@@ -32,7 +32,7 @@ import { formatTime } from "@/lib/formatters";
 
 export function OutletDetailPage() {
   const { outlet, visits, stockReports, storageError } = useLoaderData({
-    from: "/outlets/$outletId",
+    from: "/dashboard/outlets/$outletId",
   });
   return (
     <>

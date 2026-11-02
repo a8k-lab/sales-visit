@@ -20,7 +20,7 @@ import { outlets, products, salesForce } from "@/data/mock-data";
 import { StockReportCard } from "@/features/stock-reports/components/stock-report-card";
 
 export function DirectoryPage() {
-  const { stockReports } = useLoaderData({ from: "/directory" });
+  const { stockReports } = useLoaderData({ from: "/dashboard/directory" });
   return (
     <>
       <div className="flex flex-col gap-2">

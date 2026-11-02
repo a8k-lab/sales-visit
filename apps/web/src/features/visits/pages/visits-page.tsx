@@ -57,9 +57,9 @@ import {
 import { formatTime } from "@/lib/formatters";
 
 export function VisitsPage() {
-  const filters = useSearch({ from: "/visits" });
+  const filters = useSearch({ from: "/dashboard/visits" });
   const navigate = useNavigate({ from: "/visits" });
-  const data = useLoaderData({ from: "/visits" });
+  const data = useLoaderData({ from: "/dashboard/visits" });
   const { visits, stockReports } = data;
   const results = filterVisits(filters, data);
   const update = (key: keyof VisitFilters, value: string) =>

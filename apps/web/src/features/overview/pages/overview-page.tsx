@@ -26,7 +26,7 @@ const percentage = new Intl.NumberFormat("id-ID", {
 });
 
 export function OverviewPage() {
-  const data = useLoaderData({ from: "/overview" });
+  const data = useLoaderData({ from: "/dashboard/overview" });
   const metrics = [
     {
       title: "Total Kunjungan",

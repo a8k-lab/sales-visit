@@ -40,8 +40,8 @@ import { searchOutlets } from "@/features/outlets/lib/outlet-data";
 import { formatTime } from "@/lib/formatters";
 
 export function OutletsPage() {
-  const data = useLoaderData({ from: "/outlets" });
-  const { q } = useSearch({ from: "/outlets" });
+  const data = useLoaderData({ from: "/dashboard/outlets" });
+  const { q } = useSearch({ from: "/dashboard/outlets" });
   const navigate = useNavigate({ from: "/outlets" });
   const results = searchOutlets(data.outlets, q);
   const updateSearch = (value: string) =>

@@ -4,6 +4,7 @@ import {
   createRouter,
   Link,
   notFound,
+  Outlet,
   redirect,
   type SearchSchemaInput,
 } from "@tanstack/react-router";
@@ -17,6 +18,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { loadVisitData } from "@/data/visit-store";
+import { LoginPage } from "@/features/auth/pages/login-page";
 import { DirectoryPage } from "@/features/directory/pages/directory-page";
 import {
   loadOutletDetail,
@@ -54,37 +56,48 @@ const visitSearch = (search: SearchSchemaInput & Partial<VisitFilters>) =>
   validateVisitSearch(search);
 
 const rootRoute = createRootRoute({
+  component: Outlet,
+  notFoundComponent: NotFoundPage,
+});
+const dashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: "dashboard",
   component: DashboardLayout,
   notFoundComponent: NotFoundPage,
+});
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/login",
+  component: LoginPage,
 });
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   beforeLoad: () => {
-    throw redirect({ to: "/overview" });
+    throw redirect({ to: "/login", replace: true });
   },
 });
 const overviewRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => dashboardRoute,
   path: "/overview",
   loader: loadOverview,
   component: OverviewPage,
 });
 const visitsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => dashboardRoute,
   path: "/visits",
   validateSearch: visitSearch,
   loader: loadVisitData,
   component: VisitsPage,
 });
 const newVisitRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => dashboardRoute,
   path: "/visits/new",
   validateSearch: visitSearch,
   component: NewVisitPage,
 });
 const detailRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => dashboardRoute,
   path: "/visits/$visitId",
   validateSearch: visitSearch,
   loader: ({ params }) => {
@@ -97,14 +110,14 @@ const detailRoute = createRoute({
   notFoundComponent: NotFoundPage,
 });
 const directoryRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => dashboardRoute,
   path: "/directory",
   loader: loadVisitData,
   component: DirectoryPage,
 });
 
 const outletsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => dashboardRoute,
   path: "/outlets",
   validateSearch: (search: SearchSchemaInput & { q?: string }) => ({
     q: typeof search.q === "string" ? search.q : "",
@@ -113,7 +126,7 @@ const outletsRoute = createRoute({
   component: OutletsPage,
 });
 const outletDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => dashboardRoute,
   path: "/outlets/$outletId",
   loader: ({ params }) => {
     const data = loadOutletDetail(params.outletId);
@@ -127,13 +140,16 @@ const outletDetailRoute = createRoute({
 export const router = createRouter({
   routeTree: rootRoute.addChildren([
     indexRoute,
-    overviewRoute,
-    visitsRoute,
-    newVisitRoute,
-    detailRoute,
-    directoryRoute,
-    outletsRoute,
-    outletDetailRoute,
+    loginRoute,
+    dashboardRoute.addChildren([
+      overviewRoute,
+      visitsRoute,
+      newVisitRoute,
+      detailRoute,
+      directoryRoute,
+      outletsRoute,
+      outletDetailRoute,
+    ]),
   ]),
   scrollRestoration: true,
 });

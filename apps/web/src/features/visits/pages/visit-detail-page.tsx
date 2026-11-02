@@ -28,8 +28,10 @@ import { StockReportCard } from "@/features/stock-reports/components/stock-repor
 import { formatTime } from "@/lib/formatters";
 
 export function VisitDetailPage() {
-  const { visit, stockReports } = useLoaderData({ from: "/visits/$visitId" });
-  const filters = useSearch({ from: "/visits/$visitId" });
+  const { visit, stockReports } = useLoaderData({
+    from: "/dashboard/visits/$visitId",
+  });
+  const filters = useSearch({ from: "/dashboard/visits/$visitId" });
   const { outlet, member, reports } = visitContext(visit, stockReports);
   return (
     <>

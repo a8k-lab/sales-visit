@@ -35,7 +35,7 @@ import {
 } from "@/features/visits/lib/visit-entry";
 
 export function NewVisitPage() {
-  const filters = useSearch({ from: "/visits/new" });
+  const filters = useSearch({ from: "/dashboard/visits/new" });
   const navigate = useNavigate();
   const router = useRouter();
   const [value, setValue] = useState<VisitEntry>(() => ({
