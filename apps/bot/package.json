@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@sales-visit/contracts": "workspace:*",
     "grammy": "^1.46.0"
   },
   "devDependencies": {

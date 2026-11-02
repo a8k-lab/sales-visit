@@ -23,6 +23,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@sales-visit/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       hono:
         specifier: ^4.13.16
         version: 4.13.16
@@ -33,6 +36,9 @@ importers:
 
   apps/bot:
     dependencies:
+      '@sales-visit/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       grammy:
         specifier: ^1.46.0
         version: 1.46.0
@@ -52,6 +58,9 @@ importers:
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@sales-visit/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@tailwindcss/vite':
         specifier: ^4
         version: 4.3.3(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
@@ -98,6 +107,12 @@ importers:
       vite:
         specifier: ^8
         version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)
+
+  packages/contracts:
+    dependencies:
+      zod:
+        specifier: ^4.0.0
+        version: 4.6.7
 
 packages:
 
