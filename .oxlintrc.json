@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["apps/api/**/*.ts"],
+      "rules": {
+        "typescript/no-extraneous-class": [
+          "warn",
+          { "allowWithDecorator": true }
+        ]
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/*.generated.*",
+    "**/routeTree.gen.ts",
+    ".agents/",
+    ".claude/"
+  ]
+}
