@@ -9,7 +9,7 @@ Sales Visit includes a React web dashboard, a Telegram bot, and a shared backend
 
 ## Decision
 
-Use a **single Git repository** with **pnpm workspaces** (`pnpm@10.30.1`, Node 22.x). Planned boundaries:
+Use a **single Git repository** with **pnpm workspaces** (`pnpm@10.30.1`, Node 24.x). Planned boundaries:
 
 ```text
 apps/web          React + Vite application

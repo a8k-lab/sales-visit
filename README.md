@@ -90,7 +90,7 @@ sales-visit/
 
 ## Local development
 
-The environment used to start the project is **Node.js 22.22.0** and **pnpm 10.30.1**. Use the pnpm version declared in the root `package.json` once pinned.
+Use **Node.js 24.x** and **pnpm 10.30.1**, as declared in the root `package.json`.
 
 From the repository root:
 
