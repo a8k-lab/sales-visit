@@ -23,7 +23,19 @@ The list uses a table on desktop and visit cards on mobile. User-facing copy def
 
 ## Mock data and scope
 
-`src/data/mock-data.ts` contains a single coherent set of synthetic Sales Force, Outlet, Product, Visit, and Stock Report fixtures, typed against `@sales-visit/contracts`. Extra contact, address, territory, and catalog display fields are local prototype metadata, not new shared business rules. `src/data/visits.ts` owns filtering and search normalization; presentation is in `src/pages` and `src/components`.
+`src/data/mock-data.ts` contains a single coherent set of synthetic Sales Force, Outlet, Product, Visit, and Stock Report fixtures, typed against `@sales-visit/contracts`. Extra contact, address, territory, and catalog display fields are local prototype metadata, not new shared business rules. `src/features/visits/lib/filter-visits.ts` owns filtering and search normalization.
+
+## Source organization
+
+- `src/main.tsx` renders the router directly inside `StrictMode` and `ThemeProvider`.
+- `src/router.tsx` owns the code-based route tree, redirects, search validation, and detail loader. Routing is not file-based.
+- `src/app/` contains application-wide navigation, layouts, and providers.
+- `src/features/visits/` contains visit pages, filter controls, and filtering logic.
+- `src/features/stock-reports/` contains the stock-report card reused by visit details and the directory.
+- `src/features/directory/` contains the reference-data page.
+- `src/components/ui/` contains shadcn/ui primitives; `src/components/channel-badge.tsx` is shared reporting UI for Visits and Stock Reports.
+- `src/lib/formatters.ts` owns shared Indonesian/WIB timestamp formatting; `src/lib/utils.ts` contains styling utilities.
+- `src/data/mock-data.ts` remains the centralized relational fixture source, including lookup helpers. Shared hooks remain in `src/hooks/`.
 
 Useful sample records:
 
