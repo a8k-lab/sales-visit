@@ -21,8 +21,8 @@ import {
 } from "@/components/ui/sidebar";
 
 const navigation = [
-  { title: "Visits", to: "/visits", icon: ClipboardTextIcon },
-  { title: "Reference data", to: "/directory", icon: DatabaseIcon },
+  { title: "Kunjungan", to: "/visits", icon: ClipboardTextIcon },
+  { title: "Data referensi", to: "/directory", icon: DatabaseIcon },
 ] as const;
 
 // Adapted from the official shadcn/ui sidebar-07 block (Base UI / nova).
@@ -56,8 +56,8 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
-          <nav aria-label="Main navigation">
+          <SidebarGroupLabel>Ruang kerja</SidebarGroupLabel>
+          <nav aria-label="Navigasi utama">
             <SidebarMenu>
               {navigation.map(({ title, to, icon: Icon }) => (
                 <SidebarMenuItem key={to}>
@@ -78,15 +78,12 @@ export function AppSidebar() {
         <SidebarGroup className="mt-auto group-data-[collapsible=icon]:hidden">
           <div className="text-muted-foreground flex flex-col gap-2 rounded-lg border p-3 text-xs">
             <span className="text-foreground font-medium">
-              One workflow. Two channels.
+              Satu alur pelaporan, dua pilihan.
             </span>
             <p>
-              Sales Force can report through the Web Dashboard or Telegram Bot.
+              Sales Force dapat melapor melalui Dashboard Web atau Telegram Bot.
             </p>
-            <p>
-              This preview uses synthetic data. Report entry and integrations
-              are not connected.
-            </p>
+            <p>Data yang ditampilkan adalah data contoh.</p>
           </div>
         </SidebarGroup>
       </SidebarContent>
@@ -96,7 +93,7 @@ export function AppSidebar() {
             <AvatarFallback>SV</AvatarFallback>
           </Avatar>
           <div className="grid min-w-0 text-xs group-data-[collapsible=icon]:hidden">
-            <span className="truncate font-medium">Demo workspace</span>
+            <span className="truncate font-medium">Ruang kerja demo</span>
             <span className="text-muted-foreground truncate">
               Sales Force · Admin · Supervisor
             </span>

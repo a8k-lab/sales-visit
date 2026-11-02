@@ -61,10 +61,7 @@ function FilterSelect({
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
 }) {
-  const items = [
-    { value: "", label: `All ${label.toLowerCase()}` },
-    ...options,
-  ];
+  const items = [{ value: "", label: "Semua" }, ...options];
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
@@ -107,36 +104,34 @@ export function VisitsPage() {
     <>
       <div className="flex flex-col gap-2">
         <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
-          Field operations
+          Kegiatan lapangan
         </p>
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-          Visits
+          Kunjungan
         </h1>
         <p className="text-muted-foreground max-w-2xl text-sm">
-          Review outlet visits from your Sales Force, reported through Web and
-          Telegram.
+          Tinjau kunjungan Outlet yang dilaporkan Sales Force melalui Dashboard
+          Web dan Telegram Bot.
         </p>
       </div>
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle>Visit activity</CardTitle>
-            <Badge variant="secondary">{visits.length} visits</Badge>
+            <CardTitle>Aktivitas kunjungan</CardTitle>
+            <Badge variant="secondary">{visits.length} kunjungan</Badge>
           </div>
-          <CardDescription>
-            Synthetic records · 30 Oct–3 Nov 2026 · Times in WIB (UTC+7)
-          </CardDescription>
+          <CardDescription>30 Okt–3 Nov 2026 · Waktu dalam WIB</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <FieldGroup className="gap-4">
             <Field>
               <FieldLabel htmlFor="visit-search" className="sr-only">
-                Search visits
+                Cari kunjungan
               </FieldLabel>
               <InputGroup>
                 <InputGroupInput
                   id="visit-search"
-                  placeholder="Search outlet, Sales Force, visit ID, or notes…"
+                  placeholder="Cari Outlet, Sales Force, ID kunjungan, atau catatan…"
                   value={filters.q}
                   onChange={(event) => update("q", event.target.value)}
                 />
@@ -158,7 +153,7 @@ export function VisitsPage() {
               />
               <FilterSelect
                 id="outlet"
-                label="Outlets"
+                label="Outlet"
                 value={filters.outlet}
                 onChange={(value) => update("outlet", value)}
                 options={outlets.map((outlet) => ({
@@ -168,26 +163,26 @@ export function VisitsPage() {
               />
               <FilterSelect
                 id="channel"
-                label="Channels"
+                label="Kanal pelaporan"
                 value={filters.channel}
                 onChange={(value) => update("channel", value)}
                 options={[
-                  { value: "web", label: "Web Dashboard" },
+                  { value: "web", label: "Dashboard Web" },
                   { value: "telegram", label: "Telegram Bot" },
                 ]}
               />
               <FilterSelect
                 id="stock"
-                label="Stock reports"
+                label="Laporan stok"
                 value={filters.stock}
                 onChange={(value) => update("stock", value)}
                 options={[
-                  { value: "with", label: "With stock reports" },
-                  { value: "without", label: "Without stock reports" },
+                  { value: "with", label: "Dengan laporan stok" },
+                  { value: "without", label: "Tanpa laporan stok" },
                 ]}
               />
               <Field className="sm:col-span-2 xl:col-span-1">
-                <FieldLabel htmlFor="date">Visit date (WIB)</FieldLabel>
+                <FieldLabel htmlFor="date">Tanggal kunjungan (WIB)</FieldLabel>
                 <Input
                   id="date"
                   type="date"
@@ -199,11 +194,12 @@ export function VisitsPage() {
           </FieldGroup>
           <div className="flex min-h-8 items-center justify-between gap-2">
             <p role="status" className="text-muted-foreground text-xs">
-              Showing {results.length} of {visits.length} visits · Newest first
+              Menampilkan {results.length} dari {visits.length} kunjungan ·
+              Terbaru dahulu
             </p>
             {filtered && (
               <Button variant="ghost" size="sm" onClick={reset}>
-                Clear filters
+                Hapus filter
               </Button>
             )}
           </div>
@@ -213,13 +209,14 @@ export function VisitsPage() {
                 <EmptyMedia variant="icon">
                   <MagnifyingGlassIcon />
                 </EmptyMedia>
-                <EmptyTitle>No matching visits</EmptyTitle>
+                <EmptyTitle>Tidak ada kunjungan yang sesuai</EmptyTitle>
                 <EmptyDescription>
-                  Try another search or clear the filters to see all visits.
+                  Coba kata kunci lain atau hapus filter untuk melihat semua
+                  kunjungan.
                 </EmptyDescription>
               </EmptyHeader>
               <Button variant="outline" onClick={reset}>
-                Clear filters
+                Hapus filter
               </Button>
             </Empty>
           ) : (
@@ -228,13 +225,13 @@ export function VisitsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Outlet / visit</TableHead>
+                      <TableHead>Outlet / kunjungan</TableHead>
                       <TableHead>Sales Force</TableHead>
-                      <TableHead>Visited at</TableHead>
-                      <TableHead>Channel</TableHead>
-                      <TableHead>Stock reports</TableHead>
+                      <TableHead>Waktu kunjungan</TableHead>
+                      <TableHead>Kanal pelaporan</TableHead>
+                      <TableHead>Laporan stok</TableHead>
                       <TableHead>
-                        <span className="sr-only">Details</span>
+                        <span className="sr-only">Detail</span>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -268,8 +265,8 @@ export function VisitsPage() {
                               variant={reports.length ? "secondary" : "outline"}
                             >
                               {reports.length
-                                ? `${reports.length} linked`
-                                : "None"}
+                                ? `${reports.length} laporan`
+                                : "Tidak ada"}
                             </Badge>
                           </TableCell>
                           <TableCell>
@@ -282,7 +279,7 @@ export function VisitsPage() {
                                   to="/visits/$visitId"
                                   params={{ visitId: visit.id }}
                                   search={filters}
-                                  aria-label={`View ${visit.id}`}
+                                  aria-label={`Lihat kunjungan ${visit.id}`}
                                 />
                               }
                             >
@@ -317,7 +314,7 @@ export function VisitsPage() {
                       <div className="flex flex-wrap gap-2">
                         <ChannelBadge channel={visit.submissionChannel} />
                         <Badge variant="secondary">
-                          {reports.length} stock reports
+                          {reports.length} laporan stok
                         </Badge>
                       </div>
                     </Link>
@@ -327,9 +324,9 @@ export function VisitsPage() {
             </>
           )}
           <p className="text-muted-foreground flex items-start gap-2 text-xs">
-            <ClipboardTextIcon className="size-4 shrink-0" />A visit records
-            field activity. Stock reports are separate, optional snapshots—not
-            live inventory.
+            <ClipboardTextIcon className="size-4 shrink-0" />
+            Laporan stok bersifat opsional dan mencatat jumlah pada waktu
+            pelaporan, bukan stok terkini.
           </p>
         </CardContent>
       </Card>

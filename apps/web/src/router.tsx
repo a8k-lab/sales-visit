@@ -26,13 +26,13 @@ function NotFoundPage() {
   return (
     <Empty>
       <EmptyHeader>
-        <EmptyTitle>Record or page not found</EmptyTitle>
+        <EmptyTitle>Data atau halaman tidak ditemukan</EmptyTitle>
         <EmptyDescription>
-          The requested visit or page does not exist in this demo workspace.
+          Kunjungan atau halaman yang Anda cari tidak tersedia.
         </EmptyDescription>
       </EmptyHeader>
       <Button nativeButton={false} render={<Link to="/visits" search={{}} />}>
-        Return to visits
+        Kembali ke kunjungan
       </Button>
     </Empty>
   );

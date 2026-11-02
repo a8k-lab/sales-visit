@@ -34,7 +34,7 @@ export function DashboardLayout() {
           href="#dashboard-content"
           className="focus:bg-background sr-only focus:not-sr-only focus:absolute focus:rounded-md focus:p-4"
         >
-          Skip to content
+          Lewati ke konten utama
         </a>
         <AppSidebar />
         <SidebarInset className="min-w-0">
@@ -46,11 +46,13 @@ export function DashboardLayout() {
                 <BreadcrumbItem>
                   {isDetail ? (
                     <BreadcrumbLink render={<Link to="/visits" search={{}} />}>
-                      Visits
+                      Kunjungan
                     </BreadcrumbLink>
                   ) : (
                     <BreadcrumbPage>
-                      {pathname === "/directory" ? "Reference data" : "Visits"}
+                      {pathname === "/directory"
+                        ? "Data referensi"
+                        : "Kunjungan"}
                     </BreadcrumbPage>
                   )}
                 </BreadcrumbItem>
@@ -58,18 +60,18 @@ export function DashboardLayout() {
                   <>
                     <BreadcrumbSeparator />
                     <BreadcrumbItem>
-                      <BreadcrumbPage>Visit details</BreadcrumbPage>
+                      <BreadcrumbPage>Detail kunjungan</BreadcrumbPage>
                     </BreadcrumbItem>
                   </>
                 )}
               </BreadcrumbList>
             </Breadcrumb>
             <div className="ml-auto flex items-center gap-2">
-              <Badge variant="outline">Mock data</Badge>
+              <Badge variant="outline">Data contoh</Badge>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Toggle color theme"
+                aria-label="Ganti tema warna"
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               >
                 <SunIcon className="hidden dark:block" />
@@ -85,8 +87,7 @@ export function DashboardLayout() {
             <Outlet />
           </div>
           <footer className="text-muted-foreground px-4 py-4 text-xs md:px-8">
-            Sales Visit prototype · All people, outlets, and reports shown are
-            synthetic.
+            Sales Visit · Seluruh data yang ditampilkan adalah data contoh.
           </footer>
         </SidebarInset>
       </SidebarProvider>

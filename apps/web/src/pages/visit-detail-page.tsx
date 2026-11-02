@@ -43,18 +43,18 @@ export function VisitDetailPage() {
           render={<Link to="/visits" search={filters} />}
         >
           <ArrowLeftIcon data-icon="inline-start" />
-          Back to visits
+          Kembali ke kunjungan
         </Button>
       </div>
       <div className="flex flex-col gap-2">
         <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
-          Visit details · {visit.id}
+          Detail kunjungan · {visit.id}
         </p>
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
           {outlet.name}
         </h1>
         <p className="text-muted-foreground text-sm">
-          Visited by {member.name} · {formatTime(visit.visitedAt)} WIB
+          Dikunjungi oleh {member.name} · {formatTime(visit.visitedAt)} WIB
         </p>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
@@ -62,11 +62,9 @@ export function VisitDetailPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MapPinIcon className="size-4" />
-              Outlet information
+              Informasi Outlet
             </CardTitle>
-            <CardDescription>
-              {outlet.id} · Synthetic business record
-            </CardDescription>
+            <CardDescription>{outlet.id}</CardDescription>
           </CardHeader>
           <CardContent>
             <dl className="grid gap-4 text-sm">
@@ -75,11 +73,11 @@ export function VisitDetailPage() {
                 <dd className="mt-1 font-medium">{outlet.name}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground text-xs">Address</dt>
+                <dt className="text-muted-foreground text-xs">Alamat</dt>
                 <dd className="mt-1">{outlet.address}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground text-xs">Contact</dt>
+                <dt className="text-muted-foreground text-xs">Kontak</dt>
                 <dd className="mt-1">
                   {outlet.contact} · {outlet.phone}
                 </dd>
@@ -91,10 +89,10 @@ export function VisitDetailPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UserIcon className="size-4" />
-              Sales Force & visit metadata
+              Sales Force dan informasi kunjungan
             </CardTitle>
             <CardDescription>
-              Submission channel is independent of reporter identity.
+              Petugas dan kanal pelaporan kunjungan.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -104,24 +102,26 @@ export function VisitDetailPage() {
                 <dd className="mt-1 font-medium">{member.name}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground text-xs">Territory</dt>
+                <dt className="text-muted-foreground text-xs">Wilayah</dt>
                 <dd className="mt-1">{member.territory}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground text-xs">
-                  Staff reference
+                  ID Sales Force
                 </dt>
                 <dd className="mt-1">{member.id}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground text-xs">Channel</dt>
+                <dt className="text-muted-foreground text-xs">
+                  Kanal pelaporan
+                </dt>
                 <dd className="mt-1">
                   <ChannelBadge channel={visit.submissionChannel} />
                 </dd>
               </div>
               <div className="col-span-2">
                 <dt className="text-muted-foreground text-xs">
-                  Visited at (WIB / UTC+7)
+                  Waktu kunjungan (WIB)
                 </dt>
                 <dd className="mt-1 tabular-nums">
                   {formatTime(visit.visitedAt)}
@@ -133,27 +133,27 @@ export function VisitDetailPage() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Visit outcome</CardTitle>
+          <CardTitle>Hasil kunjungan</CardTitle>
           <CardDescription>
-            Notes and follow-up recorded for this visit.
+            Catatan dan tindak lanjut kunjungan.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="flex flex-col gap-5 text-sm">
             <div>
               <dt className="text-muted-foreground mb-2 text-xs font-medium">
-                Notes
+                Catatan
               </dt>
               <dd className="leading-relaxed">
-                {visit.notes || "No notes recorded."}
+                {visit.notes || "Belum ada catatan."}
               </dd>
             </div>
             <div>
               <dt className="text-muted-foreground mb-2 text-xs font-medium">
-                Follow-up
+                Tindak lanjut
               </dt>
               <dd className="leading-relaxed">
-                {visit.followUp || "No follow-up recorded."}
+                {visit.followUp || "Belum ada tindak lanjut."}
               </dd>
             </div>
           </dl>
@@ -166,13 +166,12 @@ export function VisitDetailPage() {
               id="stock-heading"
               className="text-lg font-semibold tracking-tight"
             >
-              Associated stock reports
+              Laporan stok terkait
             </h2>
             <Badge variant="secondary">{reports.length}</Badge>
           </div>
           <p className="text-muted-foreground text-sm">
-            Reported quantities at a point in time, not live inventory. Multiple
-            reports can belong to one visit.
+            Jumlah stok dicatat sesuai waktu pelaporan, bukan stok terkini.
           </p>
         </div>
         {reports.length ? (
@@ -185,10 +184,11 @@ export function VisitDetailPage() {
               <EmptyMedia variant="icon">
                 <ClipboardTextIcon />
               </EmptyMedia>
-              <EmptyTitle>No stock reports for this visit</EmptyTitle>
+              <EmptyTitle>
+                Belum ada laporan stok untuk kunjungan ini
+              </EmptyTitle>
               <EmptyDescription>
-                This visit was recorded without a stock report. A visit does not
-                require stock quantities.
+                Kunjungan ini dicatat tanpa laporan stok.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

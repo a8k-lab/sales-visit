@@ -20,7 +20,7 @@ import {
 import { products, salesForce } from "@/data/mock-data";
 
 export function formatTime(value: string) {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat("id-ID", {
     timeZone: "Asia/Jakarta",
     day: "2-digit",
     month: "short",
@@ -35,7 +35,7 @@ export function ChannelBadge({ channel }: { channel: SubmissionChannel }) {
   return (
     <Badge variant="outline">
       {channel === "web" ? <BrowserIcon /> : <TelegramLogoIcon />}
-      {channel === "web" ? "Web Dashboard" : "Telegram Bot"}
+      {channel === "web" ? "Dashboard Web" : "Telegram Bot"}
     </Badge>
   );
 }
@@ -52,15 +52,15 @@ export function StockReportCard({ report }: { report: StockReport }) {
           <ChannelBadge channel={report.submissionChannel} />
         </div>
         <CardDescription>
-          {formatTime(report.reportedAt)} WIB · Reported by {reporter.name}
+          {formatTime(report.reportedAt)} WIB · Dilaporkan oleh {reporter.name}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Product</TableHead>
-              <TableHead className="text-right">Reported quantity</TableHead>
+              <TableHead>Produk</TableHead>
+              <TableHead className="text-right">Jumlah dilaporkan</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

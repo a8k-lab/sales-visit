@@ -70,27 +70,27 @@ export const outlets = [
 export const products = [
   {
     id: "prd-01",
-    name: "Simpati Starter Pack",
+    name: "Kartu Perdana Simpati",
     category: "Perdana SA",
-    unit: "packs",
+    unit: "paket",
   },
   {
     id: "prd-02",
-    name: "by.U Starter Pack",
+    name: "Kartu Perdana by.U",
     category: "Perdana SA",
-    unit: "packs",
+    unit: "paket",
   },
   {
     id: "prd-03",
-    name: "Internet Voucher 3 GB / 7 days",
+    name: "Voucher Internet 3 GB / 7 hari",
     category: "VF Data",
-    unit: "vouchers",
+    unit: "voucher",
   },
   {
     id: "prd-04",
-    name: "Voice Voucher 20 minutes",
+    name: "Voucher Telepon 20 menit",
     category: "VF Voice",
-    unit: "vouchers",
+    unit: "voucher",
   },
 ] satisfies (Product & { category: string; unit: string })[];
 
@@ -102,8 +102,8 @@ export const visits: Visit[] = [
     visitedAt: "2026-11-03T14:20:00+07:00",
     submissionChannel: "web",
     notes:
-      "Reviewed starter pack availability with Pak Hendra. Updated the product display near the counter.",
-    followUp: "Bring the updated product leaflet on the next visit.",
+      "Meninjau ketersediaan kartu perdana bersama Pak Hendra. Memperbarui pajangan produk di dekat konter.",
+    followUp: "Bawa brosur produk terbaru pada kunjungan berikutnya.",
   },
   {
     id: "VST-0011",
@@ -112,7 +112,7 @@ export const visits: Visit[] = [
     visitedAt: "2026-11-03T13:45:00+07:00",
     submissionChannel: "telegram",
     notes:
-      "Discussed voucher options with Ibu Rina. Recorded the quantities she reported.",
+      "Membahas pilihan voucher bersama Ibu Rina. Mencatat jumlah stok yang beliau laporkan.",
   },
   {
     id: "VST-0010",
@@ -121,8 +121,8 @@ export const visits: Visit[] = [
     visitedAt: "2026-11-03T11:10:00+07:00",
     submissionChannel: "web",
     notes:
-      "Met the counter attendant. The owner was away, so no stock quantities were recorded.",
-    followUp: "Return when Ibu Sari is available on Thursday.",
+      "Bertemu penjaga konter. Pemilik sedang tidak di tempat sehingga jumlah stok tidak dicatat.",
+    followUp: "Kembali pada hari Kamis saat Ibu Sari berada di Outlet.",
   },
   {
     id: "VST-0009",
@@ -130,8 +130,7 @@ export const visits: Visit[] = [
     salesForceId: "sf-01",
     visitedAt: "2026-11-03T09:30:00+07:00",
     submissionChannel: "telegram",
-    notes:
-      "Routine visit and product discussion. Stock snapshot recorded at the counter.",
+    notes: "Kunjungan rutin dan diskusi produk. Jumlah stok dicatat di konter.",
   },
   {
     id: "VST-0008",
@@ -140,8 +139,8 @@ export const visits: Visit[] = [
     visitedAt: "2026-11-02T15:00:00+07:00",
     submissionChannel: "web",
     notes:
-      "Introduced the by.U starter pack range. Pak Deni requested a product information sheet.",
-    followUp: "Share the product information sheet.",
+      "Memperkenalkan pilihan kartu perdana by.U. Pak Deni meminta lembar informasi produk.",
+    followUp: "Bagikan lembar informasi produk.",
   },
   {
     id: "VST-0007",
@@ -149,7 +148,8 @@ export const visits: Visit[] = [
     salesForceId: "sf-02",
     visitedAt: "2026-11-02T13:15:00+07:00",
     submissionChannel: "web",
-    notes: "Reviewed the voucher display and captured reported quantities.",
+    notes:
+      "Meninjau pajangan voucher dan mencatat jumlah stok yang dilaporkan.",
   },
   {
     id: "VST-0006",
@@ -157,7 +157,7 @@ export const visits: Visit[] = [
     salesForceId: "sf-03",
     visitedAt: "2026-11-02T10:40:00+07:00",
     submissionChannel: "telegram",
-    notes: "Checked in with Ibu Sari and discussed the starter pack range.",
+    notes: "Bertemu Ibu Sari dan membahas pilihan kartu perdana.",
   },
   {
     id: "VST-0005",
@@ -165,7 +165,7 @@ export const visits: Visit[] = [
     salesForceId: "sf-01",
     visitedAt: "2026-11-02T09:00:00+07:00",
     submissionChannel: "telegram",
-    notes: "Captured reported starter pack and voucher quantities.",
+    notes: "Mencatat jumlah kartu perdana dan voucher yang dilaporkan.",
   },
   {
     id: "VST-0004",
@@ -173,7 +173,8 @@ export const visits: Visit[] = [
     salesForceId: "sf-01",
     visitedAt: "2026-10-31T14:00:00+07:00",
     submissionChannel: "web",
-    notes: "Product display visit. No stock report submitted.",
+    notes:
+      "Kunjungan untuk meninjau pajangan produk. Tidak ada laporan stok yang dikirim.",
   },
   {
     id: "VST-0003",
@@ -181,7 +182,7 @@ export const visits: Visit[] = [
     salesForceId: "sf-03",
     visitedAt: "2026-10-31T11:30:00+07:00",
     submissionChannel: "telegram",
-    notes: "Recorded quantities reported by the outlet owner.",
+    notes: "Mencatat jumlah stok yang dilaporkan pemilik Outlet.",
   },
   {
     id: "VST-0002",
@@ -189,7 +190,7 @@ export const visits: Visit[] = [
     salesForceId: "sf-01",
     visitedAt: "2026-10-30T13:00:00+07:00",
     submissionChannel: "telegram",
-    notes: "Routine outlet visit and stock observation.",
+    notes: "Kunjungan rutin ke Outlet dan pengamatan stok.",
   },
   {
     id: "VST-0001",
@@ -198,7 +199,7 @@ export const visits: Visit[] = [
     visitedAt: "2026-10-30T09:15:00+07:00",
     submissionChannel: "web",
     notes:
-      "Reviewed product availability and captured the reported quantities.",
+      "Meninjau ketersediaan produk dan mencatat jumlah stok yang dilaporkan.",
   },
 ];
 

@@ -24,14 +24,13 @@ export function DirectoryPage() {
     <>
       <div className="flex flex-col gap-2">
         <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
-          Workspace records
+          Data ruang kerja
         </p>
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-          Reference data
+          Data referensi
         </h1>
         <p className="text-muted-foreground text-sm">
-          Read-only synthetic records shared across this prototype. No accounts
-          or master-data editing are connected.
+          Lihat data Sales Force, Outlet, produk, dan laporan stok.
         </p>
       </div>
       <Card>
@@ -40,16 +39,16 @@ export function DirectoryPage() {
             Sales Force <Badge variant="secondary">{salesForce.length}</Badge>
           </CardTitle>
           <CardDescription>
-            Field staff can use both Web Dashboard and Telegram Bot.
+            Sales Force dapat melapor melalui Dashboard Web atau Telegram Bot.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Territory</TableHead>
-                <TableHead>Contact (synthetic)</TableHead>
+                <TableHead>Nama</TableHead>
+                <TableHead>Wilayah</TableHead>
+                <TableHead>Kontak</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -67,11 +66,10 @@ export function DirectoryPage() {
       <Card>
         <CardHeader>
           <CardTitle>
-            Outlets <Badge variant="secondary">{outlets.length}</Badge>
+            Outlet <Badge variant="secondary">{outlets.length}</Badge>
           </CardTitle>
           <CardDescription>
-            Business records, not outlet user accounts. Outlet self-reporting is
-            deferred.
+            Pilih Outlet untuk melihat riwayat kunjungannya.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -79,8 +77,8 @@ export function DirectoryPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Outlet</TableHead>
-                <TableHead>Address</TableHead>
-                <TableHead>Contact</TableHead>
+                <TableHead>Alamat</TableHead>
+                <TableHead>Kontak</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -108,19 +106,19 @@ export function DirectoryPage() {
       <Card>
         <CardHeader>
           <CardTitle>
-            Products <Badge variant="secondary">{products.length}</Badge>
+            Produk <Badge variant="secondary">{products.length}</Badge>
           </CardTitle>
           <CardDescription>
-            Catalog definitions, separate from reported outlet quantities.
+            Daftar produk dan satuan pelaporannya.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Unit</TableHead>
+                <TableHead>Produk</TableHead>
+                <TableHead>Kategori</TableHead>
+                <TableHead>Satuan</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -140,12 +138,11 @@ export function DirectoryPage() {
       <section className="flex flex-col gap-4" aria-labelledby="reports-title">
         <div className="flex flex-col gap-2">
           <h2 id="reports-title" className="text-lg font-semibold">
-            Stock report register{" "}
+            Daftar laporan stok{" "}
             <Badge variant="secondary">{stockReports.length}</Badge>
           </h2>
           <p className="text-muted-foreground text-sm">
-            Includes standalone snapshots reported by Sales Force. A stock
-            report is not evidence of a visit.
+            Laporan stok dari Sales Force, dengan atau tanpa kunjungan terkait.
           </p>
         </div>
         {stockReports.map((report) => (
@@ -162,7 +159,7 @@ export function DirectoryPage() {
                   {report.visitId}
                 </Link>
               ) : (
-                "No linked visit"
+                "Tanpa kunjungan terkait"
               )}
             </p>
             <StockReportCard report={report} />
