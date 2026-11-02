@@ -1,4 +1,4 @@
-import { visitContext, visits } from "@/data/mock-data";
+import { visitContext, type VisitData } from "@/data/visit-store";
 
 export type VisitFilters = {
   q: string;
@@ -26,11 +26,14 @@ export function validateVisitSearch(
   };
 }
 
-export function filterVisits(filters: VisitFilters) {
+export function filterVisits(filters: VisitFilters, data: VisitData) {
   const query = filters.q.trim().toLowerCase();
-  return visits
+  return data.visits
     .filter((visit) => {
-      const { outlet, member, reports } = visitContext(visit);
+      const { outlet, member, reports } = visitContext(
+        visit,
+        data.stockReports
+      );
       return (
         (!query ||
           [visit.id, outlet.name, member.name, visit.notes ?? ""]
@@ -44,7 +47,10 @@ export function filterVisits(filters: VisitFilters) {
           (filters.stock === "with"
             ? reports.length > 0
             : reports.length === 0)) &&
-        (!filters.date || visit.visitedAt.slice(0, 10) === filters.date)
+        (!filters.date ||
+          new Date(Date.parse(visit.visitedAt) + 7 * 60 * 60 * 1000)
+            .toISOString()
+            .slice(0, 10) === filters.date)
       );
     })
     .toSorted((a, b) => Date.parse(b.visitedAt) - Date.parse(a.visitedAt));

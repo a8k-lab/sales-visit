@@ -311,13 +311,3 @@ export const stockReports: StockReport[] = [
     items: [{ productId: "prd-01", quantity: 16 }],
   },
 ];
-
-export function reportsForVisit(visitId: string) {
-  return stockReports.filter((report) => report.visitId === visitId);
-}
-
-export function visitContext(visit: Visit) {
-  const outlet = outlets.find((item) => item.id === visit.outletId)!;
-  const member = salesForce.find((item) => item.id === visit.salesForceId)!;
-  return { outlet, member, reports: reportsForVisit(visit.id) };
-}

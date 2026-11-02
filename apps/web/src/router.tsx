@@ -16,12 +16,13 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { visits } from "@/data/mock-data";
+import { loadVisitData } from "@/data/visit-store";
 import { DirectoryPage } from "@/features/directory/pages/directory-page";
 import {
   validateVisitSearch,
   type VisitFilters,
 } from "@/features/visits/lib/filter-visits";
+import { NewVisitPage } from "@/features/visits/pages/new-visit-page";
 import { VisitDetailPage } from "@/features/visits/pages/visit-detail-page";
 import { VisitsPage } from "@/features/visits/pages/visits-page";
 
@@ -59,16 +60,24 @@ const visitsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/visits",
   validateSearch: visitSearch,
+  loader: loadVisitData,
   component: VisitsPage,
+});
+const newVisitRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/visits/new",
+  validateSearch: visitSearch,
+  component: NewVisitPage,
 });
 const detailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/visits/$visitId",
   validateSearch: visitSearch,
   loader: ({ params }) => {
-    const visit = visits.find((item) => item.id === params.visitId);
+    const data = loadVisitData();
+    const visit = data.visits.find((item) => item.id === params.visitId);
     if (!visit) throw notFound();
-    return visit;
+    return { visit, stockReports: data.stockReports };
   },
   component: VisitDetailPage,
   notFoundComponent: NotFoundPage,
@@ -76,6 +85,7 @@ const detailRoute = createRoute({
 const directoryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/directory",
+  loader: loadVisitData,
   component: DirectoryPage,
 });
 
@@ -83,6 +93,7 @@ export const router = createRouter({
   routeTree: rootRoute.addChildren([
     indexRoute,
     visitsRoute,
+    newVisitRoute,
     detailRoute,
     directoryRoute,
   ]),

@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useLoaderData } from "@tanstack/react-router";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,10 +16,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { outlets, products, salesForce, stockReports } from "@/data/mock-data";
+import { outlets, products, salesForce } from "@/data/mock-data";
 import { StockReportCard } from "@/features/stock-reports/components/stock-report-card";
 
 export function DirectoryPage() {
+  const { stockReports } = useLoaderData({ from: "/directory" });
   return (
     <>
       <div className="flex flex-col gap-2">

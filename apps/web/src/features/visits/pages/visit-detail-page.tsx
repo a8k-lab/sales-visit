@@ -23,14 +23,14 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { visitContext } from "@/data/mock-data";
+import { visitContext } from "@/data/visit-store";
 import { StockReportCard } from "@/features/stock-reports/components/stock-report-card";
 import { formatTime } from "@/lib/formatters";
 
 export function VisitDetailPage() {
-  const visit = useLoaderData({ from: "/visits/$visitId" });
+  const { visit, stockReports } = useLoaderData({ from: "/visits/$visitId" });
   const filters = useSearch({ from: "/visits/$visitId" });
-  const { outlet, member, reports } = visitContext(visit);
+  const { outlet, member, reports } = visitContext(visit, stockReports);
   return (
     <>
       <div>
@@ -45,7 +45,7 @@ export function VisitDetailPage() {
         </Button>
       </div>
       <div className="flex flex-col gap-2">
-        <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+        <p className="text-muted-foreground text-xs font-medium tracking-widest break-all uppercase">
           Detail kunjungan · {visit.id}
         </p>
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
@@ -55,6 +55,12 @@ export function VisitDetailPage() {
           Dikunjungi oleh {member.name} · {formatTime(visit.visitedAt)} WIB
         </p>
       </div>
+      {visit.submittedAt && (
+        <p role="status" className="text-muted-foreground text-sm">
+          Kunjungan tersimpan di browser ini · {formatTime(visit.submittedAt)}{" "}
+          WIB. Belum dikirim ke server.
+        </p>
+      )}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -142,7 +148,7 @@ export function VisitDetailPage() {
               <dt className="text-muted-foreground mb-2 text-xs font-medium">
                 Catatan
               </dt>
-              <dd className="leading-relaxed">
+              <dd className="leading-relaxed break-words whitespace-pre-wrap">
                 {visit.notes || "Belum ada catatan."}
               </dd>
             </div>
@@ -150,7 +156,7 @@ export function VisitDetailPage() {
               <dt className="text-muted-foreground mb-2 text-xs font-medium">
                 Tindak lanjut
               </dt>
-              <dd className="leading-relaxed">
+              <dd className="leading-relaxed break-words whitespace-pre-wrap">
                 {visit.followUp || "Belum ada tindak lanjut."}
               </dd>
             </div>

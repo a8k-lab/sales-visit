@@ -3,7 +3,12 @@ import {
   ClipboardTextIcon,
   MagnifyingGlassIcon,
 } from "@phosphor-icons/react";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import {
+  Link,
+  useLoaderData,
+  useNavigate,
+  useSearch,
+} from "@tanstack/react-router";
 
 import { ChannelBadge } from "@/components/channel-badge";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +27,12 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   InputGroup,
@@ -37,7 +47,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { outlets, salesForce, visitContext, visits } from "@/data/mock-data";
+import { outlets, salesForce } from "@/data/mock-data";
+import { visitContext } from "@/data/visit-store";
 import { FilterSelect } from "@/features/visits/components/filter-select";
 import {
   filterVisits,
@@ -48,7 +59,9 @@ import { formatTime } from "@/lib/formatters";
 export function VisitsPage() {
   const filters = useSearch({ from: "/visits" });
   const navigate = useNavigate({ from: "/visits" });
-  const results = filterVisits(filters);
+  const data = useLoaderData({ from: "/visits" });
+  const { visits, stockReports } = data;
+  const results = filterVisits(filters, data);
   const update = (key: keyof VisitFilters, value: string) =>
     void navigate({
       search: (previous: VisitFilters) => ({ ...previous, [key]: value }),
@@ -72,13 +85,23 @@ export function VisitsPage() {
           Web dan Telegram Bot.
         </p>
       </div>
+      <Button
+        nativeButton={false}
+        className="self-start"
+        render={<Link to="/visits/new" search={filters} />}
+      >
+        Catat Kunjungan
+      </Button>
+      {data.storageError && <FieldError>{data.storageError}</FieldError>}
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle>Aktivitas kunjungan</CardTitle>
             <Badge variant="secondary">{visits.length} kunjungan</Badge>
           </div>
-          <CardDescription>30 Okt–3 Nov 2026 · Waktu dalam WIB</CardDescription>
+          <CardDescription>
+            Data contoh dan kunjungan lokal · Waktu dalam WIB
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <FieldGroup className="gap-4">
@@ -195,7 +218,10 @@ export function VisitsPage() {
                   </TableHeader>
                   <TableBody>
                     {results.map((visit) => {
-                      const { outlet, member, reports } = visitContext(visit);
+                      const { outlet, member, reports } = visitContext(
+                        visit,
+                        stockReports
+                      );
                       return (
                         <TableRow key={visit.id}>
                           <TableCell>
@@ -252,7 +278,10 @@ export function VisitsPage() {
               </div>
               <div className="flex flex-col gap-3 md:hidden">
                 {results.map((visit) => {
-                  const { outlet, member, reports } = visitContext(visit);
+                  const { outlet, member, reports } = visitContext(
+                    visit,
+                    stockReports
+                  );
                   return (
                     <Link
                       key={visit.id}

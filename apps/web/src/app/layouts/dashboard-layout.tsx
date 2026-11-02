@@ -27,6 +27,7 @@ export function DashboardLayout() {
   });
   const { theme, setTheme } = useTheme();
   const isDetail = pathname.startsWith("/visits/");
+  const isNewVisit = pathname === "/visits/new";
   return (
     <TooltipProvider>
       <SidebarProvider>
@@ -60,7 +61,9 @@ export function DashboardLayout() {
                   <>
                     <BreadcrumbSeparator />
                     <BreadcrumbItem>
-                      <BreadcrumbPage>Detail kunjungan</BreadcrumbPage>
+                      <BreadcrumbPage>
+                        {isNewVisit ? "Catat Kunjungan" : "Detail kunjungan"}
+                      </BreadcrumbPage>
                     </BreadcrumbItem>
                   </>
                 )}
@@ -87,7 +90,8 @@ export function DashboardLayout() {
             <Outlet />
           </div>
           <footer className="text-muted-foreground px-4 py-4 text-xs md:px-8">
-            Sales Visit · Seluruh data yang ditampilkan adalah data contoh.
+            Sales Visit · Prototipe dengan data contoh dan data lokal browser.
+            Belum terhubung ke server.
           </footer>
         </SidebarInset>
       </SidebarProvider>
