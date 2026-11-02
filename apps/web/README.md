@@ -11,6 +11,43 @@ pnpm install
 pnpm dev:web
 ```
 
+## Deploy to Cloudflare Workers Static Assets
+
+This is a **public prototype**, not a production-ready authenticated application. It uses synthetic mock data and browser-local persistence; the login screen is not real authentication or access control. Do not enter sensitive or production data. Entries are specific to the browser and origin (local preview, production, and branch preview URLs do not share storage).
+
+Only `apps/web` is deployed. API, Telegram Bot, database, and authentication remain unconfigured and independently deployable. `wrangler.jsonc` serves the existing Vite `dist` output without a Worker entrypoint, SSR, or the Cloudflare Vite plugin. SPA fallback serves `index.html` for client-side routes such as `/login`, `/overview`, `/visits`, and `/visits/VST-0012`.
+
+From the repository root:
+
+```bash
+pnpm build:web
+pnpm deploy:web # Deploys the existing build; does not rebuild. Requires Cloudflare credentials.
+pnpm preview:web # Builds, then starts local Wrangler preview (no deployment/authentication).
+```
+
+To preview an already-built app locally, use `pnpm --filter @sales-visit/web preview:worker`. To validate deployment packaging without deploying, use `pnpm --filter @sales-visit/web exec wrangler deploy --dry-run` after building. All commands use the web package's locally installed Wrangler.
+
+The requested compatibility date is `2026-11-03`. A runtime that has not reached that date will reject local preview/deployment. For local fallback verification only, after building, use `pnpm --filter @sales-visit/web preview:worker --local --compatibility-date 2026-11-02`; keep the configured date unchanged and deploy once Cloudflare supports it.
+
+### Cloudflare Workers Builds settings
+
+Connect `a8k-lab/sales-visit` through **Workers & Pages → Create application → Import a repository** (Workers, not Pages), using:
+
+| Setting                                         | Value                                                  |
+| ----------------------------------------------- | ------------------------------------------------------ |
+| Worker name                                     | `sales-visit`                                          |
+| Production branch                               | `main`                                                 |
+| Root directory                                  | `/`                                                    |
+| Build command                                   | `pnpm build:web`                                       |
+| Deploy command                                  | `pnpm deploy:web`                                      |
+| Preview command                                 | `pnpm --filter @sales-visit/web exec wrangler preview` |
+| Node.js version (build variable `NODE_VERSION`) | `24`                                                   |
+| pnpm version                                    | `10.30.1` (root `packageManager`)                      |
+
+Install dependencies from the repository root with `pnpm install --frozen-lockfile` (Workers Builds normally detects pnpm from the lockfile). Keep build and deploy separate to avoid duplicate builds. No application environment variables or resource bindings are needed. Cloudflare manages deployment credentials through the Builds integration; do not commit credentials.
+
+The Cloudflare **Preview command** publishes a remote branch preview when preview builds are enabled; it is different from the local `pnpm preview:web` command. Do not run it merely to verify configuration locally.
+
 ## First milestone
 
 - `/` redirects to `/visits`.

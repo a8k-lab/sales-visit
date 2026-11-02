@@ -9,7 +9,7 @@ The Computing Project prioritizes low ongoing cost and manageable operations. A 
 
 ## Decision
 
-- **Web:** React/Vite static deployment, initially Cloudflare Pages.
+- **Web:** React/Vite static deployment via **Cloudflare Workers Static Assets**, replacing the initial Cloudflare Pages direction. Deploy only `apps/web/dist` with Wrangler and SPA fallback for TanStack Router; no Worker entrypoint, SSR, or Cloudflare Vite plugin. Git integration uses Workers Builds from the monorepo root, with separate web build and deploy commands (see [web deployment instructions](../../apps/web/README.md#deploy-to-cloudflare-workers-static-assets)).
 - **API:** Hono on Cloudflare Workers.
 - **Bot:** grammY on Cloudflare Workers using Telegram **webhooks**, not long polling.
 - **Persistence:** Cloudflare D1 (SQLite-compatible semantics) via Drizzle ORM.
@@ -17,6 +17,10 @@ The Computing Project prioritizes low ongoing cost and manageable operations. A 
 - **Configuration:** secrets stored in Cloudflare configuration/secrets, never in source control.
 
 Use the Cloudflare Free tier for prototype/MVP where it satisfies requirements. This is a preferred deployment strategy, **not** a promise of unlimited free capacity or a lock-in that prevents future migration.
+
+### Current deployment scope (2026-11-03)
+
+Only the web dashboard is configured for deployment. It is a public prototype using synthetic mock data and browser-local persistence, not a production-ready authenticated application. API, bot, D1, and real authentication remain future direction, not configured resources. Each application retains an independent deployment boundary.
 
 ## Consequences and risks
 
@@ -32,6 +36,9 @@ Use the Cloudflare Free tier for prototype/MVP where it satisfies requirements. 
 - Long polling on Workers: inappropriate for an always-on polling process in a request-driven runtime.
 
 ## References
+
+- https://developers.cloudflare.com/workers/static-assets/
+- https://developers.cloudflare.com/workers/ci-cd/builds/configuration/
 
 - https://developers.cloudflare.com/workers/platform/limits/
 - https://developers.cloudflare.com/d1/platform/limits/
