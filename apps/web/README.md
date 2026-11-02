@@ -19,7 +19,7 @@ pnpm dev:web
 - `/directory` shows the read-only reference fixtures and stock report register, including a standalone Sales Force stock snapshot.
 - The dashboard shell adapts the official shadcn/ui `sidebar-07` block, installed through the CLI inside this app. Desktop icon collapse, mobile drawer, sidebar keyboard shortcut (Ctrl/Cmd+B), and theme switching are preserved. Demo teams, projects, and account actions were removed.
 
-The list uses a table on desktop and visit cards on mobile. Dates are displayed in **Asia/Jakarta (WIB, UTC+7)**, independently of the browser's timezone.
+The list uses a table on desktop and visit cards on mobile. User-facing copy defaults to **Bahasa Indonesia**. Dates use the **id-ID** locale and **Asia/Jakarta (WIB, UTC+7)** timezone, independently of the browser's timezone. See [AGENTS.md](AGENTS.md) for ongoing frontend language and prototype verification conventions.
 
 ## Mock data and scope
 
@@ -43,7 +43,7 @@ pnpm format:check
 pnpm --filter @sales-visit/web build
 ```
 
-No frontend tests or E2E tooling are included. Production static hosting must serve `index.html` for client-side routes (including direct visit-detail URLs).
+Do not introduce frontend unit, component, or E2E tests, testing frameworks, or test dependencies during the prototype phase. Preserve existing shared-package tests. Prioritize functional implementation and usability, with typechecking, linting, formatting, and production builds for verification. Production static hosting must serve `index.html` for client-side routes (including direct visit-detail URLs).
 
 ## Adding UI components
 
