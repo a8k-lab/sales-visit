@@ -19,6 +19,12 @@ import {
 import { loadVisitData } from "@/data/visit-store";
 import { DirectoryPage } from "@/features/directory/pages/directory-page";
 import {
+  loadOutletDetail,
+  loadOutletDirectory,
+} from "@/features/outlets/lib/outlet-data";
+import { OutletDetailPage } from "@/features/outlets/pages/outlet-detail-page";
+import { OutletsPage } from "@/features/outlets/pages/outlets-page";
+import {
   validateVisitSearch,
   type VisitFilters,
 } from "@/features/visits/lib/filter-visits";
@@ -32,7 +38,7 @@ function NotFoundPage() {
       <EmptyHeader>
         <EmptyTitle>Data atau halaman tidak ditemukan</EmptyTitle>
         <EmptyDescription>
-          Kunjungan atau halaman yang Anda cari tidak tersedia.
+          Data atau halaman yang Anda cari tidak tersedia.
         </EmptyDescription>
       </EmptyHeader>
       <Button nativeButton={false} render={<Link to="/visits" search={{}} />}>
@@ -89,6 +95,27 @@ const directoryRoute = createRoute({
   component: DirectoryPage,
 });
 
+const outletsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/outlets",
+  validateSearch: (search: SearchSchemaInput & { q?: string }) => ({
+    q: typeof search.q === "string" ? search.q : "",
+  }),
+  loader: loadOutletDirectory,
+  component: OutletsPage,
+});
+const outletDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/outlets/$outletId",
+  loader: ({ params }) => {
+    const data = loadOutletDetail(params.outletId);
+    if (!data) throw notFound();
+    return data;
+  },
+  component: OutletDetailPage,
+  notFoundComponent: NotFoundPage,
+});
+
 export const router = createRouter({
   routeTree: rootRoute.addChildren([
     indexRoute,
@@ -96,6 +123,8 @@ export const router = createRouter({
     newVisitRoute,
     detailRoute,
     directoryRoute,
+    outletsRoute,
+    outletDetailRoute,
   ]),
   scrollRestoration: true,
 });
