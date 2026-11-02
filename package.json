@@ -6,6 +6,7 @@
     "dev:web": "pnpm --filter @sales-visit/web dev",
     "dev:api": "pnpm --filter @sales-visit/api dev",
     "dev:bot": "pnpm --filter @sales-visit/bot dev",
+    "typecheck": "pnpm -r --if-present typecheck",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
     "format": "oxfmt --write .",
