@@ -74,7 +74,15 @@ export function VisitDetailPage() {
             <dl className="grid gap-4 text-sm">
               <div>
                 <dt className="text-muted-foreground text-xs">Outlet</dt>
-                <dd className="mt-1 font-medium">{outlet.name}</dd>
+                <dd className="mt-1 font-medium">
+                  <Link
+                    to="/outlets/$outletId"
+                    params={{ outletId: outlet.id }}
+                    className="underline underline-offset-4"
+                  >
+                    {outlet.name}
+                  </Link>
+                </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground text-xs">Alamat</dt>

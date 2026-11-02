@@ -2,6 +2,7 @@ import {
   ClipboardTextIcon,
   DatabaseIcon,
   MapPinIcon,
+  StorefrontIcon,
 } from "@phosphor-icons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 
@@ -22,6 +23,7 @@ import {
 
 const navigation = [
   { title: "Kunjungan", to: "/visits", icon: ClipboardTextIcon },
+  { title: "Outlet", to: "/outlets", icon: StorefrontIcon },
   { title: "Data referensi", to: "/directory", icon: DatabaseIcon },
 ] as const;
 

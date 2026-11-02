@@ -26,7 +26,9 @@ export function DashboardLayout() {
     select: (state) => state.location.pathname,
   });
   const { theme, setTheme } = useTheme();
-  const isDetail = pathname.startsWith("/visits/");
+  const isOutlet = pathname === "/outlets" || pathname.startsWith("/outlets/");
+  const isDetail =
+    pathname.startsWith("/visits/") || pathname.startsWith("/outlets/");
   const isNewVisit = pathname === "/visits/new";
   return (
     <TooltipProvider>
@@ -46,14 +48,23 @@ export function DashboardLayout() {
               <BreadcrumbList>
                 <BreadcrumbItem>
                   {isDetail ? (
-                    <BreadcrumbLink render={<Link to="/visits" search={{}} />}>
-                      Kunjungan
+                    <BreadcrumbLink
+                      render={
+                        <Link
+                          to={isOutlet ? "/outlets" : "/visits"}
+                          search={{}}
+                        />
+                      }
+                    >
+                      {isOutlet ? "Outlet" : "Kunjungan"}
                     </BreadcrumbLink>
                   ) : (
                     <BreadcrumbPage>
                       {pathname === "/directory"
                         ? "Data referensi"
-                        : "Kunjungan"}
+                        : isOutlet
+                          ? "Outlet"
+                          : "Kunjungan"}
                     </BreadcrumbPage>
                   )}
                 </BreadcrumbItem>
@@ -62,7 +73,11 @@ export function DashboardLayout() {
                     <BreadcrumbSeparator />
                     <BreadcrumbItem>
                       <BreadcrumbPage>
-                        {isNewVisit ? "Catat Kunjungan" : "Detail kunjungan"}
+                        {isNewVisit
+                          ? "Catat Kunjungan"
+                          : isOutlet
+                            ? "Detail Outlet"
+                            : "Detail kunjungan"}
                       </BreadcrumbPage>
                     </BreadcrumbItem>
                   </>
