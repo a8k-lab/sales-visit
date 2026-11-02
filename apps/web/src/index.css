@@ -132,3 +132,28 @@
     @apply font-sans;
   }
 }
+
+/* Keep the compact desktop foundation, with comfortable touch controls. */
+@media (pointer: coarse) {
+  [data-slot="button"],
+  [data-slot="sidebar-menu-button"],
+  [data-slot="select-trigger"],
+  [data-slot="input"],
+  [data-slot="input-group"] {
+    min-height: 2.75rem;
+  }
+
+  [data-slot="button"] {
+    min-width: 2.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
