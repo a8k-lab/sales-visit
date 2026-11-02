@@ -1,7 +1,6 @@
-import { BrowserIcon, TelegramLogoIcon } from "@phosphor-icons/react";
-import type { StockReport, SubmissionChannel } from "@sales-visit/contracts";
+import type { StockReport } from "@sales-visit/contracts";
 
-import { Badge } from "@/components/ui/badge";
+import { ChannelBadge } from "@/components/channel-badge";
 import {
   Card,
   CardContent,
@@ -18,27 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { products, salesForce } from "@/data/mock-data";
-
-export function formatTime(value: string) {
-  return new Intl.DateTimeFormat("id-ID", {
-    timeZone: "Asia/Jakarta",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(value));
-}
-
-export function ChannelBadge({ channel }: { channel: SubmissionChannel }) {
-  return (
-    <Badge variant="outline">
-      {channel === "web" ? <BrowserIcon /> : <TelegramLogoIcon />}
-      {channel === "web" ? "Dashboard Web" : "Telegram Bot"}
-    </Badge>
-  );
-}
+import { formatTime } from "@/lib/formatters";
 
 export function StockReportCard({ report }: { report: StockReport }) {
   const reporter = salesForce.find(

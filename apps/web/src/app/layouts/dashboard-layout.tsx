@@ -1,8 +1,8 @@
 import { MoonIcon, SunIcon } from "@phosphor-icons/react";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 
-import { AppSidebar } from "@/components/app-sidebar";
-import { useTheme } from "@/components/theme-provider";
+import { AppSidebar } from "@/app/components/app-sidebar";
+import { useTheme } from "@/app/providers/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import {
   Breadcrumb,

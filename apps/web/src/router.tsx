@@ -8,7 +8,7 @@ import {
   type SearchSchemaInput,
 } from "@tanstack/react-router";
 
-import { DashboardLayout } from "@/components/dashboard-layout";
+import { DashboardLayout } from "@/app/layouts/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -17,10 +17,13 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { visits } from "@/data/mock-data";
-import { validateVisitSearch, type VisitFilters } from "@/data/visits";
-import { DirectoryPage } from "@/pages/directory-page";
-import { VisitDetailPage } from "@/pages/visit-detail-page";
-import { VisitsPage } from "@/pages/visits-page";
+import { DirectoryPage } from "@/features/directory/pages/directory-page";
+import {
+  validateVisitSearch,
+  type VisitFilters,
+} from "@/features/visits/lib/filter-visits";
+import { VisitDetailPage } from "@/features/visits/pages/visit-detail-page";
+import { VisitsPage } from "@/features/visits/pages/visits-page";
 
 function NotFoundPage() {
   return (

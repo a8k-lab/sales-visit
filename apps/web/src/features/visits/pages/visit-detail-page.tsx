@@ -6,11 +6,7 @@ import {
 } from "@phosphor-icons/react";
 import { Link, useLoaderData, useSearch } from "@tanstack/react-router";
 
-import {
-  ChannelBadge,
-  formatTime,
-  StockReportCard,
-} from "@/components/report-display";
+import { ChannelBadge } from "@/components/channel-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +24,8 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { visitContext } from "@/data/mock-data";
+import { StockReportCard } from "@/features/stock-reports/components/stock-report-card";
+import { formatTime } from "@/lib/formatters";
 
 export function VisitDetailPage() {
   const visit = useLoaderData({ from: "/visits/$visitId" });

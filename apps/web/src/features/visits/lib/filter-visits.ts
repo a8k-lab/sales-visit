@@ -1,4 +1,4 @@
-import { visitContext, visits } from "./mock-data.ts";
+import { visitContext, visits } from "@/data/mock-data";
 
 export type VisitFilters = {
   q: string;

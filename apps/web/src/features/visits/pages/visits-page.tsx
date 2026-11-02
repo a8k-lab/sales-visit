@@ -5,7 +5,7 @@ import {
 } from "@phosphor-icons/react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 
-import { ChannelBadge, formatTime } from "@/components/report-display";
+import { ChannelBadge } from "@/components/channel-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,14 +30,6 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -46,46 +38,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { outlets, salesForce, visitContext, visits } from "@/data/mock-data";
-import { filterVisits, type VisitFilters } from "@/data/visits";
-
-function FilterSelect({
-  id,
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (value: string) => void;
-}) {
-  const items = [{ value: "", label: "Semua" }, ...options];
-  return (
-    <Field>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Select
-        items={items}
-        value={value}
-        onValueChange={(next) => onChange(next ?? "")}
-      >
-        <SelectTrigger id={id} className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {items.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </Field>
-  );
-}
+import { FilterSelect } from "@/features/visits/components/filter-select";
+import {
+  filterVisits,
+  type VisitFilters,
+} from "@/features/visits/lib/filter-visits";
+import { formatTime } from "@/lib/formatters";
 
 export function VisitsPage() {
   const filters = useSearch({ from: "/visits" });

@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
 
-import { StockReportCard } from "@/components/report-display";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -18,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { outlets, products, salesForce, stockReports } from "@/data/mock-data";
+import { StockReportCard } from "@/features/stock-reports/components/stock-report-card";
 
 export function DirectoryPage() {
   return (
