@@ -24,6 +24,8 @@ import {
 } from "@/features/outlets/lib/outlet-data";
 import { OutletDetailPage } from "@/features/outlets/pages/outlet-detail-page";
 import { OutletsPage } from "@/features/outlets/pages/outlets-page";
+import { loadOverview } from "@/features/overview/lib/overview-data";
+import { OverviewPage } from "@/features/overview/pages/overview-page";
 import {
   validateVisitSearch,
   type VisitFilters,
@@ -59,8 +61,14 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   beforeLoad: () => {
-    throw redirect({ to: "/visits", search: {} });
+    throw redirect({ to: "/overview" });
   },
+});
+const overviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/overview",
+  loader: loadOverview,
+  component: OverviewPage,
 });
 const visitsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -119,6 +127,7 @@ const outletDetailRoute = createRoute({
 export const router = createRouter({
   routeTree: rootRoute.addChildren([
     indexRoute,
+    overviewRoute,
     visitsRoute,
     newVisitRoute,
     detailRoute,

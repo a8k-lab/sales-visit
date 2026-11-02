@@ -1,4 +1,5 @@
 import {
+  ChartBarIcon,
   ClipboardTextIcon,
   DatabaseIcon,
   MapPinIcon,
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const navigation = [
+  { title: "Ringkasan", to: "/overview", icon: ChartBarIcon },
   { title: "Kunjungan", to: "/visits", icon: ClipboardTextIcon },
   { title: "Outlet", to: "/outlets", icon: StorefrontIcon },
   { title: "Data referensi", to: "/directory", icon: DatabaseIcon },
@@ -40,7 +42,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
-              render={<Link to="/visits" search={{}} />}
+              render={<Link to="/overview" />}
               onClick={() => setOpenMobile(false)}
             >
               <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">

@@ -60,11 +60,13 @@ export function DashboardLayout() {
                     </BreadcrumbLink>
                   ) : (
                     <BreadcrumbPage>
-                      {pathname === "/directory"
-                        ? "Data referensi"
-                        : isOutlet
-                          ? "Outlet"
-                          : "Kunjungan"}
+                      {pathname === "/overview"
+                        ? "Ringkasan"
+                        : pathname === "/directory"
+                          ? "Data referensi"
+                          : isOutlet
+                            ? "Outlet"
+                            : "Kunjungan"}
                     </BreadcrumbPage>
                   )}
                 </BreadcrumbItem>
