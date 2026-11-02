@@ -6,7 +6,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "wrangler deploy",
+    "preview:worker": "wrangler dev"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -30,6 +32,7 @@
     "@vitejs/plugin-react": "^6",
     "globals": "^17",
     "typescript": "~6.0.2",
-    "vite": "^8"
+    "vite": "^8",
+    "wrangler": "^4.156.2"
   }
 }

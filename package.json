@@ -4,6 +4,9 @@
   "description": "A monorepo for Sales Visit app",
   "scripts": {
     "dev:web": "pnpm --filter @sales-visit/web dev",
+    "build:web": "pnpm --filter @sales-visit/web build",
+    "deploy:web": "pnpm --filter @sales-visit/web run deploy",
+    "preview:web": "pnpm build:web && pnpm --filter @sales-visit/web preview:worker",
     "dev:api": "pnpm --filter @sales-visit/api dev",
     "dev:bot": "pnpm --filter @sales-visit/bot dev",
     "typecheck": "pnpm -r --if-present typecheck",
