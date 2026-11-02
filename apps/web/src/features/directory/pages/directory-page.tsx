@@ -70,38 +70,17 @@ export function DirectoryPage() {
             Outlet <Badge variant="secondary">{outlets.length}</Badge>
           </CardTitle>
           <CardDescription>
-            Pilih Outlet untuk melihat riwayat kunjungannya.
+            Informasi dan riwayat Outlet tersedia di halaman khusus Outlet.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Outlet</TableHead>
-                <TableHead>Alamat</TableHead>
-                <TableHead>Kontak</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {outlets.map((outlet) => (
-                <TableRow key={outlet.id}>
-                  <TableCell>
-                    <Link
-                      to="/visits"
-                      search={{ outlet: outlet.id }}
-                      className="font-medium underline-offset-4 hover:underline"
-                    >
-                      {outlet.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="min-w-48 whitespace-normal">
-                    {outlet.address}
-                  </TableCell>
-                  <TableCell>{outlet.contact}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <Link
+            to="/outlets"
+            search={{}}
+            className="text-sm font-medium underline underline-offset-4"
+          >
+            Lihat daftar Outlet
+          </Link>
         </CardContent>
       </Card>
       <Card>
@@ -149,7 +128,14 @@ export function DirectoryPage() {
         {stockReports.map((report) => (
           <div key={report.id} className="flex flex-col gap-2">
             <p className="text-sm font-medium">
-              {outlets.find((outlet) => outlet.id === report.outletId)!.name} ·{" "}
+              <Link
+                to="/outlets/$outletId"
+                params={{ outletId: report.outletId }}
+                className="underline underline-offset-4"
+              >
+                {outlets.find((outlet) => outlet.id === report.outletId)!.name}
+              </Link>{" "}
+              ·{" "}
               {report.visitId ? (
                 <Link
                   to="/visits/$visitId"
