@@ -8,6 +8,8 @@
     "deploy:web": "pnpm --filter @sales-visit/web run deploy",
     "preview:web": "pnpm build:web && pnpm --filter @sales-visit/web preview:worker",
     "dev:api": "pnpm --filter @sales-visit/api dev",
+    "db:migrate:local": "pnpm --filter @sales-visit/api db:migrate:local",
+    "db:seed:local": "pnpm --filter @sales-visit/api db:seed:local",
     "dev:bot": "pnpm --filter @sales-visit/bot dev",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "oxlint .",

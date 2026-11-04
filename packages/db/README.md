@@ -6,7 +6,8 @@ and ADRs 0002–0005. No API, auth, frontend, or Telegram dependencies.
 
 ## Consumption
 
-The API declares `"@sales-visit/db": "workspace:*"` when integrating persistence.
+The API declares `"@sales-visit/db": "workspace:*"` and uses this package for
+local D1-backed read endpoints. See [API instructions](../../apps/api/README.md).
 Like `@sales-visit/contracts`, exports point to TypeScript source for Wrangler
 and other TypeScript-aware tooling; no build step is required.
 
@@ -100,23 +101,13 @@ pnpm --filter @sales-visit/db exec wrangler d1 execute DB --local \
   --command "SELECT name FROM sqlite_master WHERE type = 'table';"
 ```
 
-When the API Worker is configured later, its D1 entry in
-`apps/api/wrangler.jsonc` should include:
-
-```jsonc
-{
-  "binding": "DB",
-  "database_name": "<configured database name>",
-  "database_id": "<configured database ID>",
-  "migrations_dir": "../../packages/db/migrations",
-}
-```
-
-The path is relative to the API Wrangler configuration. Apply API-local
-migrations using `pnpm --filter @sales-visit/api exec wrangler d1 migrations
-apply DB --local`. The package sandbox and API-local database are separate local
-state locations. Remote creation/application is intentionally not configured
-or performed by these scripts.
+The API Worker now binds `DB` in `apps/api/wrangler.jsonc` with a local-only
+placeholder ID and `migrations_dir: "../../packages/db/migrations"` (relative to
+that config). From the root, use `pnpm db:migrate:local` and
+`pnpm db:seed:local` for the **API-local database** used by `pnpm dev:api`.
+The package sandbox command above and API-local database are separate local
+state locations. No schema or migration is duplicated. Remote creation/application
+is intentionally not configured or performed by these scripts.
 
 ## Checks
 
