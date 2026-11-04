@@ -13,3 +13,10 @@ export {
   type StockReport,
 } from "./stock-report.ts";
 export { visitSchema, type Visit } from "./visit.ts";
+export {
+  createVisitSchema,
+  createStockReportSchema,
+  idempotencyKeySchema,
+  type CreateVisit,
+  type CreateStockReport,
+} from "./write.ts";
