@@ -38,8 +38,9 @@ then rerun migrations and seed. Generated `worker-configuration.d.ts` is ignored
 
 Lists are bare arrays (empty database: `[]`). Master records sort by ID;
 visits/reports sort newest event first, then ID ascending. Items sort by Product
-ID. Timestamps serialize as UTC ISO strings; nullable optional properties are
-omitted, and storage-only fields such as `createdAt` are not exposed.
+ID in UTF-8 byte order (SQLite BINARY collation), consistently across POST,
+retries, and GET. Timestamps serialize as UTC ISO strings; nullable optional
+properties are omitted, and storage-only fields such as `createdAt` are not exposed.
 Visit details contain all linked reports, or `stockReports: []` when none exist.
 Unknown Visit IDs return 404 with `{ "error": "Visit not found" }`.
 Unknown routes and unsupported methods return 404 with
@@ -123,8 +124,12 @@ Errors use `{ "error": "Concise message" }`:
 
 ### Identity boundary
 
-`createApp(resolveIdentity)` accepts an explicit in-process resolver returning
+`createApp(resolveIdentity)` accepts an explicit in-process resolver with signature
+`(request: Request, env: CloudflareBindings) => Promise<TrustedIdentity | undefined>`.
+It receives the current request and Worker bindings and returns
 `{ salesForceId, submissionChannel }` from a trusted authentication boundary.
+The default resolver still returns no identity; providing bindings does not
+enable writes.
 Business operations in `src/operations.ts` receive that context separately from
 the untrusted input, with no HTTP/authentication dependency. Tests construct a
 separate app with a fixed test identity; the resolver is not an HTTP endpoint,
@@ -184,8 +189,10 @@ pnpm check
 
 Tests use Wrangler's local D1 binding in a disposable directory, apply the real
 migrations, seed twice, and verify reads, write contracts, references, identity
-rejection, concurrent retries, conflicts, and safe errors. A test-only SQL trigger
-forces a late item failure after parent/earlier-item insertion, verifying actual
+rejection, concurrent retries, conflicts, safe errors, and non-BMP Product ID
+ordering across POST/retry/GET. A recording, throwing D1 binding verifies the
+default Worker rejects writes without any database operations. A test-only SQL
+trigger forces a late item failure after parent/earlier-item insertion, verifying actual
 D1 rollback and retry recovery for both operations. No frontend tests,
 Cloudflare credentials, or changes to your dev database are required.
 

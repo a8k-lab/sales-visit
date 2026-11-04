@@ -32,7 +32,12 @@ async function executeSql(db, sql) {
 
 async function verifyWrites(t, env, json) {
   const identity = { salesForceId: "sf-01", submissionChannel: "web" };
-  const authenticated = createApp(async () => identity);
+  const authenticated = createApp(async (request, bindings) => {
+    assert.ok(request instanceof Request);
+    assert.equal(request.method, "POST");
+    assert.equal(bindings, env);
+    return identity;
+  });
   const visit = {
     outletId: "out-01",
     visitedAt: "2026-11-04T09:00:00+07:00",
@@ -122,6 +127,62 @@ async function verifyWrites(t, env, json) {
         assert.equal(body.items[1].quantity, 0);
       }
       assert.equal((await json(`/visits/${saved.id}`)).stockReports.length, 2);
+    }
+  );
+
+  await t.test(
+    "POST, GET, and retries share SQLite BINARY item order",
+    async () => {
+      // UTF-16 puts U+10000 before U+E000; UTF-8 (SQLite BINARY) does the reverse.
+      const productIds = ["unicode-\uE000", "unicode-\u{10000}"];
+      for (const id of productIds) {
+        await env.DB.prepare("INSERT INTO products (id, name) VALUES (?, ?)")
+          .bind(id, "Unicode ordering fixture")
+          .run();
+      }
+      const items = productIds
+        .toReversed()
+        .map((productId) => ({ productId, quantity: 0 }));
+      for (const path of ["/stock-reports", "/visits"]) {
+        const payload =
+          path === "/stock-reports"
+            ? { ...report, items }
+            : {
+                ...visit,
+                stockReport: { reportedAt: report.reportedAt, items },
+              };
+        const key = crypto.randomUUID();
+        const response = await post(path, payload, key);
+        assert.equal(response.status, 201);
+        const saved = await response.json();
+        const savedReport =
+          path === "/stock-reports" ? saved : saved.stockReports[0];
+        assert.deepEqual(
+          savedReport.items.map((item) => item.productId),
+          productIds
+        );
+        const reports = await json("/stock-reports");
+        assert.deepEqual(
+          reports.find((row) => row.id === savedReport.id),
+          savedReport
+        );
+        if (path === "/visits")
+          assert.deepEqual(await json(`/visits/${saved.id}`), saved);
+        // Reversed input order remains a matching retry with identical output.
+        const retryPayload =
+          path === "/stock-reports"
+            ? { ...report, items: items.toReversed() }
+            : {
+                ...visit,
+                stockReport: {
+                  reportedAt: report.reportedAt,
+                  items: items.toReversed(),
+                },
+              };
+        const retry = await post(path, retryPayload, key);
+        assert.equal(retry.status, 200);
+        assert.deepEqual(await retry.json(), saved);
+      }
     }
   );
 
@@ -340,6 +401,38 @@ async function verifyWrites(t, env, json) {
     assert.equal((await post("/stock-reports", report, key)).status, 201);
   });
 }
+
+test("default application rejects writes without accessing D1", async () => {
+  const accesses = [];
+  const DB = new Proxy(
+    {},
+    {
+      get(_target, property) {
+        accesses.push(property);
+        throw new Error("Unexpected D1 access");
+      },
+    }
+  );
+  for (const path of ["/visits", "/stock-reports"]) {
+    for (const body of [JSON.stringify({ salesForceId: "sf-01" }), "{"]) {
+      const response = await app.request(
+        path,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer sf-01",
+          },
+          body,
+        },
+        { DB }
+      );
+      assert.equal(response.status, 401);
+      assert.deepEqual(await response.json(), { error: "Unauthorized" });
+    }
+  }
+  assert.deepEqual(accesses, []);
+});
 
 test("read and write API against isolated local D1", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "sales-visit-api-"));

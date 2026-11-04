@@ -13,7 +13,8 @@ import { toStockReport, toVisit } from "./records.ts";
 // Tests explicitly inject a resolver in-process; the deployed default denies writes.
 export function createApp(
   resolveIdentity: (
-    request: Request
+    request: Request,
+    env: CloudflareBindings
   ) => Promise<TrustedIdentity | undefined> = async () => undefined
 ) {
   const app = new Hono<{ Bindings: CloudflareBindings }>();
@@ -24,7 +25,7 @@ export function createApp(
   ] as const) {
     app.post(path, async (c) => {
       try {
-        const identity = await resolveIdentity(c.req.raw);
+        const identity = await resolveIdentity(c.req.raw, c.env);
         if (!identity) return c.json({ error: "Unauthorized" }, 401);
         let input: unknown;
         try {

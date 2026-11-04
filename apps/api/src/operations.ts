@@ -128,10 +128,15 @@ function assertRetry(actual: unknown, expected: unknown) {
 }
 
 function sortedItems(items: StockReport["items"]) {
+  // Match SQLite BINARY collation, not JavaScript's UTF-16 string order.
+  const encoder = new TextEncoder();
   return items.toSorted((a, b) => {
-    if (a.productId < b.productId) return -1;
-    if (a.productId > b.productId) return 1;
-    return 0;
+    const left = encoder.encode(a.productId);
+    const right = encoder.encode(b.productId);
+    for (let i = 0; i < Math.min(left.length, right.length); i++) {
+      if (left[i] !== right[i]) return left[i] - right[i];
+    }
+    return left.length - right.length;
   });
 }
 
