@@ -2,7 +2,7 @@
 
 **Sales Visit** is a university **Computing Project** focused on digitizing field-sales visits and outlet reporting for a Telkomsel product-distribution workflow associated with partner **Citra Indah**.
 
-> **Project status:** The Web Dashboard uses synthetic mock data and browser-local storage. Shared contracts, the Drizzle/D1 schema and migrations, and a local read-only Hono API are implemented. API/frontend integration, writes, authentication, Telegram reporting, and remote API/D1 deployment remain unimplemented.
+> **Project status:** The Web Dashboard uses synthetic mock data and browser-local storage. Shared contracts, the Drizzle/D1 schema and migrations, local Hono reads, and atomic/idempotent Visit and Stock Report write operations are implemented. Writes are integration-tested with injected trusted identities; the default runtime rejects all writes until real authentication is implemented. API/frontend integration, authentication, Telegram reporting, and remote API/D1 deployment remain unimplemented.
 
 ## Background
 
@@ -48,10 +48,12 @@ See [CONTEXT.md](CONTEXT.md) for precise terminology and [ADR-0003](docs/adr/000
 - Overview metrics derived from coherent sample data.
 
 **Implemented local backend:** D1-backed reads for Sales Force, Outlets, Products,
-Visits (including linked Stock Reports), and Stock Reports, plus local migrations
-and idempotent synthetic seeding. See [API documentation](apps/api/README.md).
+Visits (including linked Stock Reports), and Stock Reports; atomic Visit/Stock
+Report creation with shared validation, trusted-identity boundaries and retry
+protection; plus local migrations and idempotent synthetic seeding. Default
+runtime writes are unauthorized. See [API documentation](apps/api/README.md).
 
-**Later integration:** API-backed Web operations, write endpoints, Telegram guided reporting, authentication/authorization, and operational reporting.
+**Later integration:** API-backed Web operations, Telegram guided reporting, real authentication/authorization to enable writes, and operational reporting.
 
 **Not part of the current MVP commitment:** Outlet login/self-reporting, advanced product recommendations, comprehensive sales-order and payment flows, or replacement of DigiPOS. These require business validation and an explicit scope decision.
 
@@ -145,7 +147,7 @@ Until confirmed, avoid presenting invented business calculations as actual opera
 
 The team's FigJam notes list a **static dashboard target of 3 November 2026** and a **planned partner discussion on 4 November 2026**. These dates reflect the working plan, not completed deliverables.
 
-The static Web workflow and local API/D1 read milestone are implemented separately.
-The Web still uses synthetic mocks; connecting it to the API, adding authenticated
-writes, and implementing Telegram reporting are future milestones. No API or D1
-remote resources have been created or deployed.
+The static Web workflow, local API/D1 reads, and protected write operations are
+implemented separately. The Web still uses synthetic mocks; connecting it to the
+API, implementing real authentication to enable writes, and Telegram reporting
+are future milestones. No API or D1 remote resources have been created or deployed.
