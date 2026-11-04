@@ -20,7 +20,10 @@ Use the Cloudflare Free tier for prototype/MVP where it satisfies requirements. 
 
 ### Current deployment scope (2026-11-03)
 
-Only the web dashboard is configured for deployment. It is a public prototype using synthetic mock data and browser-local persistence, not a production-ready authenticated application. API, bot, D1, and real authentication remain future direction, not configured resources. Each application retains an independent deployment boundary.
+Only the web dashboard is configured for deployment. It is a public prototype using synthetic mock data and browser-local persistence, not a production-ready authenticated application. The API now has local-only D1 read integration, shared migrations, and synthetic
+seeding; its placeholder binding is not a provisioned remote resource. API/bot
+remote deployment and real authentication remain future work. Each application
+retains an independent deployment boundary.
 
 ## Consequences and risks
 

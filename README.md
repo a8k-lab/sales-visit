@@ -2,7 +2,7 @@
 
 **Sales Visit** is a university **Computing Project** focused on digitizing field-sales visits and outlet reporting for a Telkomsel product-distribution workflow associated with partner **Citra Indah**.
 
-> **Project status (2 November 2026):** Early prototype / monorepo setup. The initial Web Dashboard is being developed with mock data; the API, Telegram Bot integration, database, and deployment are planned rather than completed.
+> **Project status:** The Web Dashboard uses synthetic mock data and browser-local storage. Shared contracts, the Drizzle/D1 schema and migrations, and a local read-only Hono API are implemented. API/frontend integration, writes, authentication, Telegram reporting, and remote API/D1 deployment remain unimplemented.
 
 ## Background
 
@@ -47,7 +47,11 @@ See [CONTEXT.md](CONTEXT.md) for precise terminology and [ADR-0003](docs/adr/000
 - Outlet list/detail and visit history.
 - Overview metrics derived from coherent sample data.
 
-**Later integration:** API-backed operations, Telegram guided reporting, persistent storage, authentication/authorization, and operational reporting.
+**Implemented local backend:** D1-backed reads for Sales Force, Outlets, Products,
+Visits (including linked Stock Reports), and Stock Reports, plus local migrations
+and idempotent synthetic seeding. See [API documentation](apps/api/README.md).
+
+**Later integration:** API-backed Web operations, write endpoints, Telegram guided reporting, authentication/authorization, and operational reporting.
 
 **Not part of the current MVP commitment:** Outlet login/self-reporting, advanced product recommendations, comprehensive sales-order and payment flows, or replacement of DigiPOS. These require business validation and an explicit scope decision.
 
@@ -69,7 +73,7 @@ The three apps are intended to be **deployed independently** even though they sh
 
 ## Target repository structure
 
-This is a **target layout**; not every directory or application is necessarily implemented yet.
+The workspace contains the following apps and shared packages; the Bot remains a scaffold.
 
 ```text
 sales-visit/
@@ -98,7 +102,15 @@ From the repository root:
 pnpm install
 ```
 
-App-specific development commands will be documented once each app is scaffolded. Do not assume that the Web, API, or Bot can run yet simply because the workspace exists.
+```sh
+pnpm dev:web             # Mock-backed dashboard
+pnpm db:migrate:local    # API-local D1 only
+pnpm db:seed:local       # Idempotent synthetic seed
+pnpm dev:api             # http://localhost:8787
+```
+
+See [Web instructions](apps/web/README.md) and [API instructions](apps/api/README.md)
+for details. No remote Cloudflare resources are needed for API development.
 
 ## Documentation and design references
 
@@ -133,4 +145,7 @@ Until confirmed, avoid presenting invented business calculations as actual opera
 
 The team's FigJam notes list a **static dashboard target of 3 November 2026** and a **planned partner discussion on 4 November 2026**. These dates reflect the working plan, not completed deliverables.
 
-The immediate focus is to demonstrate the Web reporting and monitoring workflow using consistent, synthetic mock data. Bot/API/database integration follows after the core workflow has been reviewed.
+The static Web workflow and local API/D1 read milestone are implemented separately.
+The Web still uses synthetic mocks; connecting it to the API, adding authenticated
+writes, and implementing Telegram reporting are future milestones. No API or D1
+remote resources have been created or deployed.
