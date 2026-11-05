@@ -2,7 +2,8 @@
 
 Hono Worker backed by local Cloudflare D1 through `@sales-visit/db`.
 Reads and protected Visit/Stock Report business operations use shared Zod
-contracts. The database schema and migrations are unchanged. No remote resources
+contracts. Internal Telegram registration/approval uses a named Worker RPC
+entrypoint and the additive `access_audit` migration. No remote resources
 have been created and this API has not been deployed.
 
 ## Run locally
@@ -125,7 +126,7 @@ Errors use `{ "error": "Concise message" }`:
 ### Identity boundary
 
 `createApp(resolveIdentity)` accepts an explicit in-process resolver with signature
-`(request: Request, env: CloudflareBindings) => Promise<TrustedIdentity | undefined>`.
+`(request: Request, env: ApiBindings) => Promise<TrustedIdentity | undefined>`.
 It receives the current request and Worker bindings and returns
 `{ salesForceId, submissionChannel }` from a trusted authentication boundary.
 The default resolver still returns no identity; providing bindings does not
@@ -135,10 +136,23 @@ the untrusted input, with no HTTP/authentication dependency. Tests construct a
 separate app with a fixed test identity; the resolver is not an HTTP endpoint,
 binding, header convention, environment flag, or dev-mode bypass.
 
-The exported Worker calls `createApp()` **without a resolver** and always denies
-writes before parsing a body or using D1. Authorization headers and spoofed
+The default HTTP Worker calls `createApp()` **without a resolver** and always denies
+report writes before parsing a body or using D1. Authorization headers and spoofed
 identity headers cannot enable it. There is no fake login or test identity in
 the deployed entrypoint. Reads remain unauthenticated and local-only.
+
+### Internal Bot identity RPC
+
+`src/worker.ts` exports the default Hono application and the named `BotIdentity`
+WorkerEntrypoint. Only the Bot's `IDENTITY` Service Binding is configured to call
+that entrypoint; it has no fetch handler or public HTTP routes. Methods are
+`register`, `me`, `pending`, `approve`, and `reject`. The API validates envelopes,
+resolves actors and enforces permissions independently of Bot handlers. Decision
+authorization and state/claim guards are checked inside the atomic D1 batch,
+not just at handler entry. Ordinary HTTP headers cannot supply this capability.
+No D1 binding is exposed to the Bot. See the [Bot runbook](../bot/README.md) for
+command grammar, SF verification/claim policy, local bootstrap and integration
+tests. Identity/audit fields are never added to existing public read responses.
 
 ### Idempotency
 
@@ -198,7 +212,7 @@ Cloudflare credentials, or changes to your dev database are required.
 
 ## Remaining scope
 
-Real authentication/authorization, CORS/frontend integration, Telegram reporting,
+Web authentication/read authorization, CORS/frontend integration, Telegram reporting,
 pagination/filtering, KPIs, and remote deployment remain deferred. The auth
 milestone must establish verified Web/Bot identities and trusted channel
 provenance, session/webhook security, Sales Force mapping/revocation, and Outlet

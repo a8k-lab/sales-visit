@@ -15,6 +15,13 @@
       "when": 1793852867999,
       "tag": "0001_identity_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793855996250,
+      "tag": "0002_open_lucky_pierre",
+      "breakpoints": true
     }
   ]
 }

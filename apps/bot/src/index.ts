@@ -1,12 +1,10 @@
 import { Bot, webhookCallback } from "grammy";
 
-interface Env {
-  TELEGRAM_BOT_TOKEN: string;
-  TELEGRAM_WEBHOOK_SECRET: string;
-}
+import { registerCommands } from "./registration/commands.ts";
+import { readUpdate } from "./webhook.ts";
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: CloudflareBindings): Promise<Response> {
     let pathname: string;
     try {
       pathname = new URL(request.url).pathname;
@@ -42,39 +40,20 @@ export default {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
-
-    // Keep this entrypoint stateless. Reporting will use the shared API once
-    // Telegram identity linking and server-side permissions are implemented.
-    bot.command("start", (ctx) =>
-      ctx.reply(
-        "Selamat datang di Sales Visit!\n\n" +
-          "Bot ini akan membantu Sales Force mencatat Visit dan Stock Report untuk Outlet.\n" +
-          "Fitur pelaporan belum tersedia. Tidak ada laporan yang disimpan.\n\n" +
-          "Ketik /help untuk bantuan."
-      )
-    );
-
-    bot.command("help", (ctx) =>
-      ctx.reply(
-        "/start — Perkenalan Sales Visit\n" +
-          "/help — Bantuan\n\n" +
-          "Pelaporan Visit dan Stock Report belum tersedia. " +
-          "Jangan kirim data laporan melalui chat ini dulu."
-      )
-    );
-
-    bot.on("message:text", (ctx) =>
-      ctx.reply(
-        "Pelaporan belum tersedia. Ketik /help untuk melihat perintah yang tersedia."
-      )
-    );
-
     try {
+      const update = await readUpdate(request);
+      if (update instanceof Response) return update;
+      const verifiedRequest = new Request(request.url, {
+        method: "POST",
+        headers: request.headers,
+        body: update,
+      });
+      const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
+      registerCommands(bot, env.IDENTITY);
       return await webhookCallback(bot, "cloudflare-mod", {
         secretToken: env.TELEGRAM_WEBHOOK_SECRET,
         onTimeout: "throw",
-      })(request);
+      })(verifiedRequest);
     } catch {
       // Do not log raw errors: Telegram URLs may contain the bot token.
       console.error("Telegram webhook processing failed");

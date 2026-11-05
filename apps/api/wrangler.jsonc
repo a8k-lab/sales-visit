@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sales-visit-api",
-  "main": "src/index.ts",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-11-02",
   // Local-only placeholder. No remote database has been provisioned.
   "d1_databases": [

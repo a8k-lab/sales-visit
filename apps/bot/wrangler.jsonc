@@ -3,6 +3,14 @@
   "name": "sales-visit-bot",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-02",
+  "services": [
+    {
+      "binding": "IDENTITY",
+      "service": "sales-visit-api",
+      "entrypoint": "BotIdentity",
+    },
+  ],
+  "vars": { "TELEGRAM_BOT_TOKEN": "", "TELEGRAM_WEBHOOK_SECRET": "" },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

@@ -2,7 +2,7 @@
 
 **Sales Visit** is a university **Computing Project** focused on digitizing field-sales visits and outlet reporting for a Telkomsel product-distribution workflow associated with partner **Citra Indah**.
 
-> **Project status:** The Web Dashboard uses synthetic mock data and browser-local storage. Shared contracts, the Drizzle/D1 schema and migrations, local Hono reads, and atomic/idempotent Visit and Stock Report write operations are implemented. Writes are integration-tested with injected trusted identities; the default runtime rejects all writes until real authentication is implemented. API/frontend integration, authentication, Telegram reporting, and remote API/D1 deployment remain unimplemented.
+> **Project status:** The Web Dashboard uses synthetic mock data and browser-local storage. Shared contracts, the Drizzle/D1 schema and migrations, local Hono reads, and atomic/idempotent Visit and Stock Report write operations are implemented. Writes are integration-tested with injected trusted identities; the default runtime rejects all writes until real authentication is implemented. Telegram registration and Admin approval now use a private Worker Service Binding and audited D1 operations. API/frontend integration, Web authentication, Telegram reporting, and remote API/D1 deployment remain unimplemented.
 
 ## Background
 
@@ -51,7 +51,9 @@ See [CONTEXT.md](CONTEXT.md) for precise terminology and [ADR-0003](docs/adr/000
 Visits (including linked Stock Reports), and Stock Reports; atomic Visit/Stock
 Report creation with shared validation, trusted-identity boundaries and retry
 protection; plus local migrations and idempotent synthetic seeding. Default
-runtime writes are unauthorized. See [API documentation](apps/api/README.md).
+runtime report writes are unauthorized. Telegram `/register`, `/me`, `/pending`,
+`/approve`, and `/reject` use API-owned identity operations. See
+[API documentation](apps/api/README.md) and the [Bot sandbox runbook](apps/bot/README.md).
 
 **Later integration:** API-backed Web operations, Telegram guided reporting, real authentication/authorization to enable writes, and operational reporting.
 
@@ -75,7 +77,7 @@ The three apps are intended to be **deployed independently** even though they sh
 
 ## Target repository structure
 
-The workspace contains the following apps and shared packages; the Bot remains a scaffold.
+The workspace contains the following apps and shared packages:
 
 ```text
 sales-visit/
@@ -112,7 +114,9 @@ pnpm dev:api             # http://localhost:8787
 ```
 
 See [Web instructions](apps/web/README.md) and [API instructions](apps/api/README.md)
-for details. No remote Cloudflare resources are needed for API development.
+for details. For registration/approval, follow the [Bot instructions](apps/bot/README.md)
+for local Admin bootstrap, ignored test secrets, and running both Workers.
+No remote Cloudflare resources are needed for local development.
 
 ## Documentation and design references
 

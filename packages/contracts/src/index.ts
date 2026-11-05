@@ -1,3 +1,4 @@
+export * from "./identity.ts";
 export { outletSchema, type Outlet } from "./outlet.ts";
 export { productSchema, type Product } from "./product.ts";
 export { salesForceSchema, type SalesForce } from "./sales-force.ts";
