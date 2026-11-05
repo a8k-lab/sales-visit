@@ -3,17 +3,17 @@
   "name": "sales-visit-api",
   "main": "src/worker.ts",
   "compatibility_date": "2026-11-02",
-  // Local-only placeholder. No remote database has been provisioned.
+  "workers_dev": true,
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "sales-visit-api-local",
+      "database_name": "sales-visit",
       "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "../../packages/db/migrations",
-    },
+      "migrations_dir": "../../packages/db/migrations"
+    }
   ],
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1,
-  },
+    "head_sampling_rate": 1
+  }
 }
