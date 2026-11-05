@@ -69,7 +69,16 @@ function fixture(t, options = {}) {
         return (
           state.bot ?? { is_bot: true, id: 123, username: "separate_test_bot" }
         );
-      if (method === "getWebhookInfo") return { url: state.current };
+      if (method === "getWebhookInfo") {
+        state.webhookReads = (state.webhookReads ?? 0) + 1;
+        if (state.failure === "latest-webhook" && state.webhookReads === 2)
+          throw new OperatorError(
+            "Telegram request failed; sensitive details suppressed."
+          );
+        return state.webhookStates?.length
+          ? state.webhookStates.shift()
+          : { url: state.current };
+      }
       if (method === "setWebhook") {
         assert.deepEqual(payload, {
           url: URL,
@@ -180,6 +189,7 @@ test("initial deploy supplies both secrets before health and webhook registratio
     "account",
     "deploy",
     "health",
+    "getWebhookInfo",
     "setWebhook",
     "getWebhookInfo",
   ]);
@@ -282,10 +292,57 @@ test("conflicting webhooks are never replaced or deleted", async (t) => {
   assert.ok(!state.events.includes("deleteWebhook"));
 });
 
+for (const action of ["initial-deploy", "delete"]) {
+  test(`${action} rechecks webhook state immediately before mutation and fails closed`, async (t) => {
+    for (const latest of [
+      { url: "https://unrelated.example/" },
+      { url: URL },
+      { url: "" },
+      {},
+      { url: null },
+      { url: {} },
+    ]) {
+      // Registration requires no active webhook; deletion requires the verified URL.
+      if (
+        (action === "initial-deploy" && latest.url === "") ||
+        (action === "delete" && latest.url === URL)
+      )
+        continue;
+      const state = fixture(t, {
+        current: action === "delete" ? URL : "",
+        webhookStates: [{ url: action === "delete" ? URL : "" }, latest],
+      });
+      await assert.rejects(state.run(action), /Webhook state changed/);
+      assert.ok(!state.events.includes("setWebhook"));
+      assert.ok(!state.events.includes("deleteWebhook"));
+      assert.equal(state.webhookReads, 2);
+      if (action === "initial-deploy")
+        assert.ok(
+          state.events.indexOf("health") <
+            state.events.lastIndexOf("getWebhookInfo")
+        );
+    }
+  });
+  test(`${action} refuses mutation if the final webhook read fails`, async (t) => {
+    const state = fixture(t, {
+      current: action === "delete" ? URL : "",
+      failure: "latest-webhook",
+    });
+    await assert.rejects(state.run(action), /Telegram request failed/);
+    assert.ok(!state.events.includes("setWebhook"));
+    assert.ok(!state.events.includes("deleteWebhook"));
+  });
+}
+
 test("planned deletion retains updates and permits explicit redeployment", async (t) => {
   const state = fixture(t, { current: URL });
   await state.run("delete");
   assert.equal(state.current, "");
+  assert.deepEqual(state.events.slice(-3), [
+    "getWebhookInfo",
+    "deleteWebhook",
+    "getWebhookInfo",
+  ]);
   await state.run("initial-deploy");
   assert.ok(
     state.events.indexOf("deleteWebhook") < state.events.indexOf("deploy")
@@ -327,6 +384,67 @@ test("info is read-only and does not print arbitrary Telegram fields", async (t)
     ask: async (_, hidden) => (hidden ? TOKEN : "TEST test"),
     telegram: async () => responses.shift(),
   });
+});
+
+test("status retains all documented Telegram update types but never arbitrary response values", async (t) => {
+  const valid = [
+    "message",
+    "edited_message",
+    "channel_post",
+    "edited_channel_post",
+    "business_connection",
+    "business_message",
+    "edited_business_message",
+    "deleted_business_messages",
+    "guest_message",
+    "message_reaction",
+    "message_reaction_count",
+    "inline_query",
+    "chosen_inline_result",
+    "callback_query",
+    "shipping_query",
+    "pre_checkout_query",
+    "purchased_paid_media",
+    "poll",
+    "poll_answer",
+    "my_chat_member",
+    "chat_member",
+    "chat_join_request",
+    "chat_boost",
+    "removed_chat_boost",
+    "managed_bot",
+    "subscription",
+    "stopped_message_generation",
+  ];
+  const state = fixture(t);
+  for (const allowed_updates of [
+    [
+      ...valid,
+      TOKEN,
+      { message: TOKEN },
+      null,
+      123,
+      [TOKEN],
+      "untrusted_error_text",
+      "message\n",
+    ],
+    { message: TOKEN },
+    null,
+    undefined,
+  ]) {
+    await state.run("info", {
+      telegram: async (_token, method) =>
+        method === "getMe"
+          ? { is_bot: true, id: 123, username: "separate_test_bot" }
+          : { url: "", allowed_updates, last_error_message: TOKEN },
+    });
+    const status = JSON.parse(state.output.at(-2));
+    assert.deepEqual(
+      status.allowed_updates,
+      Array.isArray(allowed_updates) ? valid : []
+    );
+    assert.equal(status.last_error_present, true);
+  }
 });
 
 test("write failure removes even a partially written private file", async () => {
@@ -483,6 +601,57 @@ function terminal() {
   return { input, output, text: () => text };
 }
 
+test("CLI exits after a prompt with initially flowing stdin, without waiting for EOF", async () => {
+  const code = `
+    import { terminalInput } from ${JSON.stringify(moduleUrl)};
+    process.stdin.isTTY = true;
+    process.stdin.setRawMode = () => {};
+    // A pipe-backed Socket remains referenced even when paused, unlike a TTY.
+    // Model the terminal handle lifecycle while keeping the input pipe open.
+    const pause = process.stdin.pause.bind(process.stdin);
+    process.stdin.pause = () => { pause(); process.stdin.unref(); return process.stdin; };
+    process.stdout.isTTY = true;
+    await terminalInput('Token: ', true);
+    console.log('complete');
+  `;
+  const child = spawn(process.execPath, ["--input-type=module", "-e", code], {
+    stdio: ["pipe", "pipe", "pipe"],
+    timeout: 2000,
+    killSignal: "SIGKILL",
+  });
+  let output = "";
+  child.stdout.on("data", (chunk) => {
+    output += chunk;
+  });
+  await once(child.stdout, "data");
+  child.stdin.write(TOKEN + "\r"); // Keep the pipe open: cleanup must pause stdin.
+  const [status, signal] = await once(child, "close");
+  assert.equal(
+    signal,
+    null,
+    "prompt left stdin active and the process had to be killed"
+  );
+  assert.equal(status, 0);
+  assert.match(output, /complete/);
+  assert.ok(!output.includes(TOKEN));
+});
+
+for (const cancel of [false, true]) {
+  test(`initially flowing input is paused on prompt ${cancel ? "cancellation" : "completion"}`, async () => {
+    const tty = terminal();
+    tty.input.resume();
+    tty.input.isRaw = true;
+    const result = terminalInput("Token: ", true, tty);
+    tty.input.write(cancel ? "\x03" : TOKEN + "\r");
+    if (cancel) await assert.rejects(result, /Cancelled/);
+    else assert.equal(await result, TOKEN);
+    assert.equal(tty.input.isPaused(), true);
+    assert.equal(tty.input.isRaw, true);
+    assert.equal(tty.input.listenerCount("keypress"), 0);
+    assert.ok(!tty.text().includes(TOKEN));
+  });
+}
+
 test("hidden raw input never echoes token, handles backspace and restores terminal state", async () => {
   const tty = terminal();
   const result = terminalInput("Token: ", true, tty);
@@ -547,6 +716,7 @@ test("terminal setup and restoration failures reject safely without lingering li
     assert.equal(tty.input.listenerCount("keypress"), 0);
     assert.equal(tty.input.listenerCount("error"), 0);
     assert.equal(tty.output.listenerCount("error"), 0);
+    assert.equal(tty.input.isPaused(), true);
   }
 });
 
@@ -702,6 +872,44 @@ for (const name of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     }
   );
 }
+
+test("symlink invocation runs the CLI while importing it stays side-effect free", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "sales-visit-cli-test-"));
+  try {
+    const link = join(directory, "operator.mjs");
+    symlinkSync(fileURLToPath(moduleUrl), link);
+    for (const [args, status, message] of [
+      [[link, "--help"], 0, /Usage:/],
+      [[link, "configure", URL], 1, /rotation is disabled/],
+      [
+        [
+          "--input-type=module",
+          "-e",
+          `await import(${JSON.stringify(moduleUrl)}); console.log('import-only');`,
+        ],
+        0,
+        /^import-only\n$/,
+      ],
+    ]) {
+      const child = spawn(process.execPath, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 2000,
+      });
+      let output = "";
+      child.stdout.on("data", (chunk) => {
+        output += chunk;
+      });
+      child.stderr.on("data", (chunk) => {
+        output += chunk;
+      });
+      const [code] = await once(child, "close");
+      assert.equal(code, status);
+      assert.match(output, message);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("main restores signal listeners, handles help/configure without credentials and suppresses unexpected errors", async () => {
   const signals = new EventEmitter();

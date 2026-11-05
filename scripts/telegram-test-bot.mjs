@@ -17,6 +17,37 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
 export class OperatorError extends Error {}
 const cancelled = () => new OperatorError("Cancelled.");
+// Telegram Update fields: https://core.telegram.org/bots/api/types/update.md
+// Keep status output to known enum values, never arbitrary response strings.
+const updateTypes = new Set([
+  "message",
+  "edited_message",
+  "channel_post",
+  "edited_channel_post",
+  "business_connection",
+  "business_message",
+  "edited_business_message",
+  "deleted_business_messages",
+  "guest_message",
+  "message_reaction",
+  "message_reaction_count",
+  "inline_query",
+  "chosen_inline_result",
+  "callback_query",
+  "shipping_query",
+  "pre_checkout_query",
+  "purchased_paid_media",
+  "poll",
+  "poll_answer",
+  "my_chat_member",
+  "chat_member",
+  "chat_join_request",
+  "chat_boost",
+  "removed_chat_boost",
+  "managed_bot",
+  "subscription",
+  "stopped_message_generation",
+]);
 
 export function workerUrl(value) {
   // Validate the original spelling too: URL parsing normalizes ports, paths and case.
@@ -136,7 +167,6 @@ export function terminalInput(
     let value = "";
     let finished = false;
     const wasRaw = input.isRaw;
-    const wasPaused = input.isPaused();
     const finish = (error) => {
       if (finished) return;
       finished = true;
@@ -146,8 +176,10 @@ export function terminalInput(
       output.removeListener("error", end);
       signal?.removeEventListener("abort", abort);
       try {
+        // A resumed stdin keeps the CLI alive, regardless of its initial state.
+        // Pause first so even a raw-mode restoration failure cannot leave it active.
+        input.pause();
         input.setRawMode(Boolean(wasRaw));
-        if (wasPaused) input.pause();
         output.write("\n");
       } catch {
         error = cancelled();
@@ -178,7 +210,7 @@ export function terminalInput(
         if (!hidden) output.write(text);
       }
     };
-    if (signal?.aborted) return reject(cancelled());
+    if (signal?.aborted) return finish(cancelled());
     try {
       emitKeypressEvents(input);
       input.setRawMode(true);
@@ -333,6 +365,9 @@ export async function operate(action, url, dependencies = {}) {
     log(
       "Also verify Wrangler access and the deployed API in that account. Health alone is not ownership proof."
     );
+    log(
+      "Independently verify this Worker is not used by another bot. This helper can inspect only the supplied bot's webhook."
+    );
     const confirmation = `ACCOUNT ${accountId} ${url.slice(8, -1)}`;
     if (
       (await ask(`Confirm ownership by typing ${confirmation}: `)) !==
@@ -356,6 +391,14 @@ export async function operate(action, url, dependencies = {}) {
     check();
     await health(url);
     check();
+    // Telegram has no conditional webhook writes. Recheck as late as possible;
+    // this narrows, but cannot eliminate, concurrent-modification races.
+    const latest = await telegram(token, "getWebhookInfo");
+    check();
+    if (latest?.url !== "")
+      throw new OperatorError(
+        "Webhook state changed; refusing to register over an active or unverified webhook."
+      );
     await telegram(token, "setWebhook", {
       url,
       secret_token: secret,
@@ -373,6 +416,12 @@ export async function operate(action, url, dependencies = {}) {
     if ((await ask("Type DELETE TEST WEBHOOK: ")) !== "DELETE TEST WEBHOOK")
       throw new OperatorError("Deletion cancelled.");
     check();
+    const latest = await telegram(token, "getWebhookInfo");
+    check();
+    if (typeof latest?.url !== "string" || !sameWebhook(latest.url, url))
+      throw new OperatorError(
+        "Webhook state changed; refusing to delete an absent, conflicting or unverified webhook."
+      );
     await telegram(token, "deleteWebhook", { drop_pending_updates: false });
     log("Test webhook removed; pending updates retained.");
   }
@@ -392,7 +441,9 @@ export async function operate(action, url, dependencies = {}) {
           : null,
         last_error_present: Boolean(info.last_error_message),
         allowed_updates: Array.isArray(info.allowed_updates)
-          ? info.allowed_updates.filter((item) => item === "message")
+          ? info.allowed_updates.filter(
+              (item) => typeof item === "string" && updateTypes.has(item)
+            )
           : [],
       },
       null,
@@ -445,5 +496,17 @@ export async function main(
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url))
-  process.exitCode = await main();
+function isEntryPoint() {
+  try {
+    return Boolean(
+      process.argv[1] &&
+      realpathSync(process.argv[1]) ===
+        realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    // An importing process may have a non-file argv[1]; do not run the CLI.
+    return false;
+  }
+}
+
+if (isEntryPoint()) process.exitCode = await main();
