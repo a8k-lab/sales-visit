@@ -83,13 +83,28 @@ def private_secrets_file(values):
         yield path
 
 
-def run_wrangler(arguments, payload=None):
+def confirm_cloudflare_target(url):
+    account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+    if not re.fullmatch(r"[0-9a-fA-F]{32}", account_id):
+        raise OperatorError("Set CLOUDFLARE_ACCOUNT_ID to the verified account ID before deployment.")
+    hostname = urlsplit(url).hostname
+    print(f"Cloudflare target: account {account_id}, Worker URL {url}")
+    print("Verify this account owns the URL's workers.dev subdomain in the Cloudflare dashboard.")
+    print("Also verify Wrangler access and the deployed API in that account. Health alone is not ownership proof.")
+    confirmation = f"ACCOUNT {account_id} {hostname}"
+    if input(f"Confirm ownership by typing {confirmation}: ") != confirmation:
+        raise OperatorError("Cloudflare account/URL ownership not confirmed; nothing changed.")
+    return account_id
+
+
+def run_wrangler(arguments, account_id):
     result = subprocess.run(
         ["pnpm", "--filter", "@sales-visit/bot", "exec", "wrangler", *arguments],
-        input=payload, stdin=subprocess.DEVNULL if payload is None else None,
+        stdin=subprocess.DEVNULL,
         text=True, capture_output=True,
         # Suppress persistent debug logs as well as captured console output.
-        env={**os.environ, "WRANGLER_LOG": "error", "WRANGLER_WRITE_LOGS": "false"},
+        env={**os.environ, "CLOUDFLARE_ACCOUNT_ID": account_id,
+             "WRANGLER_LOG": "error", "WRANGLER_WRITE_LOGS": "false"},
         cwd=Path(__file__).resolve().parents[1],
     )
     if result.returncode:
@@ -97,6 +112,11 @@ def run_wrangler(arguments, payload=None):
 
 
 def operate(action, url):
+    if action == "configure":
+        raise OperatorError(
+            "In-place rotation is disabled: remove only the verified test webhook with delete, "
+            "then use initial-deploy during a planned interruption. See docs/deployment.md."
+        )
     if not sys.stdin.isatty():
         raise OperatorError("Run interactively in a private terminal (no recording or shell tracing).")
     token = getpass.getpass("Separate TEST bot token (hidden): ")
@@ -114,17 +134,14 @@ def operate(action, url):
     current = info.get("url", "")
     if current and not same_webhook(current, url):
         raise OperatorError("A different webhook exists. Refusing to replace or delete it.")
-    if action in ("initial-deploy", "configure"):
-        if action == "configure":
-            # Rotation is only for an already deployed, reachable Worker.
-            verify_worker(url)
+    if action == "initial-deploy":
+        if current:
+            raise OperatorError("A test webhook is active. Delete it explicitly before changing Worker credentials.")
+        account_id = confirm_cloudflare_target(url)
         secret = secrets.token_urlsafe(32)
         values = {"TELEGRAM_BOT_TOKEN": token, "TELEGRAM_WEBHOOK_SECRET": secret}
-        if action == "initial-deploy":
-            with private_secrets_file(values) as path:
-                run_wrangler(["deploy", "--name", "sales-visit-bot", "--secrets-file", path])
-        else:
-            run_wrangler(["secret", "bulk", "--name", "sales-visit-bot"], json.dumps(values))
+        with private_secrets_file(values) as path:
+            run_wrangler(["deploy", "--name", "sales-visit-bot", "--secrets-file", path], account_id)
         # Never register a webhook after a failed deploy/upload/health check.
         verify_worker(url)
         api(token, "setWebhook", {"url": url, "secret_token": secret,

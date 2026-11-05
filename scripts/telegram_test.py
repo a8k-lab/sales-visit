@@ -14,6 +14,7 @@ bot = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bot)
 URL = "https://sales-visit-bot.example.workers.dev/"
 TOKEN = "123:synthetic"  # noqa: S105 - synthetic test fixture, not a credential
+ACCOUNT_ID = "a" * 32  # synthetic account fixture
 
 
 class OperatorTests(unittest.TestCase):
@@ -24,10 +25,12 @@ class OperatorTests(unittest.TestCase):
         self.failure = None
         self.health_count = 0
         self.confirmation = "TEST separate_test_bot"
+        self.account_confirmation = f"ACCOUNT {ACCOUNT_ID} sales-visit-bot.example.workers.dev"
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(patch.object(bot.sys.stdin, "isatty", return_value=True))
-        self.stack.enter_context(patch.object(bot.getpass, "getpass", return_value=TOKEN))
+        self.token_prompt = self.stack.enter_context(patch.object(bot.getpass, "getpass", return_value=TOKEN))
+        self.stack.enter_context(patch.dict(bot.os.environ, {"CLOUDFLARE_ACCOUNT_ID": ACCOUNT_ID}))
         self.stack.enter_context(patch("builtins.input", side_effect=self.confirm))
         self.stack.enter_context(patch.object(bot, "api", side_effect=self.api))
         self.stack.enter_context(patch.object(bot, "verify_worker", side_effect=self.health))
@@ -41,6 +44,9 @@ class OperatorTests(unittest.TestCase):
         self.assertNotIn(TOKEN, self.output.getvalue())
 
     def confirm(self, prompt):
+        if "Confirm ownership" in prompt:
+            self.events.append("confirm-account")
+            return self.account_confirmation
         self.events.append("confirm")
         return "DELETE TEST WEBHOOK" if "DELETE" in prompt else self.confirmation
 
@@ -77,6 +83,7 @@ class OperatorTests(unittest.TestCase):
         self.assertTrue(kwargs["capture_output"])
         self.assertEqual(kwargs["env"]["WRANGLER_WRITE_LOGS"], "false")
         self.assertEqual(kwargs["env"]["WRANGLER_LOG"], "error")
+        self.assertEqual(kwargs["env"]["CLOUDFLARE_ACCOUNT_ID"], ACCOUNT_ID)
         if "deploy" in arguments:
             self.events.append("deploy")
             self.assertNotIn("bulk", arguments)
@@ -87,11 +94,10 @@ class OperatorTests(unittest.TestCase):
             root = Path(__file__).resolve().parents[1]
             self.assertNotIn(root, path.resolve().parents)
             self.uploaded = json.loads(path.read_text())
-            self.assertIsNone(kwargs["input"])
+            self.assertNotIn("input", kwargs)
             self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
         else:
-            self.events.append("bulk")
-            self.uploaded = json.loads(kwargs["input"])
+            self.fail("Only deploy --secrets-file may write Worker credentials")
         self.assertEqual(set(self.uploaded), {"TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"})
         self.assertEqual(self.uploaded["TELEGRAM_BOT_TOKEN"], TOKEN)
         self.assertGreaterEqual(len(self.uploaded["TELEGRAM_WEBHOOK_SECRET"]), 32)
@@ -112,7 +118,7 @@ class OperatorTests(unittest.TestCase):
 
     def test_initial_deploy_supplies_required_secrets_before_health_and_webhook(self):
         bot.operate("initial-deploy", URL)
-        self.assertEqual(self.events, ["getMe", "confirm", "getWebhookInfo", "deploy",
+        self.assertEqual(self.events, ["getMe", "confirm", "getWebhookInfo", "confirm-account", "deploy",
                                        "health", "setWebhook", "getWebhookInfo"])
 
     def test_initial_deploy_failures_clean_file_and_never_set_webhook(self):
@@ -145,24 +151,46 @@ class OperatorTests(unittest.TestCase):
             bot.operate("initial-deploy", URL)
         self.assertIn("health", self.events)
 
-    def test_rotation_checks_existing_worker_then_uploads_stdin_then_health(self):
+    def test_in_place_rotation_is_disabled_without_reading_credentials_or_remote_calls(self):
         self.current = URL
-        bot.operate("configure", URL)
-        self.assertEqual(self.events, ["getMe", "confirm", "getWebhookInfo", "health",
-                                       "bulk", "health", "setWebhook", "getWebhookInfo"])
+        with self.assertRaisesRegex(bot.OperatorError, "rotation is disabled"):
+            bot.operate("configure", URL)
+        self.assertEqual(self.events, [])
+        self.token_prompt.assert_not_called()
+        self.upload.assert_not_called()
+
+    def test_initial_deploy_cannot_be_used_to_rotate_active_webhook(self):
+        self.current = URL
+        with self.assertRaisesRegex(bot.OperatorError, "webhook is active"):
+            bot.operate("initial-deploy", URL)
+        self.assertEqual(self.events, ["getMe", "confirm", "getWebhookInfo"])
+        self.upload.assert_not_called()
+
+    def test_account_id_must_be_explicit_and_valid_before_any_upload(self):
+        for value in ["", "wrong-account", "a" * 31]:
+            with self.subTest(value=value), \
+                    patch.dict(bot.os.environ, {"CLOUDFLARE_ACCOUNT_ID": value}), \
+                    self.assertRaisesRegex(bot.OperatorError, "verified account ID"):
+                bot.operate("initial-deploy", URL)
+        self.upload.assert_not_called()
+        self.assertNotIn("setWebhook", self.events)
         self.assertEqual(self.files, [])
 
-    def test_rotation_failure_paths_never_set_webhook(self):
-        for failure in ["health-1", "wrangler", "health-2"]:
-            with self.subTest(failure=failure):
-                self.events.clear()
-                self.health_count = 0
-                self.failure = failure
-                with self.assertRaises(bot.OperatorError):
-                    bot.operate("configure", URL)
-                self.assertNotIn("setWebhook", self.events)
-                if failure == "health-1":
-                    self.assertNotIn("bulk", self.events)
+    def test_account_url_mismatch_refuses_upload(self):
+        self.account_confirmation = f"ACCOUNT {ACCOUNT_ID} sales-visit-bot.other.workers.dev"
+        with self.assertRaisesRegex(bot.OperatorError, "ownership not confirmed"):
+            bot.operate("initial-deploy", URL)
+        self.upload.assert_not_called()
+        self.assertNotIn("setWebhook", self.events)
+        self.assertEqual(self.files, [])
+
+    def test_stopped_webhook_can_be_redeployed_without_in_place_rotation(self):
+        self.current = URL
+        bot.operate("delete", URL)
+        self.assertEqual(self.current, "")
+        bot.operate("initial-deploy", URL)
+        self.assertLess(self.events.index("deleteWebhook"), self.events.index("deploy"))
+        self.assertEqual(self.current, URL)
 
     def test_refuses_unrelated_webhook_before_remote_change(self):
         self.current = "https://unrelated.example/"

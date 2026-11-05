@@ -11,7 +11,7 @@ Prepared from `main` after merged PR #5 (`53e413e`). Wrangler was **not
 authenticated**, so no remote resources, migrations, deployments, secrets,
 webhook changes, Admin bootstrap or live Telegram tests have been performed.
 No deployed URLs are known. Local checks passed: workspace typechecks, 39
-workspace tests, 17 deployment-helper tests, Drizzle migration checks, Hono route
+workspace tests, 20 deployment-helper tests, Drizzle migration checks, Hono route
 inspection, both Worker bundle dry-runs, lint and formatting. These are automated/
 local checks only, not remote deployment or real Telegram evidence.
 
@@ -38,9 +38,11 @@ pnpm --filter @sales-visit/api exec wrangler whoami
 pnpm --filter @sales-visit/api exec wrangler d1 list
 ```
 
-Verify the intended account ID/name **privately** before any write. If multiple
-accounts exist, select the intended account with `CLOUDFLARE_ACCOUNT_ID` in the
-operator session and verify again. Do not copy sensitive command outputs into PRs.
+Verify the intended account ID/name **privately** before any write. Set
+`CLOUDFLARE_ACCOUNT_ID` in the operator session to that actual 32-hex account ID
+(not a token), even if you have only one account. Verify Wrangler access to that
+account again. The Bot deployment helper requires this explicit selection and
+pins the child Wrangler process to it. Do not copy sensitive command outputs into PRs.
 Only the newly provisioned Sales Visit resources are in scope. If `sales-visit`
 already exists, stop and establish ownership/purpose and whether it is the new
 empty test target; never adopt an unrelated database just because its name matches.
@@ -62,14 +64,27 @@ Worker name and `src/worker.ts` unchanged. A D1 UUID is not a credential and may
 be committed after verifying the target; never invent one. Inspect it again:
 
 ```sh
+pnpm --filter @sales-visit/api exec wrangler whoami
 pnpm --filter @sales-visit/api exec wrangler d1 info DB
+```
+
+**STOP before any remote migration.** Verify the selected Cloudflare account ID
+and name against the intended account, and compare the actual D1 UUID reported
+by `d1 info DB` with both the reviewed creation result and `database_id` in
+`apps/api/wrangler.jsonc`. Confirm this is the new `sales-visit` test database,
+not an unrelated resource. Record the target verification privately. A matching
+database name or a syntactically valid UUID alone is not sufficient. On any
+mismatch or missing evidence, stop; do not run a migration.
+
+Only after completing that explicit verification, run separately:
+
+```sh
 pnpm db:migrate:remote
 pnpm db:verify:remote
 pnpm --filter @sales-visit/api exec wrangler d1 migrations list DB --remote
 ```
 
-Compare the reported database UUID/account to the reviewed creation result before
-applying migrations. No pending migrations should remain. `d1_migrations` must
+After migration, no pending migrations should remain. `d1_migrations` must
 record `0000_initial.sql`, `0001_identity_foundation.sql`, and
 `0002_open_lucky_pierre.sql` exactly once. Expect nine application tables:
 `sales_force`, `outlets`, `products`, `visits`, `stock_reports`,
@@ -154,7 +169,13 @@ a missing/wrong `X-Telegram-Bot-Api-Secret-Token` is 401 after secrets are store
 3. Confirm Cloudflare login/account, the account's actual workers.dev subdomain
    (dashboard → Workers & Pages), no unrelated Worker-name collision, and the
    already deployed API/`BotIdentity` entrypoint. Use that verified subdomain for
-   the new Bot URL; do not guess it. Then use the same private helper for bootstrap:
+   the new Bot URL; do not guess it. In that same account's dashboard verify the
+   subdomain belongs to the account ID selected in `CLOUDFLARE_ACCOUNT_ID`.
+   The helper displays that account ID and URL and requires typing
+   `ACCOUNT ACCOUNT_ID sales-visit-bot.YOUR_SUBDOMAIN.workers.dev` before creating
+   the secrets file or invoking Wrangler. This is a mandatory operator ownership
+   attestation, not automatic ownership discovery; public health is not proof of
+   account ownership. Abort on uncertainty. Then use the helper for bootstrap:
 
 ### Initial Bot deployment (both required secrets supplied with code)
 
@@ -163,8 +184,8 @@ pnpm telegram:test-bot initial-deploy https://sales-visit-bot.YOUR_SUBDOMAIN.wor
 pnpm telegram:test-bot info https://sales-visit-bot.YOUR_SUBDOMAIN.workers.dev/
 ```
 
-After `getMe` identity confirmation and checking for a conflicting webhook, the
-helper generates a cryptographically random 32-byte URL-safe webhook secret. It
+After `getMe` identity confirmation, verifying **no webhook is active**, and
+account/URL ownership confirmation, the helper generates a cryptographically random 32-byte URL-safe webhook secret. It
 writes both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` to a temporary JSON
 file **outside the checkout**, in a private 0700 directory with a 0600 file. It
 invokes Wrangler `deploy --name sales-visit-bot --secrets-file PATH`, supplying
@@ -184,33 +205,42 @@ call `setWebhook`, using the same generated `secret_token` and
 Telegram webhook unchanged. Health verifies liveness/service identity, not RPC;
 inspect the deployed `IDENTITY` binding and complete the acceptance checks below.
 
-### Subsequent secret rotation / webhook setup
+### Subsequent code updates and planned credential replacement
 
-For an **already deployed** Worker, including replacing this test webhook:
+**`configure` is disabled** and fails before reading credentials or making remote
+calls. There is no in-place secret rotation: updating Cloudflare first can break
+an active webhook if Telegram rejects `setWebhook`, and the previous generated
+secret cannot be recovered. Health checks cannot solve that consistency problem.
+`initial-deploy` also refuses an active webhook, including one at the same URL,
+so it cannot bypass this restriction.
 
-```sh
-pnpm telegram:test-bot configure https://sales-visit-bot.YOUR_SUBDOMAIN.workers.dev/
-```
+For code-only updates use `pnpm deploy:bot`, which preserves existing secrets,
+after rechecking the selected account and Worker ownership; then check `/health`.
+For credential replacement or webhook reconfiguration, schedule an explicit test
+interruption and use this stop-and-redeploy procedure:
 
-This confirms the separate bot identity again, refuses a different existing
-webhook, and requires a healthy Worker **before** any secret write. It uploads
-both credentials via `wrangler secret bulk` **stdin**, with a freshly generated
-webhook secret, then checks health again before `setWebhook`. It does not deploy
-code and is not an initial-deployment command. For code-only updates use
-`pnpm deploy:bot`, which preserves existing secrets, then check `/health`.
+1. Reverify the separate test bot, selected Cloudflare account and URL ownership.
+2. Run the helper's `delete` action below. It confirms bot identity and the exact
+   existing test webhook, requires explicit deletion confirmation and retains
+   pending updates. Check `info` shows no active webhook. Never delete another
+   bot's webhook or ignore a different-webhook refusal.
+3. Run `initial-deploy` again with the intended URL. It reconfirms account/URL
+   ownership, redeploys code with fresh credentials using the same private
+   secrets-file procedure, verifies health, then registers the webhook.
+4. Check `info` and actual delivery. This deliberately stops delivery rather than
+   risking an existing webhook with an unknown, obsolete secret.
 
-Both paths retain pending updates, refuse an existing different webhook, and
-never follow redirects. No token, secret, response payload, error URL or traceback
-is printed. Wrangler output is captured and persistent Wrangler debug logging
-is disabled. Cloudflare login must already work. If a step fails, verify account,
-target, deployment and health privately; rerun the appropriate helper command for
-this test bot only (allow workers.dev propagation time after initial deployment).
-A successful credential write and webhook update are not atomic: the old webhook
-may temporarily fail authentication after rotation. Rerun promptly after a partial
-failure; do not weaken secret validation. The secret is not retained after the
-command; rerunning generates a new one. If bootstrap already deployed code but
-webhook setup failed, `configure` can finish once health passes; `initial-deploy`
-can also be retried deliberately, redeploying code and rotating both credentials.
+No token, secret, response payload, error URL or traceback is printed. Wrangler
+output is captured and persistent Wrangler debug logging is disabled. Cloudflare
+login must already work. Pending updates are retained and redirects are not
+followed. If deploy, health or webhook setup fails, delivery remains stopped;
+verify prerequisites privately (including workers.dev propagation) and inspect
+`info` before retrying. If no webhook is active, retry `initial-deploy`; the secret
+is not retained and a new one is generated. If Telegram accepted `setWebhook` but
+the response was lost, `info` may show an active webhook: verify delivery instead
+of blindly retrying. To retry credential replacement, explicitly delete that
+verified test webhook first. Do not weaken secret validation or enable in-place
+rotation without a reviewed recovery mechanism.
 
 Check `webhook_matches: true`, queue count, and error flags. Error flags may
 reflect an older delivery error; compare timestamps and subsequent successful
@@ -303,8 +333,9 @@ pnpm telegram:test-bot delete https://sales-visit-bot.YOUR_SUBDOMAIN.workers.dev
 
 Deletion verifies bot identity/current webhook and requires another confirmation;
 it preserves pending updates. Never switch to polling with the original token.
-For replacement, remove only this test webhook, deploy the replacement, verify
-its target/identity, then configure again. The helper intentionally supports only
+For replacement, follow the planned interruption procedure above: remove only
+this test webhook, reconfirm account/URL ownership, and run `initial-deploy`.
+Do not use the disabled `configure` action. The helper intentionally supports only
 the named Bot Worker workers.dev URL. Retire test credentials via BotFather only
 for this separate test bot. Original bot and Dashboard remain untouched.
 
