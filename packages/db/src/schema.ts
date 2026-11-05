@@ -30,6 +30,97 @@ export const salesForce = sqliteTable(
   ]
 );
 
+export const users = sqliteTable(
+  "users",
+  {
+    id: id().default(sql`(lower(hex(randomblob(16))))`),
+    status: text("status", {
+      enum: ["pending", "active", "rejected", "disabled"],
+    })
+      .notNull()
+      .default("pending"),
+    role: text("role", { enum: ["admin", "supervisor", "sales_force"] }),
+    salesForceId: text("sales_force_id").references(() => salesForce.id, {
+      onDelete: "restrict",
+      onUpdate: "restrict",
+    }),
+    createdAt: createdAt(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (table) => [
+    check("users_id_nonblank", sql`length(trim(${table.id})) > 0`),
+    check(
+      "users_status_valid",
+      sql`${table.status} in ('pending', 'active', 'rejected', 'disabled')`
+    ),
+    check(
+      "users_role_valid",
+      sql`${table.role} is null or ${table.role} in ('admin', 'supervisor', 'sales_force')`
+    ),
+    check(
+      "users_approved_role_required",
+      sql`${table.status} not in ('active', 'disabled') or ${table.role} is not null`
+    ),
+    check(
+      "users_timestamps_integer",
+      sql`typeof(${table.createdAt}) = 'integer' and typeof(${table.updatedAt}) = 'integer'`
+    ),
+    index("users_sales_force_idx").on(table.salesForceId),
+  ]
+);
+
+export const telegramIdentities = sqliteTable(
+  "telegram_identities",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    telegramUserId: text("telegram_user_id").notNull(),
+    username: text("username"),
+    firstName: text("first_name"),
+    lastName: text("last_name"),
+    createdAt: createdAt(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (table) => [
+    unique("telegram_identities_telegram_user_unique").on(table.telegramUserId),
+    check(
+      "telegram_identities_id_canonical",
+      sql`typeof(${table.telegramUserId}) = 'text' and ${table.telegramUserId} glob '[1-9]*' and ${table.telegramUserId} not glob '*[^0-9]*' and instr(${table.telegramUserId}, char(0)) = 0`
+    ),
+    check(
+      "telegram_identities_timestamps_integer",
+      sql`typeof(${table.createdAt}) = 'integer' and typeof(${table.updatedAt}) = 'integer'`
+    ),
+  ]
+);
+
+export const usersRelations = relations(users, ({ one }) => ({
+  salesForce: one(salesForce, {
+    fields: [users.salesForceId],
+    references: [salesForce.id],
+  }),
+  telegramIdentity: one(telegramIdentities),
+}));
+
+export const telegramIdentitiesRelations = relations(
+  telegramIdentities,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [telegramIdentities.userId],
+      references: [users.id],
+    }),
+  })
+);
+
 export const outlets = sqliteTable(
   "outlets",
   {
@@ -174,6 +265,7 @@ export const stockReportItems = sqliteTable(
 );
 
 export const salesForceRelations = relations(salesForce, ({ many }) => ({
+  users: many(users),
   visits: many(visits),
   stockReports: many(stockReports),
 }));

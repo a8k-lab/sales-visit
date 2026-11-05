@@ -76,6 +76,8 @@ test("exports include tables, relations, and a lazy D1 factory", () => {
   assert.equal(db.$client, binding);
   for (const name of [
     "salesForce",
+    "users",
+    "telegramIdentities",
     "outlets",
     "products",
     "visits",
@@ -88,7 +90,9 @@ test("exports include tables, relations, and a lazy D1 factory", () => {
   }
   // Resolving these nested queries exercises both sides of every relation.
   for (const [name, withRelations] of Object.entries({
-    salesForce: { visits: true, stockReports: true },
+    salesForce: { visits: true, stockReports: true, users: true },
+    users: { salesForce: true, telegramIdentity: true },
+    telegramIdentities: { user: true },
     outlets: { visits: true, stockReports: true },
     products: { stockReportItems: true },
     visits: { outlet: true, salesForce: true, stockReports: true },
