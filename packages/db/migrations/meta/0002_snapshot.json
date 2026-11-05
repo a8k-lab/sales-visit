@@ -1,0 +1,716 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "d7c5a536-8897-4481-a363-4bb6025abf4a",
+  "prevId": "67d3b17f-e00e-4431-a939-4dd8be219f5d",
+  "tables": {
+    "access_audit": {
+      "name": "access_audit",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "target_user_id": {
+          "name": "target_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "before_state": {
+          "name": "before_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "after_state": {
+          "name": "after_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "access_audit_target_idx": {
+          "name": "access_audit_target_idx",
+          "columns": ["target_user_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "access_audit_actor_user_id_users_id_fk": {
+          "name": "access_audit_actor_user_id_users_id_fk",
+          "tableFrom": "access_audit",
+          "tableTo": "users",
+          "columnsFrom": ["actor_user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        },
+        "access_audit_target_user_id_users_id_fk": {
+          "name": "access_audit_target_user_id_users_id_fk",
+          "tableFrom": "access_audit",
+          "tableTo": "users",
+          "columnsFrom": ["target_user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "access_audit_action_valid": {
+          "name": "access_audit_action_valid",
+          "value": "\"access_audit\".\"action\" in ('register', 'approve', 'reject')"
+        },
+        "access_audit_states_json": {
+          "name": "access_audit_states_json",
+          "value": "json_valid(\"access_audit\".\"before_state\") and json_valid(\"access_audit\".\"after_state\")"
+        },
+        "access_audit_time_integer": {
+          "name": "access_audit_time_integer",
+          "value": "typeof(\"access_audit\".\"created_at\") = 'integer'"
+        }
+      }
+    },
+    "outlets": {
+      "name": "outlets",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "outlets_id_nonblank": {
+          "name": "outlets_id_nonblank",
+          "value": "length(trim(\"outlets\".\"id\")) > 0"
+        },
+        "outlets_name_nonblank": {
+          "name": "outlets_name_nonblank",
+          "value": "length(trim(\"outlets\".\"name\")) > 0"
+        }
+      }
+    },
+    "products": {
+      "name": "products",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "products_id_nonblank": {
+          "name": "products_id_nonblank",
+          "value": "length(trim(\"products\".\"id\")) > 0"
+        },
+        "products_name_nonblank": {
+          "name": "products_name_nonblank",
+          "value": "length(trim(\"products\".\"name\")) > 0"
+        }
+      }
+    },
+    "sales_force": {
+      "name": "sales_force",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "sales_force_id_nonblank": {
+          "name": "sales_force_id_nonblank",
+          "value": "length(trim(\"sales_force\".\"id\")) > 0"
+        },
+        "sales_force_name_nonblank": {
+          "name": "sales_force_name_nonblank",
+          "value": "length(trim(\"sales_force\".\"name\")) > 0"
+        }
+      }
+    },
+    "stock_report_items": {
+      "name": "stock_report_items",
+      "columns": {
+        "stock_report_id": {
+          "name": "stock_report_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "stock_report_items_product_idx": {
+          "name": "stock_report_items_product_idx",
+          "columns": ["product_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "stock_report_items_stock_report_id_stock_reports_id_fk": {
+          "name": "stock_report_items_stock_report_id_stock_reports_id_fk",
+          "tableFrom": "stock_report_items",
+          "tableTo": "stock_reports",
+          "columnsFrom": ["stock_report_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        },
+        "stock_report_items_product_id_products_id_fk": {
+          "name": "stock_report_items_product_id_products_id_fk",
+          "tableFrom": "stock_report_items",
+          "tableTo": "products",
+          "columnsFrom": ["product_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {
+        "stock_report_items_stock_report_id_product_id_pk": {
+          "columns": ["stock_report_id", "product_id"],
+          "name": "stock_report_items_stock_report_id_product_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "stock_report_items_quantity_valid": {
+          "name": "stock_report_items_quantity_valid",
+          "value": "typeof(\"stock_report_items\".\"quantity\") = 'integer' and \"stock_report_items\".\"quantity\" >= 0 and \"stock_report_items\".\"quantity\" <= 9007199254740991"
+        }
+      }
+    },
+    "stock_reports": {
+      "name": "stock_reports",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "outlet_id": {
+          "name": "outlet_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reporter_sales_force_id": {
+          "name": "reporter_sales_force_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "visit_id": {
+          "name": "visit_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reported_at": {
+          "name": "reported_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "submission_channel": {
+          "name": "submission_channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "stock_reports_outlet_time_idx": {
+          "name": "stock_reports_outlet_time_idx",
+          "columns": ["outlet_id", "reported_at"],
+          "isUnique": false
+        },
+        "stock_reports_reporter_time_idx": {
+          "name": "stock_reports_reporter_time_idx",
+          "columns": ["reporter_sales_force_id", "reported_at"],
+          "isUnique": false
+        },
+        "stock_reports_visit_outlet_idx": {
+          "name": "stock_reports_visit_outlet_idx",
+          "columns": ["visit_id", "outlet_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "stock_reports_outlet_id_outlets_id_fk": {
+          "name": "stock_reports_outlet_id_outlets_id_fk",
+          "tableFrom": "stock_reports",
+          "tableTo": "outlets",
+          "columnsFrom": ["outlet_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        },
+        "stock_reports_reporter_sales_force_id_sales_force_id_fk": {
+          "name": "stock_reports_reporter_sales_force_id_sales_force_id_fk",
+          "tableFrom": "stock_reports",
+          "tableTo": "sales_force",
+          "columnsFrom": ["reporter_sales_force_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        },
+        "stock_reports_visit_outlet_fk": {
+          "name": "stock_reports_visit_outlet_fk",
+          "tableFrom": "stock_reports",
+          "tableTo": "visits",
+          "columnsFrom": ["visit_id", "outlet_id"],
+          "columnsTo": ["id", "outlet_id"],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "stock_reports_id_nonblank": {
+          "name": "stock_reports_id_nonblank",
+          "value": "length(trim(\"stock_reports\".\"id\")) > 0"
+        },
+        "stock_reports_channel_valid": {
+          "name": "stock_reports_channel_valid",
+          "value": "\"stock_reports\".\"submission_channel\" in ('web', 'telegram')"
+        },
+        "stock_reports_time_integer": {
+          "name": "stock_reports_time_integer",
+          "value": "typeof(\"stock_reports\".\"reported_at\") = 'integer'"
+        }
+      }
+    },
+    "telegram_identities": {
+      "name": "telegram_identities",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "telegram_user_id": {
+          "name": "telegram_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "first_name": {
+          "name": "first_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_name": {
+          "name": "last_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "telegram_identities_telegram_user_unique": {
+          "name": "telegram_identities_telegram_user_unique",
+          "columns": ["telegram_user_id"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "telegram_identities_user_id_users_id_fk": {
+          "name": "telegram_identities_user_id_users_id_fk",
+          "tableFrom": "telegram_identities",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "telegram_identities_id_canonical": {
+          "name": "telegram_identities_id_canonical",
+          "value": "typeof(\"telegram_identities\".\"telegram_user_id\") = 'text' and \"telegram_identities\".\"telegram_user_id\" glob '[1-9]*' and \"telegram_identities\".\"telegram_user_id\" not glob '*[^0-9]*' and instr(\"telegram_identities\".\"telegram_user_id\", char(0)) = 0"
+        },
+        "telegram_identities_timestamps_integer": {
+          "name": "telegram_identities_timestamps_integer",
+          "value": "typeof(\"telegram_identities\".\"created_at\") = 'integer' and typeof(\"telegram_identities\".\"updated_at\") = 'integer'"
+        }
+      }
+    },
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(lower(hex(randomblob(16))))"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sales_force_id": {
+          "name": "sales_force_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "users_sales_force_idx": {
+          "name": "users_sales_force_idx",
+          "columns": ["sales_force_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "users_sales_force_id_sales_force_id_fk": {
+          "name": "users_sales_force_id_sales_force_id_fk",
+          "tableFrom": "users",
+          "tableTo": "sales_force",
+          "columnsFrom": ["sales_force_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "users_id_nonblank": {
+          "name": "users_id_nonblank",
+          "value": "length(trim(\"users\".\"id\")) > 0"
+        },
+        "users_status_valid": {
+          "name": "users_status_valid",
+          "value": "\"users\".\"status\" in ('pending', 'active', 'rejected', 'disabled')"
+        },
+        "users_role_valid": {
+          "name": "users_role_valid",
+          "value": "\"users\".\"role\" is null or \"users\".\"role\" in ('admin', 'supervisor', 'sales_force')"
+        },
+        "users_approved_role_required": {
+          "name": "users_approved_role_required",
+          "value": "\"users\".\"status\" not in ('active', 'disabled') or \"users\".\"role\" is not null"
+        },
+        "users_timestamps_integer": {
+          "name": "users_timestamps_integer",
+          "value": "typeof(\"users\".\"created_at\") = 'integer' and typeof(\"users\".\"updated_at\") = 'integer'"
+        }
+      }
+    },
+    "visits": {
+      "name": "visits",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "outlet_id": {
+          "name": "outlet_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sales_force_id": {
+          "name": "sales_force_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "visited_at": {
+          "name": "visited_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "submission_channel": {
+          "name": "submission_channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "follow_up": {
+          "name": "follow_up",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "visits_outlet_time_idx": {
+          "name": "visits_outlet_time_idx",
+          "columns": ["outlet_id", "visited_at"],
+          "isUnique": false
+        },
+        "visits_sales_force_time_idx": {
+          "name": "visits_sales_force_time_idx",
+          "columns": ["sales_force_id", "visited_at"],
+          "isUnique": false
+        },
+        "visits_id_outlet_unique": {
+          "name": "visits_id_outlet_unique",
+          "columns": ["id", "outlet_id"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "visits_outlet_id_outlets_id_fk": {
+          "name": "visits_outlet_id_outlets_id_fk",
+          "tableFrom": "visits",
+          "tableTo": "outlets",
+          "columnsFrom": ["outlet_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        },
+        "visits_sales_force_id_sales_force_id_fk": {
+          "name": "visits_sales_force_id_sales_force_id_fk",
+          "tableFrom": "visits",
+          "tableTo": "sales_force",
+          "columnsFrom": ["sales_force_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "visits_id_nonblank": {
+          "name": "visits_id_nonblank",
+          "value": "length(trim(\"visits\".\"id\")) > 0"
+        },
+        "visits_channel_valid": {
+          "name": "visits_channel_valid",
+          "value": "\"visits\".\"submission_channel\" in ('web', 'telegram')"
+        },
+        "visits_time_integer": {
+          "name": "visits_time_integer",
+          "value": "typeof(\"visits\".\"visited_at\") = 'integer'"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

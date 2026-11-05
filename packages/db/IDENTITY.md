@@ -1,8 +1,8 @@
 # Identity foundation and operator bootstrap
 
-This milestone stores identity only. It does not authenticate requests or enable
-registration, approval, account management, or OIDC. The API's write resolver
-remains deny-by-default. Existing public business reads must not join or return
+Identity storage now supports Bot registration and Admin approval/rejection via
+an internal API Service Binding. OIDC, recovery and general account management
+remain deferred. The Visit/Stock Report write resolver remains deny-by-default. Existing public business reads must not join or return
 these tables; protect operational reads before using real identities/data.
 The independently operated Telegraf/PostgreSQL bot is unchanged and remains
 operational until a separately verified cutover. No import or deployment occurs.
@@ -21,8 +21,9 @@ operational until a separately verified cutover. No import or deployment occurs.
 - Optional `sales_force_id` references an existing business staff record with
   restrictive FK actions. It is deliberately **not unique**. Provisionally, one
   User can reference zero or one SF; multiple Users can reference the same SF.
-  This is storage flexibility, not permission to share staff access. Confirm
-  cardinality and reassignment/history rules before approval/submission. A true
+  This is storage flexibility, not permission to share staff access. The Bot
+  approval operation atomically refuses an SF linked to **any** other account,
+  including disabled accounts. Sharing/reassignment requires a reviewed policy. A true
   many-to-many association would require another migration; adding uniqueness
   later requires reviewing/deduplicating existing links. Admin/Supervisor do not
   need SF links, and a Telegram profile never creates/claims an SF record.
@@ -124,18 +125,28 @@ This is minimal operator support, not a general-purpose seeder or account tool.
 
 ### Audit and recovery release gates
 
-No audit table is added: no application lifecycle writer exists in this PR.
-Bootstrap accountability is an external restricted operator change record,
-not a database-enforced/tamper-proof audit guarantee. If that process cannot be
-provided, do not provision. Do not describe `updated_at` as an audit trail.
+Migration `0002_open_lucky_pierre.sql` adds `access_audit`. Application registration,
+approval and rejection write an event atomically with their lifecycle changes.
+Events include a unique event/correlation ID, actor User (self for registration),
+target User, action, before/after status/role/SF, and database UTC milliseconds.
+Registration also records the newly attached Telegram ID, not profile payloads.
+No free-text reason is collected in these commands; the action describes the
+registration/review decision. No secrets or whole updates are retained.
 
-Before application registration/approval or account changes ship, add narrowly
-scoped access-management audit writes **atomic with** mutations: event ID,
-action, actor User (or explicit operator identity for bootstrap/recovery), target
-User, previous/new status/role/SF/identity association, UTC event time, reason,
-and request/correlation/change ID. Restrict access and retention; never record
-raw tokens, secrets, whole Telegram updates or unnecessary profile payloads.
-Cover approval, rejection, role/link changes, disable/reactivate and recovery.
+D1 batches serialize registration's conditional User insert, Telegram identity
+insert, and audit insert. Existing registrations return unchanged with no new
+event. For decisions, an audit INSERT checks active Admin, pending/unassigned
+target, and existing/unclaimed SF inside the transaction; the UPDATE is gated by
+that event's random ID. Either both commit or neither does. Replays/losing races
+return unchanged-state errors and add no event. Future lifecycle writers must
+use the same conditional authorization/claim policy and audited atomicity.
+
+The bootstrap SQL above is intentionally unchanged. Operator accountability
+remains an external restricted change record, not an application audit event or
+a tamper-proof database guarantee. If that process cannot be provided, do not
+provision. Audit access is internal/operator-only; agree restricted retention
+and backup policy before production use. Future role/link changes,
+disable/reactivate and recovery must add corresponding audited operations.
 
 Later lifecycle operations must enforce the last-active-Admin rule atomically,
 including concurrent disable/demotion, and define verified operator recovery for

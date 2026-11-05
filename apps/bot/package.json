@@ -5,11 +5,13 @@
   "scripts": {
     "dev": "wrangler dev --port 8788",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "cf-typegen": "pnpm --filter @sales-visit/api cf-typegen && wrangler types --env-interface CloudflareBindings -c wrangler.jsonc -c ../api/wrangler.jsonc",
+    "typecheck": "pnpm cf-typegen && tsc --noEmit"
   },
   "dependencies": {
     "@sales-visit/contracts": "workspace:*",
-    "grammy": "^1.46.0"
+    "grammy": "^1.46.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "wrangler": "^4.156.2"

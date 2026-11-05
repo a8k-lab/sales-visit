@@ -14,10 +14,10 @@ import { toStockReport, toVisit } from "./records.ts";
 export function createApp(
   resolveIdentity: (
     request: Request,
-    env: CloudflareBindings
+    env: ApiBindings
   ) => Promise<TrustedIdentity | undefined> = async () => undefined
 ) {
-  const app = new Hono<{ Bindings: CloudflareBindings }>();
+  const app = new Hono<{ Bindings: ApiBindings }>();
 
   for (const [path, operation] of [
     ["/visits", createVisit],

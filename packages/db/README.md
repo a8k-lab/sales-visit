@@ -27,8 +27,8 @@ type. Only the API should access persistence; Web and Bot use the shared API.
 
 ## Schema decisions
 
-- Eight tables: `sales_force`, `outlets`, `products`, `visits`, `stock_reports`,
-  `stock_report_items`, `users`, and `telegram_identities`. Sales Force staff
+- Nine tables: `sales_force`, `outlets`, `products`, `visits`, `stock_reports`,
+  `stock_report_items`, `users`, `telegram_identities`, and `access_audit`. Sales Force staff
   records and Outlet business records are not application accounts. See
   [identity invariants, operator bootstrap, audit and deferred decisions](IDENTITY.md).
 - Business IDs are caller-supplied opaque nonblank strings; `crypto.randomUUID()` is a
@@ -56,7 +56,9 @@ type. Only the API should access persistence; Web and Bot use the shared API.
   positive decimal strings, unique across identities; each User has at most one
   Telegram identity. User status/role combinations and identity timestamps have
   SQL CHECK constraints. The optional User→SF FK is intentionally non-unique.
-  Identity tables are persistence-only, not new public API contracts or reads.
+  Identity tables are never exposed through public HTTP reads; internal Bot RPC
+  contracts live in `@sales-visit/contracts`. Application lifecycle changes and
+  access-audit events commit atomically through the API.
 - All FKs restrict deletion/key updates to protect referenced history; there
   are no cascading deletes, latest-value upserts, or uniqueness rules on
   outlet/time or Visit that would overwrite previous observations. Submitted
@@ -75,7 +77,8 @@ count cannot be expressed by an ordinary SQLite FK/CHECK; the database allows
 an empty parent while the batch is assembled. Do not submit only the parent.
 
 No Sales In, Sales Out, Total Belanja, Active Outlet, restock, verification,
-or account workflows/calculations are defined by this package.
+or account authorization policies are defined by this package. Registration/
+approval/rejection policies are enforced by API operations, not schema CHECKs.
 
 ## Migrations
 

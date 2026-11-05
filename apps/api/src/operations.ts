@@ -134,7 +134,8 @@ function sortedItems(items: StockReport["items"]) {
     const left = encoder.encode(a.productId);
     const right = encoder.encode(b.productId);
     for (let i = 0; i < Math.min(left.length, right.length); i++) {
-      if (left[i] !== right[i]) return left[i] - right[i];
+      // Both indexes are in bounds by the minimum-length loop condition.
+      if (left[i] !== right[i]) return left[i]! - right[i]!;
     }
     return left.length - right.length;
   });

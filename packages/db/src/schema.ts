@@ -103,6 +103,47 @@ export const telegramIdentities = sqliteTable(
   ]
 );
 
+// Restricted access-management history; never included in public business reads.
+export const accessAudit = sqliteTable(
+  "access_audit",
+  {
+    id: id(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    targetUserId: text("target_user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    action: text("action", {
+      enum: ["register", "approve", "reject"],
+    }).notNull(),
+    before: text("before_state").notNull(),
+    after: text("after_state").notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    check(
+      "access_audit_action_valid",
+      sql`${table.action} in ('register', 'approve', 'reject')`
+    ),
+    check(
+      "access_audit_states_json",
+      sql`json_valid(${table.before}) and json_valid(${table.after})`
+    ),
+    check(
+      "access_audit_time_integer",
+      sql`typeof(${table.createdAt}) = 'integer'`
+    ),
+    index("access_audit_target_idx").on(table.targetUserId),
+  ]
+);
+
 export const usersRelations = relations(users, ({ one }) => ({
   salesForce: one(salesForce, {
     fields: [users.salesForceId],
