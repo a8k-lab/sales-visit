@@ -23,7 +23,8 @@ while the sentinel remains. Never use temporary preview accounts.
 
 ## Prerequisites and target confirmation
 
-- Node 24, pnpm 10.30.1; Python 3 for the operator-only Telegram tool.
+- Node.js 24 and pnpm 10.30.1. Operational tools use native Node.js ES modules;
+  no additional runtime is required.
 - Authorized Cloudflare account with Workers + D1 permissions and a configured
   workers.dev subdomain. No custom domain, KV, queues or other resources needed.
 - Separate BotFather test bot; consenting Admin and additional test users.
@@ -162,9 +163,12 @@ a missing/wrong `X-Telegram-Bot-Api-Secret-Token` is 401 after secrets are store
 1. In the official BotFather chat, create a **new test bot** with `/newbot` or
    select a known separate test bot using `/mybots`. Verify its username and
    ownership there. Do not revoke or modify the teammate's bot credentials.
-2. Run the operator tool **locally in a private terminal**, not through an agent
-   session/recorded terminal. It prompts for the token with echo disabled, calls
-   `getMe`, displays only bot ID/username, and requires `TEST username` confirmation.
+2. Run `scripts/telegram-test-bot.mjs` via `pnpm telegram:test-bot` **locally in a
+   private terminal**, not through an agent session/recorded terminal. Both input
+   and output must be terminals; redirected/piped sessions are refused. Use
+   `pnpm telegram:test-bot --help` for credential-free usage. It prompts for the
+   token with echo disabled, calls `getMe`, displays only bot ID/username, and
+   requires `TEST username` confirmation.
    Compare to BotFather. Abort on any mismatch; a bot ID is not an Admin user ID.
 3. Confirm Cloudflare login/account, the account's actual workers.dev subdomain
    (dashboard → Workers & Pages), no unrelated Worker-name collision, and the
@@ -192,8 +196,11 @@ invokes Wrangler `deploy --name sales-visit-bot --secrets-file PATH`, supplying
 both required secrets with the first Worker version. Only the random file path,
 not a credential, appears in arguments. JSON avoids dotenv variable expansion.
 The file/directory are removed after Wrangler exits, including deployment errors,
-write failures, Ctrl-C, SIGTERM and terminal closure. As with any local file,
-uncatchable termination (SIGKILL/power loss) cannot guarantee cleanup: use a
+write failures, Ctrl-C, SIGTERM and terminal closure (SIGHUP). On macOS and Linux,
+interruption terminates the Wrangler process group (including pnpm descendants),
+with a bounded SIGKILL fallback, before removing credentials. Hidden input uses
+raw terminal mode without echo and restores terminal state on cancellation.
+As with any local file, uncatchable termination (SIGKILL/power loss) cannot guarantee cleanup: use a
 trusted private temporary filesystem and remove any abandoned
 `sales-visit-secrets-*` directories privately before retrying. No manual secret
 file or token-bearing shell command is needed; a repository-local TMPDIR is refused.
@@ -231,7 +238,7 @@ interruption and use this stop-and-redeploy procedure:
    risking an existing webhook with an unknown, obsolete secret.
 
 No token, secret, response payload, error URL or traceback is printed. Wrangler
-output is captured and persistent Wrangler debug logging is disabled. Cloudflare
+output is discarded and persistent Wrangler debug logging is disabled. Cloudflare
 login must already work. Pending updates are retained and redirects are not
 followed. If deploy, health or webhook setup fails, delivery remains stopped;
 verify prerequisites privately (including workers.dev propagation) and inspect
