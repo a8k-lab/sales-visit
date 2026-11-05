@@ -27,10 +27,11 @@ type. Only the API should access persistence; Web and Bot use the shared API.
 
 ## Schema decisions
 
-- Six tables: `sales_force`, `outlets`, `products`, `visits`, `stock_reports`,
-  and `stock_report_items`. Sales Force identities and Outlet business records
-  are not application accounts. No account or Telegram-identity fields exist.
-- IDs are caller-supplied opaque nonblank strings; `crypto.randomUUID()` is a
+- Eight tables: `sales_force`, `outlets`, `products`, `visits`, `stock_reports`,
+  `stock_report_items`, `users`, and `telegram_identities`. Sales Force staff
+  records and Outlet business records are not application accounts. See
+  [identity invariants, operator bootstrap, audit and deferred decisions](IDENTITY.md).
+- Business IDs are caller-supplied opaque nonblank strings; `crypto.randomUUID()` is a
   reasonable generator, but UUID syntax is not required by storage or contracts.
   Names are required/nonblank, not unique: no business uniqueness rule is agreed.
 - Both Visit and Stock Report record a required `web`/`telegram` submission
@@ -51,6 +52,11 @@ type. Only the API should access persistence; Web and Bot use the shared API.
 - Each report/product pair is unique (composite item primary key). Quantity is
   a required nonnegative JavaScript-safe whole number, including zero; it is
   only a reported observation, not live inventory or a sales calculation.
+- User IDs default to generated internal random text. Telegram IDs are canonical
+  positive decimal strings, unique across identities; each User has at most one
+  Telegram identity. User status/role combinations and identity timestamps have
+  SQL CHECK constraints. The optional User→SF FK is intentionally non-unique.
+  Identity tables are persistence-only, not new public API contracts or reads.
 - All FKs restrict deletion/key updates to protect referenced history; there
   are no cascading deletes, latest-value upserts, or uniqueness rules on
   outlet/time or Visit that would overwrite previous observations. Submitted
@@ -121,6 +127,10 @@ pnpm check
 Tests apply the generated migrations to Node's in-memory SQLite with foreign
 keys enabled, exercise constraints and ORM-generated inserts, compile every
 relational query, verify package exports/lazy binding use, and validate mapped
-records against the existing shared contracts. Node may report its built-in
+records against the existing shared contracts. Identity tests also cover every
+role/status combination, lifecycle-compatible updates, decimal canonicalization,
+both directions of identity uniqueness, FK protection, the documented bootstrap
+SQL (retry/conflict behavior), and a populated pre-identity schema upgrade.
+Node may report its built-in
 SQLite module as experimental. Local Wrangler application additionally checks
 D1 compatibility.
