@@ -11,7 +11,7 @@ Prepared from `main` after merged PR #5 (`53e413e`). Wrangler was **not
 authenticated**, so no remote resources, migrations, deployments, secrets,
 webhook changes, Admin bootstrap or live Telegram tests have been performed.
 No deployed URLs are known. Local checks passed: workspace typechecks, 39
-workspace tests, 8 deployment-helper tests, Drizzle migration checks, Hono route
+workspace tests, 17 deployment-helper tests, Drizzle migration checks, Hono route
 inspection, both Worker bundle dry-runs, lint and formatting. These are automated/
 local checks only, not remote deployment or real Telegram evidence.
 
@@ -112,16 +112,18 @@ records, contact data or imports are needed.
 pnpm deploy:api
 # Record the actual URL returned by Wrangler, not a guessed subdomain.
 curl -fsS https://sales-visit-api.YOUR_SUBDOMAIN.workers.dev/health
-pnpm deploy:bot
-curl -fsS https://sales-visit-bot.YOUR_SUBDOMAIN.workers.dev/health
+# Next: the private initial-deploy procedure below, NOT pnpm deploy:bot yet.
 ```
 
 API health: `{"status":"ok"}`. Bot health adds
 `"service":"sales-visit-bot"`. Health is liveness only, not D1/RPC proof.
 Bot config must show `IDENTITY` → `sales-visit-api`, entrypoint **`BotIdentity`**.
-Only API has `DB`. Keep `src/index.ts` as Bot entrypoint. Bot can be deployed
-before secrets and will fail closed (503 on webhook requests) until configured.
-Inspect deployed bindings in Wrangler output/dashboard; do not change the
+Only API has `DB`. Keep `src/index.ts` as Bot entrypoint. Both Telegram secrets
+are declared under `secrets.required`; the first Bot deployment must supply them
+with `deploy --secrets-file` as below. Plain `pnpm deploy:bot` is for subsequent
+code-only redeployments after both secrets exist, not for initial bootstrap.
+Inspect deployed bindings in the Cloudflare dashboard after initial deployment
+(the helper suppresses Wrangler output); do not change the
 Service Binding to HTTP if RPC fails. Check account, Worker names, deployment
 order, exported entrypoint and versions first.
 
@@ -149,24 +151,66 @@ a missing/wrong `X-Telegram-Bot-Api-Secret-Token` is 401 after secrets are store
    session/recorded terminal. It prompts for the token with echo disabled, calls
    `getMe`, displays only bot ID/username, and requires `TEST username` confirmation.
    Compare to BotFather. Abort on any mismatch; a bot ID is not an Admin user ID.
-3. After Cloudflare account and deployed Bot Worker target are verified:
+3. Confirm Cloudflare login/account, the account's actual workers.dev subdomain
+   (dashboard → Workers & Pages), no unrelated Worker-name collision, and the
+   already deployed API/`BotIdentity` entrypoint. Use that verified subdomain for
+   the new Bot URL; do not guess it. Then use the same private helper for bootstrap:
+
+### Initial Bot deployment (both required secrets supplied with code)
 
 ```sh
-pnpm telegram:test-bot configure https://sales-visit-bot.YOUR_SUBDOMAIN.workers.dev/
+pnpm telegram:test-bot initial-deploy https://sales-visit-bot.YOUR_SUBDOMAIN.workers.dev/
 pnpm telegram:test-bot info https://sales-visit-bot.YOUR_SUBDOMAIN.workers.dev/
 ```
 
-The tool generates a cryptographically random 32-byte URL-safe webhook secret
-in memory and uploads both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`
-through Wrangler `secret bulk` **stdin**, not vars/arguments/files. It then calls
-`setWebhook` with the Worker root URL, the same `secret_token`, and
-`allowed_updates: ["message"]`. It retains pending updates. It refuses an
-existing different webhook and never follows Telegram redirects. No token,
-secret, response payload, error URL or traceback is printed. Cloudflare login
-must already work; subprocess output is deliberately suppressed. If a step
-fails, verify prerequisites and rerun for this test bot only. Secret rotation
-and webhook update are not atomic; rerun promptly after a partial failure.
-The generated secret is not saved locally; rerunning safely rotates it.
+After `getMe` identity confirmation and checking for a conflicting webhook, the
+helper generates a cryptographically random 32-byte URL-safe webhook secret. It
+writes both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` to a temporary JSON
+file **outside the checkout**, in a private 0700 directory with a 0600 file. It
+invokes Wrangler `deploy --name sales-visit-bot --secrets-file PATH`, supplying
+both required secrets with the first Worker version. Only the random file path,
+not a credential, appears in arguments. JSON avoids dotenv variable expansion.
+The file/directory are removed after Wrangler exits, including deployment errors,
+write failures, Ctrl-C, SIGTERM and terminal closure. As with any local file,
+uncatchable termination (SIGKILL/power loss) cannot guarantee cleanup: use a
+trusted private temporary filesystem and remove any abandoned
+`sales-visit-secrets-*` directories privately before retrying. No manual secret
+file or token-bearing shell command is needed; a repository-local TMPDIR is refused.
+
+Only after Wrangler succeeds and GET `/health` at the supplied Worker URL returns
+200 with exactly `{"status":"ok","service":"sales-visit-bot"}` does the helper
+call `setWebhook`, using the same generated `secret_token` and
+`allowed_updates: ["message"]`. A failed deployment or health check leaves the
+Telegram webhook unchanged. Health verifies liveness/service identity, not RPC;
+inspect the deployed `IDENTITY` binding and complete the acceptance checks below.
+
+### Subsequent secret rotation / webhook setup
+
+For an **already deployed** Worker, including replacing this test webhook:
+
+```sh
+pnpm telegram:test-bot configure https://sales-visit-bot.YOUR_SUBDOMAIN.workers.dev/
+```
+
+This confirms the separate bot identity again, refuses a different existing
+webhook, and requires a healthy Worker **before** any secret write. It uploads
+both credentials via `wrangler secret bulk` **stdin**, with a freshly generated
+webhook secret, then checks health again before `setWebhook`. It does not deploy
+code and is not an initial-deployment command. For code-only updates use
+`pnpm deploy:bot`, which preserves existing secrets, then check `/health`.
+
+Both paths retain pending updates, refuse an existing different webhook, and
+never follow redirects. No token, secret, response payload, error URL or traceback
+is printed. Wrangler output is captured and persistent Wrangler debug logging
+is disabled. Cloudflare login must already work. If a step fails, verify account,
+target, deployment and health privately; rerun the appropriate helper command for
+this test bot only (allow workers.dev propagation time after initial deployment).
+A successful credential write and webhook update are not atomic: the old webhook
+may temporarily fail authentication after rotation. Rerun promptly after a partial
+failure; do not weaken secret validation. The secret is not retained after the
+command; rerunning generates a new one. If bootstrap already deployed code but
+webhook setup failed, `configure` can finish once health passes; `initial-deploy`
+can also be retried deliberately, redeploying code and rotating both credentials.
 
 Check `webhook_matches: true`, queue count, and error flags. Error flags may
 reflect an older delivery error; compare timestamps and subsequent successful
