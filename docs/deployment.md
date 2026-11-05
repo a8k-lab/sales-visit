@@ -23,7 +23,8 @@ while the sentinel remains. Never use temporary preview accounts.
 
 ## Prerequisites and target confirmation
 
-- Node 24, pnpm 10.30.1; Python 3 for the operator-only Telegram tool.
+- Node.js 24 and pnpm 10.30.1. Operational tools use native Node.js ES modules;
+  no additional runtime is required.
 - Authorized Cloudflare account with Workers + D1 permissions and a configured
   workers.dev subdomain. No custom domain, KV, queues or other resources needed.
 - Separate BotFather test bot; consenting Admin and additional test users.
@@ -162,9 +163,12 @@ a missing/wrong `X-Telegram-Bot-Api-Secret-Token` is 401 after secrets are store
 1. In the official BotFather chat, create a **new test bot** with `/newbot` or
    select a known separate test bot using `/mybots`. Verify its username and
    ownership there. Do not revoke or modify the teammate's bot credentials.
-2. Run the operator tool **locally in a private terminal**, not through an agent
-   session/recorded terminal. It prompts for the token with echo disabled, calls
-   `getMe`, displays only bot ID/username, and requires `TEST username` confirmation.
+2. Run `scripts/telegram-test-bot.mjs` via `pnpm telegram:test-bot` **locally in a
+   private terminal**, not through an agent session/recorded terminal. Both input
+   and output must be terminals; redirected/piped sessions are refused. Use
+   `pnpm telegram:test-bot --help` for credential-free usage. It prompts for the
+   token with echo disabled, calls `getMe`, displays only bot ID/username, and
+   requires `TEST username` confirmation.
    Compare to BotFather. Abort on any mismatch; a bot ID is not an Admin user ID.
 3. Confirm Cloudflare login/account, the account's actual workers.dev subdomain
    (dashboard → Workers & Pages), no unrelated Worker-name collision, and the
@@ -175,7 +179,13 @@ a missing/wrong `X-Telegram-Bot-Api-Secret-Token` is 401 after secrets are store
    `ACCOUNT ACCOUNT_ID sales-visit-bot.YOUR_SUBDOMAIN.workers.dev` before creating
    the secrets file or invoking Wrangler. This is a mandatory operator ownership
    attestation, not automatic ownership discovery; public health is not proof of
-   account ownership. Abort on uncertainty. Then use the helper for bootstrap:
+   account ownership. Independently verify the Worker is dedicated to this
+   separate test bot, using trusted deployment records and the Worker owner.
+   The helper sees only the supplied token's webhook; it cannot detect another
+   bot whose webhook targets the same Worker URL. Replacing that Worker's token
+   or secret would disrupt the other bot. Never replace a Worker used by another
+   bot, and never use the teammate's credentials to investigate. Abort on any
+   uncertainty. Then use the helper for bootstrap:
 
 ### Initial Bot deployment (both required secrets supplied with code)
 
@@ -184,7 +194,8 @@ pnpm telegram:test-bot initial-deploy https://sales-visit-bot.YOUR_SUBDOMAIN.wor
 pnpm telegram:test-bot info https://sales-visit-bot.YOUR_SUBDOMAIN.workers.dev/
 ```
 
-After `getMe` identity confirmation, verifying **no webhook is active**, and
+After `getMe` identity confirmation, verifying **no webhook is active for the
+supplied bot token**, and
 account/URL ownership confirmation, the helper generates a cryptographically random 32-byte URL-safe webhook secret. It
 writes both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` to a temporary JSON
 file **outside the checkout**, in a private 0700 directory with a 0600 file. It
@@ -192,15 +203,19 @@ invokes Wrangler `deploy --name sales-visit-bot --secrets-file PATH`, supplying
 both required secrets with the first Worker version. Only the random file path,
 not a credential, appears in arguments. JSON avoids dotenv variable expansion.
 The file/directory are removed after Wrangler exits, including deployment errors,
-write failures, Ctrl-C, SIGTERM and terminal closure. As with any local file,
-uncatchable termination (SIGKILL/power loss) cannot guarantee cleanup: use a
+write failures, Ctrl-C, SIGTERM and terminal closure (SIGHUP). On macOS and Linux,
+interruption terminates the Wrangler process group (including pnpm descendants),
+with a bounded SIGKILL fallback, before removing credentials. Hidden input uses
+raw terminal mode without echo and restores terminal state on cancellation.
+As with any local file, uncatchable termination (SIGKILL/power loss) cannot guarantee cleanup: use a
 trusted private temporary filesystem and remove any abandoned
 `sales-visit-secrets-*` directories privately before retrying. No manual secret
 file or token-bearing shell command is needed; a repository-local TMPDIR is refused.
 
 Only after Wrangler succeeds and GET `/health` at the supplied Worker URL returns
 200 with exactly `{"status":"ok","service":"sales-visit-bot"}` does the helper
-call `setWebhook`, using the same generated `secret_token` and
+re-fetch `getWebhookInfo` for the supplied bot and require its URL to still be
+empty before calling `setWebhook`, using the same generated `secret_token` and
 `allowed_updates: ["message"]`. A failed deployment or health check leaves the
 Telegram webhook unchanged. Health verifies liveness/service identity, not RPC;
 inspect the deployed `IDENTITY` binding and complete the acceptance checks below.
@@ -211,15 +226,19 @@ inspect the deployed `IDENTITY` binding and complete the acceptance checks below
 calls. There is no in-place secret rotation: updating Cloudflare first can break
 an active webhook if Telegram rejects `setWebhook`, and the previous generated
 secret cannot be recovered. Health checks cannot solve that consistency problem.
-`initial-deploy` also refuses an active webhook, including one at the same URL,
-so it cannot bypass this restriction.
+`initial-deploy` also refuses an active webhook for the supplied bot, including
+one at the same URL, so it cannot bypass this restriction for that bot. This
+check says nothing about other bots using the Worker; independently verify
+Worker ownership and exclusive use before deploying, including when changing
+to a different test-bot token.
 
 For code-only updates use `pnpm deploy:bot`, which preserves existing secrets,
 after rechecking the selected account and Worker ownership; then check `/health`.
 For credential replacement or webhook reconfiguration, schedule an explicit test
 interruption and use this stop-and-redeploy procedure:
 
-1. Reverify the separate test bot, selected Cloudflare account and URL ownership.
+1. Reverify the separate test bot, selected Cloudflare account, URL/Worker
+   ownership and that no other bot uses this Worker.
 2. Run the helper's `delete` action below. It confirms bot identity and the exact
    existing test webhook, requires explicit deletion confirmation and retains
    pending updates. Check `info` shows no active webhook. Never delete another
@@ -230,8 +249,20 @@ interruption and use this stop-and-redeploy procedure:
 4. Check `info` and actual delivery. This deliberately stops delivery rather than
    risking an existing webhook with an unknown, obsolete secret.
 
+Run this procedure with **one operator per bot/Worker at a time**, with other
+webhook writers and deployment automation stopped. Immediately before each
+`setWebhook` or `deleteWebhook`, the helper re-fetches `getWebhookInfo`:
+registration requires no active webhook; deletion requires the intended URL.
+A conflicting, absent (for deletion), malformed or unreadable latest state
+refuses the mutation. These checks narrow but do not eliminate concurrent-change
+risks: Telegram provides no atomic compare-and-set for webhook mutations, and
+another writer can change state between the read and write. A same-URL change
+with different credentials is not detectable. A late refusal after deployment
+does not undo the Worker deployment; inspect the state privately rather than
+blindly retrying.
+
 No token, secret, response payload, error URL or traceback is printed. Wrangler
-output is captured and persistent Wrangler debug logging is disabled. Cloudflare
+output is discarded and persistent Wrangler debug logging is disabled. Cloudflare
 login must already work. Pending updates are retained and redirects are not
 followed. If deploy, health or webhook setup fails, delivery remains stopped;
 verify prerequisites privately (including workers.dev propagation) and inspect

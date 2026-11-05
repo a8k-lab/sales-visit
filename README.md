@@ -118,6 +118,12 @@ for details. For registration/approval, follow the [Bot instructions](apps/bot/R
 for local Admin bootstrap, ignored test secrets, and running both Workers.
 No remote Cloudflare resources are needed for local development.
 
+Operational scripts use native Node.js 24 ES modules (no additional runtime).
+`pnpm test:deployment` runs all deployment-tool tests using `node:test`, without
+contacting Telegram or Cloudflare. The private-terminal test-bot helper is
+`scripts/telegram-test-bot.mjs` (`pnpm telegram:test-bot --help`); follow the
+[deployment runbook](docs/deployment.md) before any remote operation.
+
 ## Documentation and design references
 
 - **[CONTEXT.md](CONTEXT.md):** shared domain glossary and naming conventions.

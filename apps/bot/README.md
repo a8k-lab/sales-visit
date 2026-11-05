@@ -6,6 +6,13 @@ provisioning status, secrets, webhook setup and remote bootstrap. No original-bo
 cutover is performed. Uses a named Cloudflare Service Binding to the Hono API;
 only the API has D1.
 
+Remote test-bot operations use `scripts/telegram-test-bot.mjs` via
+`pnpm telegram:test-bot` (native Node.js 24; no additional runtime). Run
+`pnpm telegram:test-bot --help` for usage, and `pnpm test:deployment` for offline
+operator-tool tests. Initial deployment and planned delete-and-redeploy credential
+replacement require the private-terminal confirmations in the runbook;
+`configure` remains disabled. This helper does not support local tunnel URLs.
+
 ## Commands (private chat only)
 
 - `/start`, `/help`: account-aware welcome/help, Admin guidance when active.
