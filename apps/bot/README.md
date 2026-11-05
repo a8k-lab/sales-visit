@@ -1,7 +1,10 @@
 # Telegram registration & approval
 
-Local-only grammY Worker. No deployment or original-bot cutover is performed.
-Uses a named Cloudflare Service Binding to the Hono API; only the API has D1.
+grammY Worker with local development and a single Cloudflare test deployment
+configuration. See the [deployment runbook](../../docs/deployment.md) for current
+provisioning status, secrets, webhook setup and remote bootstrap. No original-bot
+cutover is performed. Uses a named Cloudflare Service Binding to the Hono API;
+only the API has D1.
 
 ## Commands (private chat only)
 
@@ -100,7 +103,8 @@ TELEGRAM_BOT_TOKEN="token-from-a-separate-test-bot"
 TELEGRAM_WEBHOOK_SECRET="fresh-random-test-only-secret"
 ```
 
-Wrangler's empty config vars fail closed until overridden. Never use the existing
+Wrangler declares required secret names (no plaintext vars); missing secrets
+fail closed. Never use the existing
 production bot's token or webhook. Generate API types before Bot types on a fresh
 checkout (`pnpm typecheck` does this in workspace order). Start two terminals:
 

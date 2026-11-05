@@ -110,13 +110,15 @@ pnpm --filter @sales-visit/db exec wrangler d1 execute DB --local \
   --command "SELECT name FROM sqlite_master WHERE type = 'table';"
 ```
 
-The API Worker now binds `DB` in `apps/api/wrangler.jsonc` with a local-only
-placeholder ID and `migrations_dir: "../../packages/db/migrations"` (relative to
+The API Worker now binds `DB` in `apps/api/wrangler.jsonc` with an initially local-only
+sentinel ID and `migrations_dir: "../../packages/db/migrations"` (relative to
 that config). From the root, use `pnpm db:migrate:local` and
 `pnpm db:seed:local` for the **API-local database** used by `pnpm dev:api`.
 The package sandbox command above and API-local database are separate local
-state locations. No schema or migration is duplicated. Remote creation/application
-is intentionally not configured or performed by these scripts.
+state locations. No schema or migration is duplicated. For remote creation and
+explicit guarded `pnpm db:migrate:remote` / `pnpm db:verify:remote` commands, see
+[the test deployment runbook](../../docs/deployment.md). Local scripts never
+apply remote migrations.
 
 ## Checks
 

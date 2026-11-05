@@ -5,7 +5,9 @@ an internal API Service Binding. OIDC, recovery and general account management
 remain deferred. The Visit/Stock Report write resolver remains deny-by-default. Existing public business reads must not join or return
 these tables; protect operational reads before using real identities/data.
 The independently operated Telegraf/PostgreSQL bot is unchanged and remains
-operational until a separately verified cutover. No import or deployment occurs.
+operational until a separately verified cutover. No import or original-bot
+cutover occurs. For the independent test deployment's remote operator steps, see
+[the deployment runbook](../../docs/deployment.md).
 
 ## Stored invariants
 
@@ -56,7 +58,8 @@ belongs to the future authorized operation, not a speculative storage rule.
 Documentation-only operator procedure, not an application service. Use a
 restricted change record and an authorized D1 operator; no public endpoint,
 secret allowlist, privileged environment switch or application bypass exists.
-Do not run against a remote database as part of this PR.
+Remote execution requires the separate explicit operator target/approval steps in
+[the test deployment runbook](../../docs/deployment.md#first-admin-pending-until-a-verified-user-id-is-available).
 
 1. Obtain approval for the operator, target person, database/environment, and
    reason in a restricted change record. Verify ownership of the person's Bot

@@ -1,10 +1,11 @@
 # Sales Visit API
 
-Hono Worker backed by local Cloudflare D1 through `@sales-visit/db`.
+Hono Worker backed by Cloudflare D1 through `@sales-visit/db`.
 Reads and protected Visit/Stock Report business operations use shared Zod
 contracts. Internal Telegram registration/approval uses a named Worker RPC
-entrypoint and the additive `access_audit` migration. No remote resources
-have been created and this API has not been deployed.
+entrypoint and the additive `access_audit` migration. See the
+[Cloudflare test deployment runbook](../../docs/deployment.md) for provisioning
+status, guarded deployment commands and verification.
 
 ## Run locally
 
@@ -139,7 +140,7 @@ binding, header convention, environment flag, or dev-mode bypass.
 The default HTTP Worker calls `createApp()` **without a resolver** and always denies
 report writes before parsing a body or using D1. Authorization headers and spoofed
 identity headers cannot enable it. There is no fake login or test identity in
-the deployed entrypoint. Reads remain unauthenticated and local-only.
+the deployed entrypoint. Reads remain unauthenticated; remote deployment must use synthetic data only.
 
 ### Internal Bot identity RPC
 
@@ -213,11 +214,12 @@ Cloudflare credentials, or changes to your dev database are required.
 ## Remaining scope
 
 Web authentication/read authorization, CORS/frontend integration, Telegram reporting,
-pagination/filtering, KPIs, and remote deployment remain deferred. The auth
+pagination/filtering and KPIs remain deferred. The auth
 milestone must establish verified Web/Bot identities and trusted channel
 provenance, session/webhook security, Sales Force mapping/revocation, and Outlet
 assignment/role permissions before enabling writes. Existing rules only validate
 that the trusted Sales Force and referenced records exist; no assignment policy
 has been invented. Add operational logging/rate limits and review request-size
-limits before production exposure. Lists remain unpaginated. Keep the API local
-and use synthetic data only; the Web still uses mocks/browser-local storage.
+limits before production exposure. Lists remain unpaginated. Use synthetic
+business data only, including in the remote test deployment; the Web still uses
+mocks/browser-local storage.

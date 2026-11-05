@@ -10,7 +10,10 @@
       "entrypoint": "BotIdentity",
     },
   ],
-  "vars": { "TELEGRAM_BOT_TOKEN": "", "TELEGRAM_WEBHOOK_SECRET": "" },
+  "workers_dev": true,
+  "secrets": {
+    "required": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"],
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

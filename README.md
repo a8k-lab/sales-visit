@@ -122,6 +122,7 @@ No remote Cloudflare resources are needed for local development.
 
 - **[CONTEXT.md](CONTEXT.md):** shared domain glossary and naming conventions.
 - **[Architecture Decision Records](docs/adr/):** decisions and alternatives behind the proposed system.
+- **[API + Bot test deployment](docs/deployment.md):** Cloudflare setup, guarded remote commands, test webhook and Admin bootstrap; deployment pending credentials.
 - **[Sales Visit FigJam](https://www.figma.com/board/xYjjlXsulf3fGKFFyNhd0W/Sales-Visit?node-id=0-1):** team brainstorming and research notes.
 - **[As-Is business flow](https://www.figma.com/board/xYjjlXsulf3fGKFFyNhd0W/Sales-Visit?node-id=104-115):** existing handwritten visit-report workflow.
 - **[Initial To-Be business flow](https://www.figma.com/board/xYjjlXsulf3fGKFFyNhd0W/Sales-Visit?node-id=105-147):** **outdated draft** drawn before confirming that Sales Force can use **both** Web and Telegram. Must be revised before treating it as the agreed flow.
