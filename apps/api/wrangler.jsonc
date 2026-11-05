@@ -8,7 +8,7 @@
     {
       "binding": "DB",
       "database_name": "sales-visit",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "c4af99fa-e52e-4329-b04e-5d92598c63da",
       "migrations_dir": "../../packages/db/migrations"
     }
   ],
