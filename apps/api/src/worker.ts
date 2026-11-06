@@ -4,6 +4,7 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 import { IdentityOperations } from "./identity.ts";
 import app from "./index.ts";
 import { OutletOperations } from "./outlets.ts";
+import { ScheduleOperations } from "./schedules.ts";
 
 // Only Workers explicitly bound to this named entrypoint can invoke these methods.
 // No fetch handler, HTTP router, header-based actor, or public RPC dispatcher.
@@ -11,6 +12,15 @@ export class BotIdentity
   extends WorkerEntrypoint<ApiBindings>
   implements BotIdentityService
 {
+  ownSchedule(actor: BotActor, input?: unknown) {
+    return new ScheduleOperations(this.env.DB).own(actor, input);
+  }
+  listSchedules(actor: BotActor, input?: unknown) {
+    return new ScheduleOperations(this.env.DB).list(actor, input);
+  }
+  createSchedule(actor: BotActor, input: unknown) {
+    return new ScheduleOperations(this.env.DB).create(actor, input);
+  }
   listOutlets(actor: BotActor, input?: unknown) {
     return new OutletOperations(this.env.DB).list(actor, input);
   }
