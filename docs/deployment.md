@@ -1,11 +1,20 @@
 # First API + Telegram test deployment
 
+> **Current release procedure:** use [GitHub Actions CI/CD](ci-cd.md).
+> The bootstrap sections below are historical instructions, not authorization to
+> create resources or replay migrations. Existing Workers must be reused. The
+> operator confirms `0004_misty_red_skull.sql` is already applied remotely; do not
+> apply it again. API/Bot deployed versions remain unverified until inspected.
+> Automatic deployment stays OFF. Guarded deploy commands now also require the
+> account/token, verified URLs and current-main `RELEASE_REVISION` described in
+> the CI/CD runbook. Migration/Telegram operations remain separate manual tasks.
+
 **Development/testing only, not approved for operational use.** One Cloudflare
 configuration, no staging/production pair. Dashboard deployment is independent:
 none of these commands deploys Web. Business GETs are public; use synthetic data
 only. Identity/audit are internal and report HTTP writes remain deny-by-default.
 
-## Current handoff
+## Historical bootstrap handoff (PR #5)
 
 Prepared from `main` after merged PR #5 (`53e413e`). Wrangler was **not
 authenticated**, so no remote resources, migrations, deployments, secrets,

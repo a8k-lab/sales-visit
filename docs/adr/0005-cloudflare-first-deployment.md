@@ -9,7 +9,7 @@ The Computing Project prioritizes low ongoing cost and manageable operations. A 
 
 ## Decision
 
-- **Web:** React/Vite static deployment via **Cloudflare Workers Static Assets**, replacing the initial Cloudflare Pages direction. Deploy only `apps/web/dist` with Wrangler and SPA fallback for TanStack Router; no Worker entrypoint, SSR, or Cloudflare Vite plugin. Git integration uses Workers Builds from the monorepo root, with separate web build and deploy commands (see [web deployment instructions](../../apps/web/README.md#deploy-to-cloudflare-workers-static-assets)).
+- **Web:** React/Vite static deployment via **Cloudflare Workers Static Assets**, replacing the initial Cloudflare Pages direction. Deploy only `apps/web/dist` with Wrangler and SPA fallback for TanStack Router; no Worker entrypoint, SSR, or Cloudflare Vite plugin. GitHub Actions is the selected CD owner, with separate web build and deploy commands and automatic deployment initially OFF (see the [CI/CD runbook](../ci-cd.md)). This supersedes the original Workers Builds/Git ownership: operators must disable overlapping Builds integrations before activating Actions, without recreating existing Workers.
 - **API:** Hono on Cloudflare Workers.
 - **Bot:** grammY on Cloudflare Workers using Telegram **webhooks**, not long polling.
 - **Persistence:** Cloudflare D1 (SQLite-compatible semantics) via Drizzle ORM.
