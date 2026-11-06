@@ -32,16 +32,21 @@ export function displayId(value: string): string {
     ? encodeToken(value)
     : "[ID di luar batas operasi; hubungi administrator]";
 }
+export function nextPage(prefix: string, cursor: string): string {
+  return planningIdSchema.safeParse(cursor).success
+    ? `Berikutnya: ${prefix}${encodeToken(cursor)}`
+    : "Halaman berikutnya tidak dapat dibuka: kursor di luar batas operasi API. Hubungi administrator.";
+}
 export function label(value: string): string {
   // Plain text, bounded display only. Do not change keys used by RPC.
   const safe = value.replace(/[\p{Cc}\p{Cf}]/gu, " ");
-  return [...safe].slice(0, 160).join("") + ([...safe].length > 160 ? "…" : "");
+  return [...safe].slice(0, 256).join("") + ([...safe].length > 256 ? "…" : "");
 }
 export async function replyBlocks(ctx: Context, blocks: string[]) {
   let text = "";
   for (const block of blocks) {
     if (block.length > 4096) throw new Error("Oversized message block");
-    if (text.length + block.length + 2 > 4096) {
+    if (text && text.length + block.length + 2 > 4096) {
       await ctx.reply(text);
       text = "";
     }

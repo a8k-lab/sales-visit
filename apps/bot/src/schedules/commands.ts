@@ -13,6 +13,7 @@ import {
   decodeToken,
   displayId,
   label,
+  nextPage,
   parseOrUsage,
   planningResult,
   replyBlocks,
@@ -58,9 +59,7 @@ export function scheduleCommands(bot: Bot, api: BotIdentityService) {
       `JADWAL SAYA — ${day}\nRencana berulang, bukan Visit selesai.`,
       ...page.items.map(schedule),
       ...(!page.items.length ? ["Tidak ada jadwal."] : []),
-      ...(page.next
-        ? [`Berikutnya: /jadwal ${day} after=${displayId(page.next)}`]
-        : []),
+      ...(page.next ? [nextPage(`/jadwal ${day} after=`, page.next)] : []),
     ]);
   });
   bot.command("jadwalsales", async (ctx) => {
@@ -102,7 +101,10 @@ export function scheduleCommands(bot: Bot, api: BotIdentityService) {
       ...(!page.items.length ? ["Tidak ada jadwal."] : []),
       ...(page.next
         ? [
-            `Berikutnya: /jadwalsales ${filters ? filters + " " : ""}after=${displayId(page.next)}`,
+            nextPage(
+              `/jadwalsales ${filters ? filters + " " : ""}after=`,
+              page.next
+            ),
           ]
         : []),
     ]);

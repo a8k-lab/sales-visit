@@ -7,6 +7,7 @@ import {
   decodeToken,
   displayId,
   label,
+  nextPage,
   parseOrUsage,
   planningResult,
   replyBlocks,
@@ -31,7 +32,7 @@ export function outletCommands(bot: Bot, api: BotIdentityService) {
       "DAFTAR OUTLET",
       ...page.items.map(outlet),
       ...(!page.items.length ? ["Tidak ada Outlet."] : []),
-      ...(page.next ? [`Berikutnya: /outlets ${displayId(page.next)}`] : []),
+      ...(page.next ? [nextPage("/outlets ", page.next)] : []),
     ]);
   });
   bot.command("outlet", async (ctx) => {
