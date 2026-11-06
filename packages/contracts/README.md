@@ -18,9 +18,10 @@ const visit: Visit = visitSchema.parse(input);
   or generated artifacts are needed. This is not a compiled JavaScript package
   for runtimes without TypeScript support. Node 24 can run the tests natively.
 - Import from the package root, not internal paths. Types are inferred from Zod.
-- These are minimal domain record contracts, not endpoint request/response
-  contracts, persistence models, authorization rules, or finalized business rules.
-  Add API-specific schemas only when operations are agreed.
+- Domain record contracts coexist with strict operation inputs and internal RPC
+  result types. They are not persistence models or proof of authorization; the
+  API checks current D1 identity/permissions. Partner-unvalidated business fields
+  remain deferred.
 
 ## Initial conventions
 
@@ -43,6 +44,18 @@ const visit: Visit = visitSchema.parse(input);
   to the same Outlet. Such checks belong at the future API business boundary.
 - Outlet is a business record, not an account. Outlet representative reporting
   is deferred; no speculative reporter union or self-reporting API is included.
+
+## Outlet & Schedule operations
+
+`planning.ts` separates unchanged public `Outlet` from timestamped `OutletDetail`,
+create/update/key/list inputs, recurring schedule read/create models, and own vs
+monitoring filters. `weekdaySchema` is an integer ISO weekday (Monday=1,
+Sunday=7); `indonesianWeekdaySchema` converts trimmed case-insensitive Indonesian
+names to that representation. Planning timestamps are integer epoch milliseconds,
+not Visit/Stock Report event-time ISO strings. `BotIdentityService` extends
+`BotPlanningService` for the existing private Service Binding, not public HTTP.
+See [the foundation guide](../../docs/design/outlet-schedule-foundation.md) for
+permissions, pagination, error codes and deferred business ID/`no_rs` semantics.
 
 ## Checks
 

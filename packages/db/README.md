@@ -27,13 +27,19 @@ type. Only the API should access persistence; Web and Bot use the shared API.
 
 ## Schema decisions
 
-- Nine tables: `sales_force`, `outlets`, `products`, `visits`, `stock_reports`,
-  `stock_report_items`, `users`, `telegram_identities`, and `access_audit`. Sales Force staff
+- Ten tables: `sales_force`, `outlets`, `products`, `visits`, `stock_reports`,
+  `stock_report_items`, `users`, `telegram_identities`, `access_audit`, and `visit_schedules`. Sales Force staff
   records and Outlet business records are not application accounts. See
   [identity invariants, operator bootstrap, audit and deferred decisions](IDENTITY.md).
 - Business IDs are caller-supplied opaque nonblank strings; `crypto.randomUUID()` is a
   reasonable generator, but UUID syntax is not required by storage or contracts.
   Names are required/nonblank, not unique: no business uniqueness rule is agreed.
+- Recurring `visit_schedules` link SF → Outlet with ISO weekday 1–7, integer
+  millisecond timestamps, restrictive FKs and unique `(sales_force_id, outlet_id,
+  weekday)`. Plans never create actual Visits. `outlets.updated_at` is nullable
+  for unknown legacy modification times. See [the foundation guide](../../docs/design/outlet-schedule-foundation.md)
+  for migration `0003_greedy_spot.sql`, permissions, identifier assumptions and
+  synthetic fixture provisioning.
 - Both Visit and Stock Report record a required `web`/`telegram` submission
   channel with SQL CHECK constraints. Reporter identity is a separate required
   Sales Force reference. Independent reports still require a Sales Force

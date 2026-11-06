@@ -22,6 +22,13 @@
       "when": 1793855996250,
       "tag": "0002_open_lucky_pierre",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793930905166,
+      "tag": "0003_greedy_spot",
+      "breakpoints": true
     }
   ]
 }
