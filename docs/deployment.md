@@ -87,9 +87,12 @@ pnpm --filter @sales-visit/api exec wrangler d1 migrations list DB --remote
 
 After migration, no pending migrations should remain. `d1_migrations` must
 record `0000_initial.sql`, `0001_identity_foundation.sql`, and
-`0002_open_lucky_pierre.sql` exactly once. Expect nine application tables:
+`0002_open_lucky_pierre.sql`, and `0003_greedy_spot.sql` exactly once. The
+Outlet/Schedule backend requires migration 0003 **before** the matching API
+release; Bot code alone must not be used as migration verification. Expect ten application tables:
 `sales_force`, `outlets`, `products`, `visits`, `stock_reports`,
-`stock_report_items`, `users`, `telegram_identities`, `access_audit`, plus D1's
+`stock_report_items`, `users`, `telegram_identities`, `access_audit`,
+`visit_schedules`, plus D1's
 migration/internal tables. `PRAGMA foreign_key_check` must return zero rows.
 No previous migration files are edited. Verification emits counts, not profiles.
 
@@ -339,6 +342,55 @@ retention policy. If the user ID/approval is unavailable, leave bootstrap pendin
 Keep three result categories separate: **automated tests**, **remote deployment
 checks**, **real Telegram E2E**. Do not mark live verification complete based on
 Miniflare tests, health responses or webhook metadata alone.
+
+## Outlet & Schedule manual smoke checklist (separate test bot)
+
+This is an **unexecuted operator checklist**, not authorization to deploy, migrate,
+change webhooks, or modify credentials. Use the existing separate test bot only,
+after independently approved API migration/release and Bot release procedures.
+For local testing, use the tunnel procedure in `apps/bot/README.md` instead.
+Keep all business records synthetic while public business GETs remain unauthenticated.
+See the [exact command grammar](../apps/bot/README.md#outlet--schedule-command-grammar).
+
+- [ ] Confirm intended bot username, exclusive Worker ownership, named `IDENTITY`
+      binding to `BotIdentity`, migration 0003 and active test Admin/Supervisor/SF.
+      Never inspect or alter the teammate's bot. Verify test SF link out of band;
+      reuse `test-sf-01` only if the operator verified it is synthetic.
+- [ ] Admin `/help`: management and monitoring commands shown. Supervisor sees
+      Outlet reads/monitoring only; SF sees `/jadwal`; pending/disabled sees no
+      planning commands. Existing `/register`, `/pending`, `/approve`, `/reject`,
+      `/me` still work with consenting synthetic test accounts.
+- [ ] Admin `/tambahoutlet Toko Sintetis PR9`; record returned internal token
+      privately. Repeat only intentionally to check duplicate names are allowed.
+      Supervisor `/outlets` and `/outlet TOKEN` work; Supervisor/SF mutation denied.
+- [ ] Admin `/editoutlet TOKEN Nama Baru Sintetis`; confirm details. Create a
+      disposable second Outlet, check deletion without `KONFIRMASI` is denied, then
+      `/hapusoutlet SECOND_TOKEN KONFIRMASI` succeeds. Unknown Outlet is not found
+      for Admin, but unauthorized callers receive only access denial.
+- [ ] Admin `/tambahjadwal test-sf-01 TOKEN senin` succeeds; repeat returns
+      duplicate. Supervisor provisioning is denied. Referenced Outlet deletion is
+      denied; do not delete reports or schedules to work around the restriction.
+- [ ] Linked SF `/jadwal` matches current Jakarta day, `/jadwal SENIN` filters,
+      `/jadwal minggu` shows an empty state if unassigned, `/jadwal semua` spans all
+      days. SF `/jadwalsales sf=test-sf-01` and `/jadwal sf=other` cannot select
+      another member. Admin/Supervisor `/jadwalsales hari=senin sf=test-sf-01` works.
+- [ ] In a disposable **local** fixture with >50 records, copy complete next
+      commands. Verify filters persist, whitespace/Unicode tokens round-trip, no
+      truncation of ID tokens, readable packed messages <=4096 characters, and
+      `<b>`, `&`, `*` in synthetic names remain plain text. Automated tests cover
+      these cases without filling the remote test DB unnecessarily.
+- [ ] Test group commands and a non-Admin message forwarding an Admin message:
+      neither grants authority. Unregistered/inactive users remain denied.
+- [ ] On transport/delivery failure, inspect the list before repeating creates;
+      no exactly-once receipt exists. Do not induce remote failures or expose raw
+      logs. Mark actual live outcomes separately from automated results.
+- [ ] Verify no Visit/Stock Report was created by scheduling. Public writes stay
+      401; no new administrative HTTP routes exist. Record sanitized evidence only.
+      Retain referenced synthetic schedules for reviewed cleanup: schedule deletion
+      and reporting wizard are deliberately not implemented.
+
+No remote deployment, migration, credential or webhook operation was performed
+as part of the Telegram Outlet/Schedule implementation.
 
 ## Logs, rollback, webhook removal
 
