@@ -6,7 +6,9 @@ import { outletSchema } from "./outlet.ts";
 // Bounded opaque operation inputs, not business codes or Telegram identities.
 const printable = (value: string) =>
   [...value].every(
-    (char) => char.charCodeAt(0) >= 32 && char.charCodeAt(0) !== 127
+    (char) =>
+      char.charCodeAt(0) >= 32 &&
+      (char.charCodeAt(0) < 127 || char.charCodeAt(0) > 159)
   );
 // Validate blankness without normalizing opaque stored keys or page cursors.
 const storedPlanningIdSchema = z.string().refine((id) => id.trim().length > 0);

@@ -120,6 +120,51 @@ async function setup(t, legacy = false) {
   return { db, rpc, api: await mf.getWorker("api") };
 }
 
+test("planning RPC rejects C1 inputs without mutations and retains Unicode names", async (t) => {
+  const { db, rpc } = await setup(t);
+  const name = "Toko Café 日本 🏪";
+  const created = await rpc("createOutlet", 1, { name });
+  assert.equal(created.ok, true);
+  assert.equal(created.data.name, name);
+  const id = created.data.id;
+  const before = (await db.prepare("SELECT * FROM outlets").all()).results;
+  for (const code of [0x80, 0x85, 0x9f]) {
+    const invalid = `a${String.fromCharCode(code)}b`;
+    for (const [method, by, input] of [
+      ["createOutlet", 1, { name: invalid }],
+      ["updateOutlet", 1, { id, name: invalid }],
+      ["getOutlet", 1, { id: invalid }],
+      ["deleteOutlet", 1, { id: invalid }],
+      ["listOutlets", 1, { after: invalid }],
+      ["listSchedules", 1, { salesForceId: invalid }],
+      ["ownSchedule", 3, { after: invalid }],
+      [
+        "createSchedule",
+        1,
+        { salesForceId: invalid, outletId: id, weekday: 1 },
+      ],
+      [
+        "createSchedule",
+        1,
+        { salesForceId: "sf-a", outletId: invalid, weekday: 1 },
+      ],
+    ])
+      assert.deepEqual(await rpc(method, by, input), {
+        ok: false,
+        code: "invalid",
+      });
+  }
+  assert.deepEqual(
+    (await db.prepare("SELECT * FROM outlets").all()).results,
+    before
+  );
+  assert.equal(
+    (await db.prepare("SELECT count(*) AS n FROM visit_schedules").first()).n,
+    0
+  );
+  assert.equal((await rpc("getOutlet", 1, { id })).data.name, name);
+});
+
 test("planning RPC uses exact legacy IDs for Outlet mutations and Schedule references", async (t) => {
   const { db, rpc } = await setup(t);
   const id = " outlet-exact ";

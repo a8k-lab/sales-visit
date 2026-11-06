@@ -48,6 +48,39 @@ test("outlet operation inputs are strict, bounded and separate from stored model
   );
 });
 
+test("planning inputs reject every C1 control while supporting Unicode names", () => {
+  for (let code = 0x80; code <= 0x9f; code++) {
+    const value = `a${String.fromCharCode(code)}b`;
+    for (const [schema, input] of [
+      [createOutletSchema, { name: value }],
+      [updateOutletSchema, { id: "valid", name: value }],
+      [outletKeySchema, { id: value }],
+      [outletListSchema, { after: value }],
+      [ownScheduleFilterSchema, { after: value }],
+      [scheduleFilterSchema, { salesForceId: value }],
+      [
+        createScheduleSchema,
+        { salesForceId: value, outletId: "valid", weekday: 1 },
+      ],
+      [
+        createScheduleSchema,
+        { salesForceId: "valid", outletId: value, weekday: 1 },
+      ],
+    ])
+      assert.equal(
+        schema.safeParse(input).success,
+        false,
+        `U+${code.toString(16)}`
+      );
+  }
+  const name = "Toko Café 日本 🏪";
+  assert.deepEqual(createOutletSchema.parse({ name }), { name });
+  assert.deepEqual(updateOutletSchema.parse({ id: "toko-日本", name }), {
+    id: "toko-日本",
+    name,
+  });
+});
+
 test("planning IDs preserve exact whitespace in inputs, reads and cursors", () => {
   const id = " opaque-key ";
   assert.equal(planningIdSchema.parse(id), id);

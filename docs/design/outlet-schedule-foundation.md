@@ -105,7 +105,8 @@ not Telegram/User profile data. Existing public `Outlet` remains `{ id, name }`.
 Inputs are strict; names are trimmed, nonblank and bounded to 256 characters.
 Operation IDs and cursors are nonblank and bounded to 256 characters, but are
 **never trimmed or normalized**: surrounding whitespace is part of an opaque
-key. Control characters are rejected in inputs. Planning read-model IDs and
+key. C0 controls, DEL and C1 controls (U+0080–U+009F) are rejected in inputs;
+normal Unicode names remain supported. Planning read-model IDs and
 SF/Outlet references also preserve exact stored values; read models do not impose
 the input length limit. No shared Visit/Stock Report identifier behavior or
 stored rows are changed. IDs longer than 256 characters require a reviewed
