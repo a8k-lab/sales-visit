@@ -38,7 +38,7 @@ export class OperationError extends Error {
   }
 }
 
-async function submissionId(
+export async function submissionId(
   identity: TrustedIdentity,
   key: unknown,
   operation: "visit" | "stock-report"

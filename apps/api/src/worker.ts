@@ -5,6 +5,7 @@ import { IdentityOperations } from "./identity.ts";
 import app from "./index.ts";
 import { OutletOperations } from "./outlets.ts";
 import { ScheduleOperations } from "./schedules.ts";
+import { VisitWizard } from "./visits/wizard.ts";
 
 // Only Workers explicitly bound to this named entrypoint can invoke these methods.
 // No fetch handler, HTTP router, header-based actor, or public RPC dispatcher.
@@ -12,6 +13,9 @@ export class BotIdentity
   extends WorkerEntrypoint<ApiBindings>
   implements BotIdentityService
 {
+  visitWizard(actor: BotActor, input: unknown) {
+    return new VisitWizard(this.env.DB).handle(actor, input);
+  }
   ownSchedule(actor: BotActor, input?: unknown) {
     return new ScheduleOperations(this.env.DB).own(actor, input);
   }
