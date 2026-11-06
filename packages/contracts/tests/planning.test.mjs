@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   createOutletSchema,
+  planningIdSchema,
   updateOutletSchema,
   outletKeySchema,
   outletListSchema,
@@ -45,6 +46,70 @@ test("outlet operation inputs are strict, bounded and separate from stored model
       updatedAt: null,
     }).success
   );
+});
+
+test("planning IDs preserve exact whitespace in inputs, reads and cursors", () => {
+  const id = " opaque-key ";
+  assert.equal(planningIdSchema.parse(id), id);
+  assert.equal(outletKeySchema.parse({ id }).id, id);
+  assert.equal(updateOutletSchema.parse({ id, name: "Name" }).id, id);
+  assert.equal(outletListSchema.parse({ after: id }).after, id);
+  assert.equal(ownScheduleFilterSchema.parse({ after: id }).after, id);
+  assert.deepEqual(
+    scheduleFilterSchema.parse({ after: id, salesForceId: id }),
+    { after: id, salesForceId: id }
+  );
+  assert.deepEqual(
+    createScheduleSchema.parse({ salesForceId: id, outletId: id, weekday: 1 }),
+    { salesForceId: id, outletId: id, weekday: 1 }
+  );
+  assert.equal(
+    outletDetailSchema.parse({
+      id,
+      name: "Legacy",
+      createdAt: 0,
+      updatedAt: null,
+    }).id,
+    id
+  );
+  const schedule = {
+    id,
+    salesForceId: " sf ",
+    outletId: " outlet ",
+    weekday: 1,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+  assert.deepEqual(visitScheduleSchema.parse(schedule), schedule);
+  for (const invalid of [
+    "",
+    " ",
+    "\t",
+    "x".repeat(257),
+    "a\u0000b",
+    "a\nb",
+    "a\u007fb",
+  ]) {
+    assert.equal(planningIdSchema.safeParse(invalid).success, false);
+    assert.equal(outletKeySchema.safeParse({ id: invalid }).success, false);
+    assert.equal(outletListSchema.safeParse({ after: invalid }).success, false);
+    assert.equal(
+      createScheduleSchema.safeParse({
+        salesForceId: invalid,
+        outletId: id,
+        weekday: 1,
+      }).success,
+      false
+    );
+    assert.equal(
+      createScheduleSchema.safeParse({
+        salesForceId: id,
+        outletId: invalid,
+        weekday: 1,
+      }).success,
+      false
+    );
+  }
 });
 
 test("planning read timestamps accept signed safe integers without transformation", () => {

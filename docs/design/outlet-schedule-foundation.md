@@ -102,11 +102,14 @@ timestamps, preserving pre-1970 legacy values (Outlet `updatedAt` nullable);
 schedules additionally include business SF/Outlet names,
 not Telegram/User profile data. Existing public `Outlet` remains `{ id, name }`.
 
-Inputs are strict; operation IDs and names are trimmed, nonblank, bounded to 256
-characters, with control characters rejected. Existing stored IDs remain opaque;
-no schema rewrite or new uniqueness rule is imposed on legacy Outlets. Previously
-out-of-contract IDs longer than 256 characters would require a reviewed repair
-or changed operation limit before management through RPC.
+Inputs are strict; names are trimmed, nonblank and bounded to 256 characters.
+Operation IDs and cursors are nonblank and bounded to 256 characters, but are
+**never trimmed or normalized**: surrounding whitespace is part of an opaque
+key. Control characters are rejected in inputs. Planning read-model IDs and
+SF/Outlet references also preserve exact stored values; read models do not impose
+the input length limit. No shared Visit/Stock Report identifier behavior or
+stored rows are changed. IDs longer than 256 characters require a reviewed
+operation-limit change before management or use as a page cursor through RPC.
 
 ## Future Bot use and synthetic provisioning
 

@@ -2,18 +2,22 @@ import { z } from "zod";
 
 import type { BotActor } from "./identity.ts";
 import { outletSchema } from "./outlet.ts";
-import { identifierSchema } from "./shared.ts";
 
 // Bounded opaque operation inputs, not business codes or Telegram identities.
 const printable = (value: string) =>
   [...value].every(
     (char) => char.charCodeAt(0) >= 32 && char.charCodeAt(0) !== 127
   );
-export const planningIdSchema = identifierSchema.max(256).refine(printable);
+// Validate blankness without normalizing opaque stored keys or page cursors.
+const storedPlanningIdSchema = z.string().refine((id) => id.trim().length > 0);
+export const planningIdSchema = storedPlanningIdSchema
+  .max(256)
+  .refine(printable);
 const nameSchema = z.string().trim().min(1).max(256).refine(printable);
 // Stored epoch milliseconds may predate 1970; never normalize legacy values.
 const timestampSchema = z.number().int().safe();
 export const outletDetailSchema = outletSchema.extend({
+  id: storedPlanningIdSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema.nullable(),
 });
@@ -48,9 +52,9 @@ export const indonesianWeekdaySchema = z
   .transform((day) => indonesianWeekdays.indexOf(day) + 1)
   .pipe(weekdaySchema);
 export const visitScheduleSchema = z.object({
-  id: identifierSchema,
-  salesForceId: identifierSchema,
-  outletId: identifierSchema,
+  id: storedPlanningIdSchema,
+  salesForceId: storedPlanningIdSchema,
+  outletId: storedPlanningIdSchema,
   weekday: weekdaySchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,

@@ -120,6 +120,141 @@ async function setup(t, legacy = false) {
   return { db, rpc, api: await mf.getWorker("api") };
 }
 
+test("planning RPC uses exact legacy IDs for Outlet mutations and Schedule references", async (t) => {
+  const { db, rpc } = await setup(t);
+  const id = " outlet-exact ";
+  const sf = " sf-exact ";
+  await db.batch([
+    db
+      .prepare(
+        "INSERT INTO outlets (id, name) VALUES (?, 'Spaced'), ('outlet-exact', 'Unspaced')"
+      )
+      .bind(id),
+    db
+      .prepare(
+        "INSERT INTO sales_force (id, name) VALUES (?, 'Spaced SF'), ('sf-exact', 'Unspaced SF')"
+      )
+      .bind(sf),
+  ]);
+  assert.equal((await rpc("getOutlet", 1, { id })).data.id, id);
+  assert.equal((await rpc("getOutlet", 1, { id })).data.name, "Spaced");
+  assert.equal(
+    (await rpc("updateOutlet", 1, { id, name: "Changed" })).data.id,
+    id
+  );
+  assert.equal(
+    (await db.prepare("SELECT name FROM outlets WHERE id = ?").bind(id).first())
+      .name,
+    "Changed"
+  );
+  assert.equal(
+    (await rpc("getOutlet", 1, { id: id.trim() })).data.name,
+    "Unspaced"
+  );
+  assert.equal((await rpc("deleteOutlet", 1, { id })).data.id, id);
+  assert.equal(
+    await db.prepare("SELECT id FROM outlets WHERE id = ?").bind(id).first(),
+    null
+  );
+  assert.equal(
+    (await rpc("getOutlet", 1, { id: id.trim() })).data.name,
+    "Unspaced"
+  );
+  await db
+    .prepare("INSERT INTO outlets (id, name) VALUES (?, 'Spaced again')")
+    .bind(id)
+    .run();
+  const created = await rpc("createSchedule", 1, {
+    salesForceId: sf,
+    outletId: id,
+    weekday: 1,
+  });
+  assert.equal(created.ok, true);
+  assert.equal(created.data.salesForceId, sf);
+  assert.equal(created.data.outletId, id);
+  assert.deepEqual(
+    await db
+      .prepare(
+        "SELECT sales_force_id AS salesForceId, outlet_id AS outletId FROM visit_schedules WHERE id = ?"
+      )
+      .bind(created.data.id)
+      .first(),
+    { salesForceId: sf, outletId: id }
+  );
+  assert.equal(
+    (await rpc("listSchedules", 1, { salesForceId: sf })).data.items[0]
+      .outletId,
+    id
+  );
+  assert.deepEqual(
+    (await rpc("listSchedules", 1, { salesForceId: sf.trim() })).data.items,
+    []
+  );
+  await db
+    .prepare("UPDATE users SET sales_force_id = ? WHERE id = 'u-3'")
+    .bind(sf)
+    .run();
+  assert.equal(
+    (await rpc("ownSchedule", 3, {})).data.items[0].salesForceId,
+    sf
+  );
+  assert.equal((await rpc("deleteOutlet", 1, { id })).code, "referenced");
+  assert.deepEqual(
+    (await db.prepare("PRAGMA foreign_key_check").all()).results,
+    []
+  );
+});
+
+test("planning pages return and consume exact whitespace-bearing IDs and cursors", async (t) => {
+  const { db, rpc } = await setup(t);
+  const outletIds = Array.from(
+    { length: 52 },
+    (_, i) => ` outlet-${String(i).padStart(3, "0")} `
+  );
+  const scheduleIds = Array.from(
+    { length: 52 },
+    (_, i) => ` schedule-${String(i).padStart(3, "0")} `
+  );
+  await db.batch(
+    outletIds.map((id) =>
+      db.prepare("INSERT INTO outlets (id, name) VALUES (?, 'Page')").bind(id)
+    )
+  );
+  await db.batch(
+    scheduleIds.map((id, i) =>
+      db
+        .prepare(
+          "INSERT INTO visit_schedules (id, sales_force_id, outlet_id, weekday) VALUES (?, 'sf-a', ?, 1)"
+        )
+        .bind(id, outletIds[i])
+    )
+  );
+  for (const [method, by, expectedIds] of [
+    ["listOutlets", 1, outletIds],
+    ["listSchedules", 2, scheduleIds],
+    ["ownSchedule", 3, scheduleIds],
+  ]) {
+    const first = await rpc(method, by, {});
+    assert.equal(first.ok, true);
+    assert.deepEqual(
+      first.data.items.map((row) => row.id),
+      expectedIds.slice(0, 50)
+    );
+    assert.equal(first.data.next, expectedIds[49]);
+    const second = await rpc(method, by, { after: first.data.next });
+    assert.deepEqual(
+      second.data.items.map((row) => row.id),
+      expectedIds.slice(50)
+    );
+    assert.equal(second.data.next, null);
+    if (method !== "listOutlets")
+      assert.deepEqual(
+        [...first.data.items, ...second.data.items].map((row) => row.outletId),
+        outletIds
+      );
+  }
+});
+
 test("Outlet RPC preserves signed legacy timestamps across reads and mutations", async (t) => {
   const { db, rpc } = await setup(t);
   const createdAt = -86400000;
