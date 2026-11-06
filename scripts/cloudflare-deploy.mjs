@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { git } from "./ci/changes.mjs";
 import { prepareSource } from "./ci/source.mjs";
 import { cloudflare, inspect, readJSON } from "./ci/targets.mjs";
+import { assertApiCompatibility, smoke } from "./ci/verify-release.mjs";
 
 export function assertCurrentRevision(revision, run = git) {
   if (
@@ -42,6 +43,8 @@ export async function deploy(
     checkRevision = assertCurrentRevision,
     verify = inspect,
     prepare = prepareSource,
+    compatible = assertApiCompatibility,
+    health = smoke,
   } = {}
 ) {
   for (const key of [
@@ -96,6 +99,19 @@ export async function deploy(
         pathToFileURL(`${source.directory}/`)
       ),
     });
+    if (worker === "bot") {
+      const api = await verify("api", {
+        account,
+        api: cloudflare(account, env.CLOUDFLARE_API_TOKEN),
+        url: env.API_URL,
+        config: readJSON(
+          "apps/api/wrangler.jsonc",
+          pathToFileURL(`${source.directory}/`)
+        ),
+      });
+      compatible(api, revision);
+      await health(api);
+    }
     checkRevision(revision);
     const result = spawn("pnpm", args, {
       cwd: join(source.directory, "apps", worker),

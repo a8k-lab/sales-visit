@@ -138,6 +138,37 @@ test("manual Web deployment rebuilds isolated assets before applying the revisio
   assert.ok(commands[2].includes("--tag"));
   assert.equal(cleaned, true);
 });
+test("direct manual Bot wrapper cannot bypass API source compatibility", async () => {
+  let cleaned = false;
+  await assert.rejects(
+    deploy("bot", {
+      env,
+      checkRevision: () => {},
+      prepare: () => ({
+        directory: process.cwd(),
+        cleanup: () => {
+          cleaned = true;
+        },
+      }),
+      verify: async (worker) => ({
+        worker,
+        tag: "immutable",
+        revision: undefined,
+      }),
+      health: () =>
+        assert.fail(
+          "unknown API revision cannot pass liveness as compatibility"
+        ),
+      spawn: (_, args) => {
+        assert.equal(args[0], "install");
+        return { status: 0 };
+      },
+    }),
+    /API RPC compatibility unverified/
+  );
+  assert.equal(cleaned, true);
+});
+
 for (const failure of ["install", "build:web"])
   test(`failed isolated ${failure} blocks Wrangler and cleans snapshot`, async (t) => {
     const directory = snapshot(t);

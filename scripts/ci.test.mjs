@@ -599,6 +599,7 @@ const states = () =>
   );
 function execution({ failApi = false, dryRun = false } = {}) {
   const before = states();
+  before.api.revision = revision;
   const calls = [];
   const deployed = new Set();
   const deps = {
@@ -627,12 +628,13 @@ test("API deploy and verified health precede Bot; unchanged Workers are never de
   assert.deepEqual(calls, [
     "deploy:api",
     "health:api",
+    "health:api",
     "deploy:bot",
     "health:bot",
   ]);
   const bot = execution();
   await executePlan(["bot"], bot.deps);
-  assert.deepEqual(bot.calls, ["deploy:bot", "health:bot"]);
+  assert.deepEqual(bot.calls, ["health:api", "deploy:bot", "health:bot"]);
 });
 test("API deployment or health failure blocks dependent Bot", async () => {
   const failed = execution({ failApi: true });
@@ -826,6 +828,7 @@ test("full release preflights every selected Worker before any deployment", asyn
     "verify:api",
     "verify:bot",
   ]);
+  assert.ok(events.includes("health:api"));
   assert.ok(events.indexOf("health:api") < events.indexOf("deploy:bot"));
 });
 test("failure of any preflight blocks all writes, including independent Web", async () => {
@@ -869,6 +872,7 @@ test("Bot-only release verifies and health-checks API without redeploying it", a
     verify: async (w) => {
       events.push(`verify:${w}`);
       const state = states()[w];
+      if (w === "api") state.revision = revision;
       return w === "bot" && updated
         ? { ...state, version: "new", deployment: "new", revision }
         : state;
@@ -880,6 +884,7 @@ test("Bot-only release verifies and health-checks API without redeploying it", a
     health: async (target) => events.push(`health:${target.worker}`),
   });
   assert.ok(events.includes("verify:api"));
+  assert.ok(events.includes("health:api"));
   assert.ok(events.indexOf("health:api") < events.indexOf("deploy:bot"));
   assert.ok(!events.includes("deploy:api"));
 });

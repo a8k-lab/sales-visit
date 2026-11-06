@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { assertCurrentRevision } from "../cloudflare-deploy.mjs";
 import { changedPaths, git, impact, workers } from "./changes.mjs";
 import { cloudflare, inspect, names, readJSON } from "./targets.mjs";
+import { assertApiCompatibility, smoke } from "./verify-release.mjs";
+export { assertApiCompatibility, smoke } from "./verify-release.mjs";
 
 export function policy(event, enabled, target, dryRun) {
   if (event === "push")
@@ -44,44 +46,6 @@ export function selectAutomatic(
     return impact(diff(base, revision)).cd.includes(worker);
   });
 }
-export async function smoke(
-  target,
-  fetcher = fetch,
-  wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-) {
-  for (let attempt = 0; attempt < 6; attempt++) {
-    try {
-      const response = await fetcher(
-        `${target.url}${target.worker === "web" ? "/" : "/health"}`,
-        {
-          redirect: "error",
-          signal: AbortSignal.timeout(10000),
-          headers: { "Cache-Control": "no-cache" },
-        }
-      );
-      if (!response.ok) throw new Error("Unhealthy");
-      if (target.worker === "web") {
-        if (
-          !response.headers.get("content-type")?.includes("text/html") ||
-          !(await response.text()).includes('<div id="root">')
-        )
-          throw new Error("Wrong Web response");
-      } else {
-        const body = await response.json();
-        if (
-          body.status !== "ok" ||
-          (target.worker === "bot" && body.service !== names.bot)
-        )
-          throw new Error("Wrong health response");
-      }
-      return;
-    } catch {
-      /* Only sanitized failure is emitted after bounded propagation retries. */
-    }
-    if (attempt < 5) await wait(5000);
-  }
-  throw new Error(`Health verification failed: ${target.worker}`);
-}
 export function validateScripts() {
   const root = readJSON("package.json").scripts;
   for (const worker of workers) {
@@ -118,8 +82,10 @@ export async function executePlan(
     run = command,
     report = console.log,
     env = process.env,
+    compatible = assertApiCompatibility,
   }
 ) {
+  let verifiedApi = states.api;
   for (const worker of ["web", "api", "bot"].filter((w) =>
     targets.includes(w)
   )) {
@@ -134,6 +100,13 @@ export async function executePlan(
       report(`Validation only: ${worker}; no deployment invoked`);
       continue;
     }
+    if (worker === "bot") {
+      const api = await verify("api");
+      if (api.tag !== verifiedApi?.tag || api.version !== verifiedApi?.version)
+        throw new Error("API changed since release verification");
+      compatible(api, revision);
+      await health(api);
+    }
     run([`deploy:${worker}`], { ...env, RELEASE_REVISION: revision });
     const after = await verify(worker);
     if (
@@ -146,6 +119,7 @@ export async function executePlan(
         "Deployed resource/version/revision does not match expected update"
       );
     await health(after);
+    if (worker === "api") verifiedApi = after;
     report(
       `${names[worker]}: deployment=${after.deployment} version=${after.version} revision=${revision}`
     );
@@ -159,6 +133,7 @@ export async function release({
   report = console.log,
   health = smoke,
   select = selectAutomatic,
+  compatible = assertApiCompatibility,
 } = {}) {
   const decision = policy(
     env.GITHUB_EVENT_NAME,
@@ -200,8 +175,10 @@ export async function release({
       await health(states[worker]);
   }
   if (!targets.length) return;
-  if (targets.includes("bot") && !targets.includes("api"))
+  if (targets.includes("bot") && !targets.includes("api")) {
+    compatible(states.api, revision);
     await health(states.api);
+  }
   // Validation subprocesses receive no Cloudflare credentials.
   const local = { ...env };
   delete local.CLOUDFLARE_API_TOKEN;
@@ -237,6 +214,7 @@ export async function release({
     run,
     report,
     env,
+    compatible,
   });
 }
 function reportSummary(message) {
