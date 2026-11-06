@@ -17,6 +17,14 @@ Reuse only these existing resources in the verified account:
 | api    | `apps/api/wrangler.jsonc` | `sales-visit-api` | `pnpm deploy:api`                   |
 | bot    | `apps/bot/wrangler.jsonc` | `sales-visit-bot` | `pnpm deploy:bot`                   |
 
+For Telegram Web authentication, follow [the dedicated setup and staged release checklist](web-auth.md).
+Migration 0007 must be the only pending migration after verifying 0000–0006.
+The release orchestrator still orders `web → api → bot`: use separate manual
+`api`, then `web` targets, not `all`, for API-before-Web activation. The isolated
+Web build maps approved Environment `API_URL` to public `VITE_API_URL`; secrets
+and caller VITE/dotenv variables remain excluded. Strict API config validation
+now explicitly permits only `TELEGRAM_CLIENT_ID` and `WEB_ORIGINS` runtime vars.
+
 No staging environment, resource bootstrap or rollback automation is included.
 Old bootstrap instructions in `docs/deployment.md` are historical, not steps to
 repeat on these resources. No frontend tests or business behavior were added.

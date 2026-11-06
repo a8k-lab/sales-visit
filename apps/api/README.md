@@ -29,6 +29,14 @@ then rerun migrations and seed. Generated `worker-configuration.d.ts` is ignored
 
 ## Endpoints
 
+See [Web authentication and release setup](../../docs/web-auth.md) for Telegram
+OIDC, challenge/session contracts, CORS, role scoping and migration 0007.
+Only `/health` is public among the business GETs below. All others require a
+valid Web Bearer session; public HTTP writes remain denied even with a session.
+Admin/Supervisor can monitor all operational data; Sales Force cannot list
+Sales Force and can read only their own Visits/Stock Reports plus limited
+Outlet/Product references. Authorization is applied server-side on every request.
+
 | GET path         | JSON response                                            |
 | ---------------- | -------------------------------------------------------- |
 | `/health`        | `{ "status": "ok" }` (liveness only; no database query)  |
@@ -39,12 +47,14 @@ then rerun migrations and seed. Generated `worker-configuration.d.ts` is ignored
 | `/visits/:id`    | `Visit & { stockReports: StockReport[] }`                |
 | `/stock-reports` | `StockReport[]`, including items and independent reports |
 
-Lists are bare arrays (empty database: `[]`). Master records sort by ID;
+Authorized lists are bare arrays (empty database: `[]`), bounded by `limit`
+(1–100, default 100) and `offset` (0–100000, default 0). Master records sort by ID;
 visits/reports sort newest event first, then ID ascending. Items sort by Product
 ID in UTF-8 byte order (SQLite BINARY collation), consistently across POST,
 retries, and GET. Timestamps serialize as UTC ISO strings; nullable optional
 properties are omitted, and storage-only fields such as `createdAt` are not exposed.
-Visit details contain all linked reports, or `stockReports: []` when none exist.
+Visit details contain at most 100 authorized linked reports, or `stockReports: []`
+when none exist. Sales Force detail includes only their own reported stock.
 Unknown Visit IDs return 404 with `{ "error": "Visit not found" }`.
 Unknown routes and unsupported methods return 404 with
 `{ "error": "Not found" }`. Read handler/database failures return 503 with
@@ -52,13 +62,14 @@ Unknown routes and unsupported methods return 404 with
 
 ```sh
 curl http://localhost:8787/health
+# Business examples below return 401 without a valid Web session.
 curl http://localhost:8787/sales-force
 curl http://localhost:8787/outlets
 curl http://localhost:8787/products
 curl http://localhost:8787/visits
 curl http://localhost:8787/visits/VST-0012
 curl http://localhost:8787/stock-reports
-curl -i http://localhost:8787/visits/unknown # 404
+curl -i http://localhost:8787/visits/unknown # 401 without session; 404 if authorized
 ```
 
 ## Write contracts

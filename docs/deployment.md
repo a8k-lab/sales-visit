@@ -61,6 +61,12 @@ before deploying; stop on any unrelated resource-name collision.
 
 ## D1 creation and configuration
 
+**Existing installations:** do not repeat resource creation or bootstrap below.
+For the Web authentication milestone, follow [the staged rollout checklist](web-auth.md#manual-release-checklist),
+verify 0000–0006 are applied, and apply only pending 0007. Current schema has
+13 application tables, adding the durable Telegram draft and Web challenge/session
+tables beyond the older ten-table bootstrap description below.
+
 If absent, create exactly one database:
 
 ```sh
