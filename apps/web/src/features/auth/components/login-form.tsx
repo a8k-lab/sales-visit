@@ -19,7 +19,7 @@ interface TelegramLogin {
       nonce: string;
       lang: string;
     },
-    callback: (result: { id_token?: string; error?: string }) => void
+    callback: (result?: { id_token?: string; error?: string } | null) => void
   ): void;
   close(): void;
 }
@@ -160,7 +160,12 @@ export function LoginForm() {
         (result) => {
           if (attempt.current !== current || !mounted.current) return;
           clearTimeout(timer.current);
-          if (!result.id_token || result.error) {
+          if (
+            !result ||
+            typeof result.id_token !== "string" ||
+            !result.id_token ||
+            result.error
+          ) {
             cancel();
             return;
           }

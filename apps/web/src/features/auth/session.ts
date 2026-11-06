@@ -29,6 +29,11 @@ export function clearSession() {
   account = null;
   notify();
 }
+class SessionExpiredError extends Error {
+  constructor() {
+    super("Sesi berakhir atau login ditolak. Silakan masuk kembali.");
+  }
+}
 const base = import.meta.env.VITE_API_URL as string | undefined;
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (
@@ -54,7 +59,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
       sessionStorage.setItem("sales-visit.session-ended", "1");
       clearSession();
     }
-    throw new Error("Sesi berakhir atau login ditolak. Silakan masuk kembali.");
+    throw new SessionExpiredError();
   }
   if (!response.ok)
     throw new Error(
@@ -70,11 +75,19 @@ export async function restoreSession() {
     account = null;
     return null;
   }
-  const result = await api<{ account: Account }>("/auth/me");
-  if (token() !== credential) return account;
-  account = result.account;
-  notify();
-  return account;
+  try {
+    const result = await api<{ account: Account }>("/auth/me");
+    if (token() !== credential) return account;
+    account = result.account;
+    notify();
+    return account;
+  } catch (error) {
+    // Only an authoritative 401 (or no credential) means unauthenticated.
+    // Timeouts, transport/JSON failures and other HTTP errors must remain errors,
+    // including on a fresh page load where the account cache is still empty.
+    if (error instanceof SessionExpiredError && !token()) return null;
+    throw error;
+  }
 }
 export async function finishLogin(idToken: string, challenge: string) {
   const result = await api<{ token: string; account: Account }>(

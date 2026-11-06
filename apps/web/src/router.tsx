@@ -6,6 +6,7 @@ import {
   notFound,
   Outlet,
   redirect,
+  useRouter,
   type SearchSchemaInput,
 } from "@tanstack/react-router";
 
@@ -57,6 +58,21 @@ function NotFoundPage() {
   );
 }
 
+function SessionUnavailable() {
+  const router = useRouter();
+  return (
+    <Empty>
+      <EmptyHeader role="alert">
+        <EmptyTitle>Sesi belum dapat diperiksa</EmptyTitle>
+        <EmptyDescription>
+          Periksa koneksi lalu coba lagi. Sesi tersimpan tidak dihapus.
+        </EmptyDescription>
+      </EmptyHeader>
+      <Button onClick={() => void router.invalidate()}>Coba lagi</Button>
+    </Empty>
+  );
+}
+
 const visitSearch = (search: SearchSchemaInput & Partial<VisitFilters>) =>
   validateVisitSearch(search);
 
@@ -68,13 +84,7 @@ const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: "dashboard",
   beforeLoad: async ({ location }) => {
-    let account;
-    try {
-      account = await restoreSession();
-    } catch {
-      if (currentAccount())
-        throw new Error("Koneksi terputus. Muat ulang untuk memeriksa sesi.");
-    }
+    const account = await restoreSession();
     if (!account)
       throw redirect({
         to: "/login",
@@ -83,11 +93,7 @@ const dashboardRoute = createRoute({
       });
   },
   pendingComponent: () => <p role="status">Memeriksa sesi…</p>,
-  errorComponent: () => (
-    <p role="alert">
-      Sesi tidak dapat diperiksa. Periksa koneksi dan muat ulang halaman.
-    </p>
-  ),
+  errorComponent: SessionUnavailable,
   component: DashboardLayout,
   notFoundComponent: NotFoundPage,
 });
