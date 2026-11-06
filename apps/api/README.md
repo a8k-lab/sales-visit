@@ -160,7 +160,8 @@ tests. Identity/audit fields are never added to existing public read responses.
 
 The same named `BotIdentity` entrypoint now exposes `listOutlets`, `getOutlet`,
 `createOutlet`, `updateOutlet`, `deleteOutlet`, `ownSchedule`, `listSchedules`,
-and Admin-only `createSchedule`. No HTTP routes or Bot commands are added.
+and Admin-only `createSchedule`. These operations add no public HTTP routes;
+the Bot's existing Outlet/Schedule commands call this private surface.
 See [the foundation guide](../../docs/design/outlet-schedule-foundation.md) for
 contracts, role permissions, ISO/Indonesian weekdays, safe error codes,
 50-row keyset pagination, additive migration prerequisites and optional local
@@ -175,9 +176,11 @@ Visit ID plus `-stock`; independent reports use a separate operation namespace.
 Clients must retain their key after timeouts and use a fresh key for a genuinely
 new observation. Keys are scoped per identity/channel/operation, not globally.
 
-The persisted immutable records are the retry receipt, so no extra table or
-migration is needed. Normalized timestamps, trimmed reference IDs, and Product
-item order are compared semantically; notes/follow-up remain exact. A retry
+The persisted immutable records are the business operation's retry receipt;
+the Telegram wizard's separate draft table stores conversation progress.
+Normalized timestamps, exact Visit Outlet IDs (other reference inputs retain
+existing trimming), and Product item order are compared semantically;
+notes/follow-up remain exact. A retry
 returns 200, while changed valid payloads return 409 without overwriting data.
 Concurrent insert races are resolved by primary keys, then rereading and
 comparing the winner. Failed atomic batches leave no receipt and can be retried.
@@ -222,13 +225,32 @@ trigger forces a late item failure after parent/earlier-item insertion, verifyin
 D1 rollback and retry recovery for both operations. No frontend tests,
 Cloudflare credentials, or changes to your dev database are required.
 
+## Authenticated Telegram Visit wizard
+
+`BotIdentity.visitWizard(actor, input)` is a private API-owned D1 state machine.
+Active, registered Sales Force with a current existing SF association can select
+an exact known Outlet, record actual Jakarta visit time, skip or enter notes and
+follow-up, review, cancel and confirm. No assignment is required. API derives the
+SF/channel; the Bot cannot supply either. `createVisit()` is reused with a frozen
+UUID/payload and an atomic current-account/draft guard in the insert. Public HTTP
+writes remain denied. Migration `0004_misty_red_skull.sql` must precede API, then
+Bot deployment. No remote migration/deployment is performed here.
+
+See the [Visit wizard guide](../../docs/design/telegram-visit-wizard.md) for RPC
+semantics, 24-hour lazy expiry, state transitions, cancellation/confirmation races,
+recoverable receipts, failure guarantees, offline tests and manual acceptance.
+`createVisitSchema.outletId` now preserves exact opaque stored values instead of
+trimming; independent Stock Report/Product normalization is unchanged.
+
 ## Remaining scope
 
-Web authentication/read authorization, CORS/frontend integration, Telegram reporting,
-public-read pagination/filtering and KPIs remain deferred. The auth
-milestone must establish verified Web/Bot identities and trusted channel
-provenance, session/webhook security, Sales Force mapping/revocation, and Outlet
-assignment/role permissions before enabling writes. Existing rules only validate
+Web authentication/read authorization, CORS/frontend integration, Telegram Stock
+Reports, public-read pagination/filtering and KPIs remain deferred. The future Web auth
+milestone must establish verified Web identities, trusted channel provenance,
+sessions and read permissions before enabling public writes. Telegram Visit
+submission now checks registered identity, current role/status and SF association
+at the private boundary and again atomically at insertion; assignment enforcement
+is not an established submission rule. Existing rules only validate
 that the trusted Sales Force and referenced records exist; no assignment policy
 has been invented. Add operational logging/rate limits and review request-size
 limits before production exposure. Public HTTP lists remain unpaginated; new
