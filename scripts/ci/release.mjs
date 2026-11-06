@@ -118,6 +118,10 @@ export async function executePlan(
       throw new Error(
         "Deployed resource/version/revision does not match expected update"
       );
+    if (worker === "api" && after.authRateLimitsReady !== true)
+      throw new Error(
+        "Deployed API auth rate limit bindings were not verified"
+      );
     await health(after);
     if (worker === "api") verifiedApi = after;
     report(

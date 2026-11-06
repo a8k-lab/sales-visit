@@ -29,7 +29,9 @@ export type WebEnv = {
 export function configured(env: ApiBindings) {
   return (
     /^[1-9][0-9]*$/.test(env.TELEGRAM_CLIENT_ID ?? "") &&
-    Number.isSafeInteger(Number(env.TELEGRAM_CLIENT_ID))
+    Number.isSafeInteger(Number(env.TELEGRAM_CLIENT_ID)) &&
+    typeof env.AUTH_IP_LIMITER?.limit === "function" &&
+    typeof env.AUTH_GLOBAL_LIMITER?.limit === "function"
   );
 }
 
@@ -97,6 +99,37 @@ export async function sessionAccount(request: Request, db: D1Database) {
 }
 export function authRoutes(keys: JWTVerifyGetKey = telegramKeys) {
   const app = new Hono<WebEnv>();
+  app.on("POST", ["/challenge", "/telegram"], async (c, next) => {
+    if (!configured(c.env)) return c.json({ error: "Login unavailable" }, 503);
+    // Cloudflare overwrites this header for incoming Internet traffic. Never use
+    // forwarded headers, unverified profile IDs, challenge references or tokens.
+    const ip = c.req.header("CF-Connecting-IP");
+    if (!ip || !/^[0-9a-f:.]{3,45}$/i.test(ip))
+      return c.json({ error: "Login unavailable" }, 503);
+    try {
+      const ipDecision = await c.env.AUTH_IP_LIMITER.limit({
+        key: `web-auth:ip:${await hashToken(ip)}`,
+      });
+      if (typeof ipDecision?.success !== "boolean")
+        throw new Error("Unavailable limiter");
+      if (!ipDecision.success) {
+        c.header("Retry-After", "60");
+        return c.json({ error: "Too many requests" }, 429);
+      }
+      const globalDecision = await c.env.AUTH_GLOBAL_LIMITER.limit({
+        key: "web-auth:all",
+      });
+      if (typeof globalDecision?.success !== "boolean")
+        throw new Error("Unavailable limiter");
+      if (!globalDecision.success) {
+        c.header("Retry-After", "60");
+        return c.json({ error: "Too many requests" }, 429);
+      }
+    } catch {
+      return c.json({ error: "Login unavailable" }, 503);
+    }
+    await next();
+  });
   app.use(
     "*",
     bodyLimit({
@@ -118,7 +151,7 @@ export function authRoutes(keys: JWTVerifyGetKey = telegramKeys) {
       nonce = random(),
       now = Date.now(),
       expiresAt = now + 180000;
-    // Bounded retention cleanup; deployment should additionally rate-limit /auth/*.
+    // Bounded retention cleanup after the shared auth abuse budgets permit work.
     await c.env.DB.batch([
       c.env.DB.prepare(
         "DELETE FROM web_login_challenges WHERE id IN (SELECT id FROM web_login_challenges WHERE expires_at < ? LIMIT 100)"

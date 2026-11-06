@@ -9,6 +9,25 @@ export const names = {
   api: "sales-visit-api",
   bot: "sales-visit-bot",
 };
+// Account-local rate namespaces are declared, not provisioned remote resources.
+// Changes require explicit review of both this policy and Wrangler configuration.
+export const authRateLimits = [
+  {
+    name: "AUTH_IP_LIMITER",
+    namespace_id: "15001",
+    simple: { limit: 20, period: 60 },
+  },
+  {
+    name: "AUTH_GLOBAL_LIMITER",
+    namespace_id: "15002",
+    simple: { limit: 300, period: 60 },
+  },
+];
+const sameRateLimit = (binding, expected) =>
+  binding?.name === expected.name &&
+  binding.namespace_id === expected.namespace_id &&
+  binding.simple?.limit === expected.simple.limit &&
+  binding.simple?.period === expected.simple.period;
 export const root = new URL("../../", import.meta.url);
 export function readJSON(path, base = root) {
   const errors = [];
@@ -48,7 +67,7 @@ export function validateConfig(worker, config, account, overrides = []) {
     "compatibility_flags",
     "workers_dev",
     "observability",
-    ...(worker === "api" ? ["d1_databases", "vars"] : []),
+    ...(worker === "api" ? ["d1_databases", "vars", "ratelimits"] : []),
     ...(worker === "bot" ? ["services", "secrets"] : []),
     ...(worker === "web" ? ["assets"] : []),
   ]);
@@ -56,6 +75,23 @@ export function validateConfig(worker, config, account, overrides = []) {
     if (!allowed.has(key))
       throw new Error(`Unapproved Wrangler setting: ${key}`);
   if (worker === "api") {
+    const rates = config.ratelimits;
+    if (
+      !Array.isArray(rates) ||
+      rates.length !== authRateLimits.length ||
+      !authRateLimits.every(
+        (expected) =>
+          rates.filter(
+            (rate) =>
+              sameRateLimit(rate, expected) &&
+              Object.keys(rate).every((key) =>
+                ["name", "namespace_id", "simple"].includes(key)
+              ) &&
+              Object.keys(rate.simple).length === 2
+          ).length === 1
+      )
+    )
+      throw new Error("Unapproved auth rate limit configuration");
     const vars = config.vars;
     if (
       !vars ||
@@ -166,6 +202,41 @@ export function validateBindings(worker, config, bindings) {
     )
       throw new Error("Missing or wrong D1 binding");
   } else if (databases.length) throw new Error("Only API may bind D1");
+  const rates = bindings.filter(
+    (binding) =>
+      binding.type === "ratelimit" ||
+      authRateLimits.some((expected) => expected.name === binding.name)
+  );
+  if (worker !== "api" && rates.length)
+    throw new Error("Only API may bind auth rate limiters");
+  if (worker === "api") {
+    if (rates.length === 0) {
+      // Bootstrap only: existing pre-auth or explicitly disabled API. A partial,
+      // misnamed or mismatched limiter is never an acceptable baseline.
+      const clients = bindings.filter(
+        (binding) => binding.name === "TELEGRAM_CLIENT_ID"
+      );
+      if (
+        clients.length > 1 ||
+        clients.some(
+          (binding) => binding.type !== "plain_text" || binding.text !== ""
+        )
+      )
+        throw new Error("Active Web login has no verified abuse protection");
+      return false;
+    }
+    if (
+      rates.length !== authRateLimits.length ||
+      !authRateLimits.every(
+        (expected) =>
+          rates.filter(
+            (rate) => rate.type === "ratelimit" && sameRateLimit(rate, expected)
+          ).length === 1
+      )
+    )
+      throw new Error("Missing or wrong auth rate limit binding");
+    return true;
+  }
   if (worker === "bot") {
     validateBotBindings(bindings, "active-version");
     for (const name of config.secrets.required)
@@ -264,7 +335,11 @@ export async function inspect(
     throw new Error(
       "Revision annotation does not belong to the active version"
     );
-  validateBindings(worker, config, version.resources?.bindings);
+  const authRateLimitsReady = validateBindings(
+    worker,
+    config,
+    version.resources?.bindings
+  );
   if (
     worker === "api" &&
     !version.resources?.script?.named_handlers?.some(
@@ -300,6 +375,7 @@ export async function inspect(
     deployment: deployment.id,
     version: version.id,
     revision: annotatedVersion.annotations?.["workers/tag"],
+    ...(worker === "api" ? { authRateLimitsReady } : {}),
     url,
   };
 }

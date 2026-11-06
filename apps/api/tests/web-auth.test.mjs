@@ -86,6 +86,9 @@ test("Web sessions and authorized reads on disposable local D1", async (t) => {
     ...proxy.env,
     TELEGRAM_CLIENT_ID: clientId,
     WEB_ORIGINS: "https://dashboard.example,http://localhost:5173",
+    // Proof/session tests isolate auth from native approximate rate counters.
+    AUTH_IP_LIMITER: { limit: async () => ({ success: true }) },
+    AUTH_GLOBAL_LIMITER: { limit: async () => ({ success: true }) },
   };
   const db = env.DB;
   const sql = async (text) =>
@@ -118,6 +121,7 @@ test("Web sessions and authorized reads on disposable local D1", async (t) => {
       {
         method,
         headers: {
+          "CF-Connecting-IP": "203.0.113.10",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(origin ? { Origin: origin } : {}),
           ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
