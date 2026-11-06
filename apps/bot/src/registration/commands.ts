@@ -19,6 +19,14 @@ const errors = {
     "Pengguna bukan berstatus pending. Keputusan tidak diubah (termasuk akun disabled).",
   sales_force_unavailable:
     "Sales Force tidak ditemukan atau sudah terkait dengan akun lain. Hubungi administrator untuk verifikasi.",
+  invalid_transition:
+    "Perubahan tidak valid. /setrole hanya untuk akun active; /disable dari active; /enable dari disabled. Akun pending harus disetujui, akun rejected tidak dapat diaktifkan.",
+  protected_admin:
+    "Administrator aktif tidak dapat diturunkan role-nya atau dinonaktifkan melalui bot. Hubungi operator untuk prosedur pemulihan terpisah.",
+  last_admin:
+    "Admin aktif terakhir harus dipertahankan. Perubahan ditolak; gunakan prosedur pemulihan operator yang ditinjau terpisah.",
+  association_locked:
+    "Asosiasi Sales Force yang sudah ada tidak dapat diganti melalui perintah ini. Verifikasi dan koordinasikan perubahan dengan operator.",
 };
 function statusMessage(account: Account | null): string {
   if (!account) return "Kamu belum terdaftar. Gunakan /register.";

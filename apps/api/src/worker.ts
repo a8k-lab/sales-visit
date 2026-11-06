@@ -46,6 +46,18 @@ export class BotIdentity
   me(actor: BotActor) {
     return new IdentityOperations(this.env.DB).me(actor);
   }
+  users(actor: BotActor, after?: string) {
+    return new IdentityOperations(this.env.DB).users(actor, after);
+  }
+  setRole(actor: BotActor, input: unknown) {
+    return new IdentityOperations(this.env.DB).setRole(actor, input);
+  }
+  disable(actor: BotActor, input: unknown) {
+    return new IdentityOperations(this.env.DB).disable(actor, input);
+  }
+  enable(actor: BotActor, input: unknown) {
+    return new IdentityOperations(this.env.DB).enable(actor, input);
+  }
   pending(actor: BotActor, after?: string) {
     return new IdentityOperations(this.env.DB).pending(actor, after);
   }
