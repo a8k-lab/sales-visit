@@ -131,6 +131,12 @@ for (const [path, ci, cd, db, helpers] of [
   ["apps/web/src/main.tsx", ["web"], ["web"]],
   ["apps/api/src/operations.ts", ["api", "bot"], ["api"]],
   ["apps/bot/src/commands.ts", ["api", "bot"], ["bot"]],
+  ["apps/web/package.json", ["web"], ["web"], false, true],
+  ["apps/api/package.json", ["api", "bot"], ["api"], false, true],
+  ["apps/bot/package.json", ["api", "bot"], ["bot"], false, true],
+  ["apps/web/wrangler.jsonc", ["web"], ["web"], false, true],
+  ["apps/api/wrangler.jsonc", ["api", "bot"], ["api"], false, true],
+  ["apps/bot/wrangler.jsonc", ["api", "bot"], ["bot"], false, true],
   ["packages/contracts/src/visit.ts", workers, workers],
   [
     "packages/db/migrations/0004_misty_red_skull.sql",
@@ -193,6 +199,17 @@ test("multi-commit push and PR merge-base comparisons include all changed paths"
     "initial",
     "web",
   ]);
+  run(["switch", "-qc", "target", base]);
+  const target = commit("target-only");
+  assert.deepEqual(changedPaths(target, head, true, run).toSorted(), [
+    "api",
+    "web",
+  ]);
+  assert.deepEqual(changedPaths(target, head, false, run).toSorted(), [
+    "api",
+    "target-only",
+    "web",
+  ]);
   assert.throws(() => changedPaths(undefined, head), /revision/);
 });
 
@@ -233,6 +250,28 @@ for (const [label, worker, mutate, expected] of [
     mutate(config);
     assert.throws(() => validateConfig(worker, config, account), expected);
   });
+for (const worker of workers)
+  test(`${worker} workers.dev config cannot disable the required health origin`, async () => {
+    const config = { ...configs[worker] };
+    delete config.workers_dev;
+    assert.doesNotThrow(() => validateConfig(worker, config, account));
+    config.workers_dev = true;
+    assert.doesNotThrow(() => validateConfig(worker, config, account));
+    config.workers_dev = false;
+    await assert.rejects(
+      inspect(worker, {
+        account,
+        config,
+        url: url(worker),
+        api: () =>
+          assert.fail(
+            "disabled workers.dev must fail before inspection/upload"
+          ),
+      }),
+      /workers_dev/
+    );
+  });
+
 test("missing account, unknown targets and name/env CLI overrides fail closed", () => {
   for (const id of [undefined, "", "123", "g".repeat(32)])
     assert.throws(() => validateConfig("web", configs.web, id), /account/);

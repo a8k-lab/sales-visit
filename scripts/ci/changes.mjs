@@ -18,6 +18,12 @@ export function impact(paths) {
   };
   for (const path of paths) {
     if (/\.md$|^docs\//.test(path)) continue;
+    if (
+      /^apps\/(web|api|bot)\/(package\.json$|wrangler[^/]*\.(jsonc?|toml)$|scripts\/)/.test(
+        path
+      )
+    )
+      helpers = true;
     if (path.startsWith("apps/web/")) add(["web"]);
     else if (path.startsWith("apps/api/")) {
       add(["api"]);

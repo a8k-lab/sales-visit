@@ -36,6 +36,8 @@ export function validateConfig(worker, config, account, overrides = []) {
   )
     throw new Error("Unapproved environment/account/argument override");
   if (config.name !== names[worker]) throw new Error("Unexpected Worker name");
+  if (config.workers_dev !== undefined && config.workers_dev !== true)
+    throw new Error("workers_dev must be enabled for verified health URLs");
   // This release path has no alternate routes, environments or resource provisioning.
   const allowed = new Set([
     "$schema",
