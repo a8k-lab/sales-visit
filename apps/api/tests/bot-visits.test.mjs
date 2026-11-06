@@ -148,10 +148,10 @@ test("Visit wizard through real Workers, private RPC and persistent disposable D
     "../../../packages/db/migrations/",
     import.meta.url
   );
-  for (const f of readdirSync(migrations)
-    .filter((f) => f.endsWith(".sql"))
+  for (const file of readdirSync(migrations)
+    .filter((entry) => entry.endsWith(".sql"))
     .toSorted()) {
-    const sql = readFileSync(new URL(f, migrations), "utf8").replace(
+    const sql = readFileSync(new URL(file, migrations), "utf8").replace(
       /^\s*--.*$/gm,
       ""
     );
@@ -362,6 +362,15 @@ test("Visit wizard through real Workers, private RPC and persistent disposable D
       assert.equal((await deliver(confirm)).status, 200);
       await command(3, "/konfirmasi");
       assert.equal(await count(), 2);
+      await db
+        .prepare("UPDATE users SET status = 'disabled' WHERE id = 'u3'")
+        .run();
+      assert.match(await command(3, "/konfirmasi"), /Akses ditolak/);
+      assert.equal(await count(), 2);
+      await db
+        .prepare("UPDATE users SET status = 'active' WHERE id = 'u3'")
+        .run();
+      assert.match(await command(3, "/konfirmasi"), /berhasil tersimpan/);
     }
   );
   await t.test(
