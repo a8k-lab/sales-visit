@@ -94,16 +94,41 @@ export function validateConfig(worker, config, account, overrides = []) {
   )
     throw new Error("Unexpected static assets configuration");
 }
-export function validateBotBindings(bindings) {
+export function validateBotBindings(bindings, source = "config") {
+  if (source !== "config" && source !== "active-version")
+    throw new Error("Unknown Bot binding validation source");
   const services = bindings.filter((b) => b.type === "service");
+  const identity = services.find((b) => b.name === "IDENTITY");
+  // Cloudflare's API may serialize the default Service environment explicitly.
+  // This is NOT permission to select a Wrangler --env or config environment.
+  const environment =
+    identity?.environment === undefined
+      ? "omitted"
+      : identity.environment === "production"
+        ? "production"
+        : "unexpected";
+  const checks = {
+    serviceCount: services.length,
+    expectedBindingPresent: Boolean(identity),
+    targetMatch: identity?.service === names.api,
+    entrypointMatch: identity?.entrypoint === "BotIdentity",
+    unexpectedEnvironment:
+      environment !== "omitted" &&
+      !(source === "active-version" && environment === "production"),
+    environment,
+  };
+  // Only fixed keys, booleans, a count and a closed enum may reach logs. Never
+  // interpolate binding values, names from the response, secrets or raw errors.
+  const diagnostic = `[bot-binding-guard] source=${source} ${JSON.stringify(checks)}`;
   if (
-    services.length !== 1 ||
-    services[0].name !== "IDENTITY" ||
-    services[0].service !== names.api ||
-    services[0].entrypoint !== "BotIdentity" ||
-    services[0].environment
+    checks.serviceCount !== 1 ||
+    !checks.expectedBindingPresent ||
+    !checks.targetMatch ||
+    !checks.entrypointMatch ||
+    checks.unexpectedEnvironment
   )
-    throw new Error("Missing or wrong Bot Service Binding");
+    throw new Error(`Missing or wrong Bot Service Binding; ${diagnostic}`);
+  if (source === "active-version") console.info(diagnostic);
 }
 export function validateBindings(worker, config, bindings) {
   if (!Array.isArray(bindings))
@@ -118,7 +143,7 @@ export function validateBindings(worker, config, bindings) {
       throw new Error("Missing or wrong D1 binding");
   } else if (databases.length) throw new Error("Only API may bind D1");
   if (worker === "bot") {
-    validateBotBindings(bindings);
+    validateBotBindings(bindings, "active-version");
     for (const name of config.secrets.required)
       if (!bindings.some((b) => b.name === name && b.type === "secret_text"))
         throw new Error("Missing deployed Telegram secret name");

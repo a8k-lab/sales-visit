@@ -166,6 +166,38 @@ Wrangler command can be supplied by dispatch. Local deploy commands now require
 the same token/account/URL settings and `RELEASE_REVISION` equal to current
 `main`; prefer the approved workflow rather than bypassing wrappers.
 
+### Diagnosing a Bot Service Binding refusal
+
+The Dashboard display is not a reason to assume a binding is missing or to
+redeploy. Preflight reads bindings from the exact **active deployment version**,
+not a latest upload or an unverified Dashboard draft. `[bot-binding-guard]` reports
+only a service count, fixed condition booleans and a closed environment enum:
+
+```text
+[bot-binding-guard] source=active-version {"serviceCount":1,"expectedBindingPresent":true,"targetMatch":true,"entrypointMatch":true,"unexpectedEnvironment":false,"environment":"production"}
+```
+
+A refusal carries the same fields in its error; successful active-version
+validation emits one line. No binding names/values from the response, arbitrary
+fields, secret values, tokens or raw API responses are logged. The configured
+name, target and entrypoint remain exact comparisons, with exactly one Service
+binding required. `environment` is only `omitted`, `production` or `unexpected`.
+
+Cloudflare's [documented Service metadata](https://developers.cloudflare.com/workers/configuration/multipart-upload-metadata/#bindings)
+can explicitly contain `environment: "production"`. The old truthiness check
+incorrectly rejected that valid API representation. Active-version validation
+accepts only omission or that exact production value; other values fail closed.
+Local Wrangler config still must omit the environment field, and `--env` remains
+forbidden. No binding/resource change is needed to correct this schema assumption.
+
+The original post-merge dry-run logged only a generic refusal, so its precise
+failed condition cannot be recovered from that log. After review/merge, an
+operator may repeat **validation-only** (`dry_run: true`, automatic CD OFF) to
+obtain the sanitized conditions. A count/name/target/entrypoint mismatch or
+`unexpectedEnvironment: true` means stop and investigate the active version;
+do not edit or redeploy the Worker merely to make preflight pass. A documented
+production environment is not a legacy missing-binding recovery scenario.
+
 ### Source and Web artifact provenance
 
 The wrapper refuses tracked, staged and untracked working-tree changes. It then

@@ -42,6 +42,7 @@ const bindings = (worker) =>
             type: "service",
             service: names.api,
             entrypoint: "BotIdentity",
+            environment: "production",
           },
           ...configs.bot.secrets.required.map((name) => ({
             name,
