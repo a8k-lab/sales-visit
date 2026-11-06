@@ -16,9 +16,15 @@ export function installCommands(bot: Bot, api: BotIdentityService) {
     )
       return;
     if (ctx.chat?.type !== "private") {
-      await ctx.reply(
-        "Gunakan chat pribadi dengan bot untuk registrasi dan administrasi."
-      );
+      if (
+        ctx.message.entities?.some(
+          (entity) => entity.type === "bot_command" && entity.offset === 0
+        )
+      ) {
+        await ctx.reply(
+          "Gunakan chat pribadi dengan bot untuk registrasi dan administrasi."
+        );
+      }
       return;
     }
     await next();
