@@ -1,5 +1,10 @@
 import { createDb } from "@sales-visit/db";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+
+const page = (c: Context<WebEnv>) => ({
+  limit: Number(c.req.query("limit") ?? 100),
+  offset: Number(c.req.query("offset") ?? 0),
+});
 import type { JWTVerifyGetKey } from "jose";
 
 import {
@@ -9,7 +14,7 @@ import {
   type TrustedIdentity,
 } from "./operations.ts";
 import { toStockReport, toVisit } from "./records.ts";
-import { authRoutes, type WebEnv } from "./web-auth.ts";
+import { authRoutes, sessionAccount, type WebEnv } from "./web-auth.ts";
 
 // No header, secret, environment switch, or development bypass supplies identity.
 // Tests explicitly inject a resolver in-process; the deployed default denies writes.
@@ -84,8 +89,43 @@ export function createApp(
   // Liveness only: database readiness is exercised by the read endpoints.
   app.get("/health", (c) => c.json({ status: "ok" }));
 
+  app.use("*", async (c, next) => {
+    if (
+      c.req.method !== "GET" ||
+      !/^\/(sales-force|outlets|products|visits|stock-reports)(\/|$)/.test(
+        c.req.path
+      )
+    )
+      return next();
+    const account = await sessionAccount(c.req.raw, c.env.DB);
+    if (!account) return c.json({ error: "Unauthorized" }, 401);
+    c.set("account", account);
+    if (
+      account.role === "sales_force" &&
+      (c.req.path === "/sales-force" ||
+        ["salesForceId", "reporterSalesForceId"].some((key) =>
+          c.req.queries(key)?.some((value) => value !== account.salesForceId)
+        ))
+    )
+      return c.json({ error: "Forbidden" }, 403);
+    for (const [key, max] of [
+      ["limit", 100],
+      ["offset", 100000],
+    ] as const) {
+      const value = c.req.query(key);
+      if (
+        value !== undefined &&
+        (!/^\d{1,6}$/.test(value) ||
+          Number(value) > max ||
+          (key === "limit" && Number(value) < 1))
+      )
+        return c.json({ error: "Invalid request" }, 400);
+    }
+    await next();
+  });
   app.get("/sales-force", async (c) => {
     const rows = await createDb(c.env.DB).query.salesForce.findMany({
+      ...page(c),
       columns: { id: true, name: true },
       orderBy: (table, { asc }) => [asc(table.id)],
     });
@@ -94,6 +134,7 @@ export function createApp(
 
   app.get("/outlets", async (c) => {
     const rows = await createDb(c.env.DB).query.outlets.findMany({
+      ...page(c),
       columns: { id: true, name: true },
       orderBy: (table, { asc }) => [asc(table.id)],
     });
@@ -102,6 +143,7 @@ export function createApp(
 
   app.get("/products", async (c) => {
     const rows = await createDb(c.env.DB).query.products.findMany({
+      ...page(c),
       columns: { id: true, name: true },
       orderBy: (table, { asc }) => [asc(table.id)],
     });
@@ -110,6 +152,11 @@ export function createApp(
 
   app.get("/visits", async (c) => {
     const rows = await createDb(c.env.DB).query.visits.findMany({
+      ...page(c),
+      where: (table, { eq }) =>
+        c.get("account").role === "sales_force"
+          ? eq(table.salesForceId, c.get("account").salesForceId!)
+          : undefined,
       orderBy: (table, { desc, asc }) => [desc(table.visitedAt), asc(table.id)],
     });
     return c.json(rows.map(toVisit));
@@ -118,9 +165,20 @@ export function createApp(
   app.get("/visits/:id", async (c) => {
     const id = c.req.param("id");
     const row = await createDb(c.env.DB).query.visits.findFirst({
-      where: (table, { eq }) => eq(table.id, id),
+      where: (table, { eq, and }) =>
+        and(
+          eq(table.id, id),
+          c.get("account").role === "sales_force"
+            ? eq(table.salesForceId, c.get("account").salesForceId!)
+            : undefined
+        ),
       with: {
         stockReports: {
+          limit: 100,
+          where: (table, { eq }) =>
+            c.get("account").role === "sales_force"
+              ? eq(table.reporterSalesForceId, c.get("account").salesForceId!)
+              : undefined,
           orderBy: (table, { desc, asc }) => [
             desc(table.reportedAt),
             asc(table.id),
@@ -140,6 +198,11 @@ export function createApp(
 
   app.get("/stock-reports", async (c) => {
     const rows = await createDb(c.env.DB).query.stockReports.findMany({
+      ...page(c),
+      where: (table, { eq }) =>
+        c.get("account").role === "sales_force"
+          ? eq(table.reporterSalesForceId, c.get("account").salesForceId!)
+          : undefined,
       orderBy: (table, { desc, asc }) => [
         desc(table.reportedAt),
         asc(table.id),
