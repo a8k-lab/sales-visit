@@ -1,5 +1,6 @@
 import { createDb } from "@sales-visit/db";
 import { Hono } from "hono";
+import type { JWTVerifyGetKey } from "jose";
 
 import {
   createVisit,
@@ -8,6 +9,7 @@ import {
   type TrustedIdentity,
 } from "./operations.ts";
 import { toStockReport, toVisit } from "./records.ts";
+import { authRoutes, type WebEnv } from "./web-auth.ts";
 
 // No header, secret, environment switch, or development bypass supplies identity.
 // Tests explicitly inject a resolver in-process; the deployed default denies writes.
@@ -15,9 +17,40 @@ export function createApp(
   resolveIdentity: (
     request: Request,
     env: ApiBindings
-  ) => Promise<TrustedIdentity | undefined> = async () => undefined
+  ) => Promise<TrustedIdentity | undefined> = async () => undefined,
+  telegramKeys?: JWTVerifyGetKey
 ) {
-  const app = new Hono<{ Bindings: ApiBindings }>();
+  const app = new Hono<WebEnv>();
+  app.use("*", async (c, next) => {
+    c.header("Cache-Control", "no-store");
+    const origin = c.req.header("Origin");
+    const allowed = (c.env.WEB_ORIGINS ?? "").split(",").filter(Boolean);
+    if (origin) {
+      c.header("Vary", "Origin");
+      if (!allowed.includes(origin))
+        return c.json({ error: "Origin denied" }, 403);
+      c.header("Access-Control-Allow-Origin", origin);
+      if (c.req.method === "OPTIONS") {
+        const method = c.req.header("Access-Control-Request-Method");
+        const headers = (c.req.header("Access-Control-Request-Headers") ?? "")
+          .toLowerCase()
+          .split(",")
+          .map((h) => h.trim())
+          .filter(Boolean);
+        if (
+          !method ||
+          !["GET", "POST"].includes(method) ||
+          headers.some((h) => !["authorization", "content-type"].includes(h))
+        )
+          return c.json({ error: "Invalid preflight" }, 403);
+        c.header("Access-Control-Allow-Methods", "GET, POST");
+        c.header("Access-Control-Allow-Headers", "Authorization, Content-Type");
+        return c.body(null, 204);
+      }
+    }
+    await next();
+  });
+  app.route("/auth", authRoutes(telegramKeys));
 
   for (const [path, operation] of [
     ["/visits", createVisit],

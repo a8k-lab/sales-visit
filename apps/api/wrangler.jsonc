@@ -4,6 +4,10 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-11-02",
   "workers_dev": true,
+  "vars": {
+    "TELEGRAM_CLIENT_ID": "",
+    "WEB_ORIGINS": ""
+  },
   "d1_databases": [
     {
       "binding": "DB",

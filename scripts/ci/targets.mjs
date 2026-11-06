@@ -48,7 +48,7 @@ export function validateConfig(worker, config, account, overrides = []) {
     "compatibility_flags",
     "workers_dev",
     "observability",
-    ...(worker === "api" ? ["d1_databases"] : []),
+    ...(worker === "api" ? ["d1_databases", "vars"] : []),
     ...(worker === "bot" ? ["services", "secrets"] : []),
     ...(worker === "web" ? ["assets"] : []),
   ]);
@@ -56,6 +56,30 @@ export function validateConfig(worker, config, account, overrides = []) {
     if (!allowed.has(key))
       throw new Error(`Unapproved Wrangler setting: ${key}`);
   if (worker === "api") {
+    const vars = config.vars;
+    if (
+      !vars ||
+      Object.keys(vars).length !== 2 ||
+      typeof vars.TELEGRAM_CLIENT_ID !== "string" ||
+      (vars.TELEGRAM_CLIENT_ID !== "" &&
+        (!/^[1-9][0-9]*$/.test(vars.TELEGRAM_CLIENT_ID) ||
+          !Number.isSafeInteger(Number(vars.TELEGRAM_CLIENT_ID)))) ||
+      typeof vars.WEB_ORIGINS !== "string"
+    )
+      throw new Error("Invalid Web auth configuration");
+    for (const origin of vars.WEB_ORIGINS.split(",").filter(Boolean)) {
+      const url = URL.parse(origin);
+      if (
+        !url ||
+        url.origin !== origin ||
+        !(
+          url.protocol === "https:" ||
+          (url.protocol === "http:" &&
+            ["localhost", "127.0.0.1"].includes(url.hostname))
+        )
+      )
+        throw new Error("Invalid Web origin");
+    }
     validateRemoteTarget(config); // Preserve the original remote-operation safeguard.
     if (
       config.d1_databases[0].migrations_dir !== "../../packages/db/migrations"
