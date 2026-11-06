@@ -1,6 +1,7 @@
 import type { BotIdentityService } from "@sales-visit/contracts";
 import { type Bot } from "grammy";
 
+import { outletCommands } from "./outlets/commands.ts";
 import { registerCommands } from "./registration/commands.ts";
 
 export function installCommands(bot: Bot, api: BotIdentityService) {
@@ -22,6 +23,16 @@ export function installCommands(bot: Bot, api: BotIdentityService) {
     await next();
   });
   registerCommands(bot, api);
+  // Planning deliveries are acknowledged even if a reply fails: Telegram must
+  // not redeliver a non-idempotent create after an ambiguous API/delivery error.
+  bot.use(async (_ctx, next) => {
+    try {
+      await next();
+    } catch {
+      console.error("Planning command delivery failed");
+    }
+  });
+  outletCommands(bot, api);
   bot.on("message:text", (ctx) =>
     ctx.reply(
       "Ketik /help untuk melihat perintah yang tersedia. Pelaporan belum tersedia."
