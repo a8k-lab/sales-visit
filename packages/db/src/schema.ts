@@ -284,6 +284,71 @@ export const visits = sqliteTable(
   ]
 );
 
+// One latest workflow/receipt per registered User. Submitting payloads are frozen.
+export const telegramVisitDrafts = sqliteTable(
+  "telegram_visit_drafts",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    key: text("submission_key").notNull(),
+    salesForceId: text("sales_force_id")
+      .notNull()
+      .references(() => salesForce.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    step: text("step", {
+      enum: [
+        "outlet",
+        "time",
+        "notes",
+        "followUp",
+        "review",
+        "submitting",
+        "submitted",
+        "cancelled",
+        "expired",
+      ],
+    }).notNull(),
+    payload: text("payload").notNull().default("{}"),
+    revision: integer("revision").notNull().default(0),
+    lastMessage: integer("last_message").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    visitId: text("visit_id").references(() => visits.id, {
+      onDelete: "restrict",
+      onUpdate: "restrict",
+    }),
+  },
+  (table) => [
+    unique("telegram_visit_drafts_key_unique").on(table.key),
+    check(
+      "telegram_visit_drafts_step_valid",
+      sql`${table.step} in ('outlet','time','notes','followUp','review','submitting','submitted','cancelled','expired')`
+    ),
+    check(
+      "telegram_visit_drafts_payload_json",
+      sql`json_valid(${table.payload})`
+    ),
+    check(
+      "telegram_visit_drafts_revision_valid",
+      sql`typeof(${table.revision}) = 'integer' and ${table.revision} >= 0`
+    ),
+    check(
+      "telegram_visit_drafts_message_valid",
+      sql`typeof(${table.lastMessage}) = 'integer' and ${table.lastMessage} > 0`
+    ),
+    check(
+      "telegram_visit_drafts_expiry_valid",
+      sql`typeof(${table.expiresAt}) = 'integer'`
+    ),
+  ]
+);
+
 export const stockReports = sqliteTable(
   "stock_reports",
   {
