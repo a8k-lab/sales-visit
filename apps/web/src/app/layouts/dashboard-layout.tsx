@@ -1,5 +1,6 @@
 import { MoonIcon, SunIcon } from "@phosphor-icons/react";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 
 import { AppSidebar } from "@/app/components/app-sidebar";
 import { useTheme } from "@/app/providers/theme-provider";
@@ -20,8 +21,35 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  logout,
+  restoreSession,
+  useAccount,
+  roleLabel,
+} from "@/features/auth/session";
 
 export function DashboardLayout() {
+  const account = useAccount();
+  useEffect(() => {
+    if (!account) location.replace("/login");
+  }, [account]);
+  const [logoutError, setLogoutError] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      void restoreSession()
+        .then((user) => {
+          if (!user) location.replace("/login");
+        })
+        .catch(() => {});
+    };
+    const timer = window.setInterval(check, 60000);
+    window.addEventListener("focus", check);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", check);
+    };
+  }, []);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -87,7 +115,28 @@ export function DashboardLayout() {
               </BreadcrumbList>
             </Breadcrumb>
             <div className="ml-auto flex items-center gap-2">
-              <Badge variant="outline">Data contoh</Badge>
+              <Badge variant="outline">Demo · Data contoh</Badge>
+              <span className="text-sm">
+                {account?.name} · {account && roleLabel(account.role)}
+              </span>
+              <Button
+                variant="outline"
+                disabled={loggingOut}
+                onClick={() => {
+                  setLoggingOut(true);
+                  setLogoutError("");
+                  void logout()
+                    .then(() => location.replace("/login"))
+                    .catch(() => {
+                      setLoggingOut(false);
+                      setLogoutError(
+                        "Gagal keluar. Periksa koneksi lalu coba lagi."
+                      );
+                    });
+                }}
+              >
+                Keluar
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -104,11 +153,16 @@ export function DashboardLayout() {
             tabIndex={-1}
             className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 outline-none md:p-6 lg:p-8"
           >
+            {logoutError && <p role="alert">{logoutError}</p>}
+            <p className="text-muted-foreground text-sm">
+              Demo sintetis — bukan laporan operasional. Perubahan formulir
+              hanya disimpan di browser ini, tidak dikirim ke server.
+            </p>
             <Outlet />
           </div>
           <footer className="text-muted-foreground px-4 py-4 text-xs md:px-8">
-            Sales Visit · Prototipe dengan data contoh dan data lokal browser.
-            Belum terhubung ke server.
+            Sales Visit · Login terverifikasi. Isi Dashboard adalah data contoh
+            dan data lokal browser, bukan data operasional.
           </footer>
         </SidebarInset>
       </SidebarProvider>

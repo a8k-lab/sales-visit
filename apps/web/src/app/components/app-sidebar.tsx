@@ -21,6 +21,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useAccount, roleLabel } from "@/features/auth/session";
 
 const navigation = [
   { title: "Ringkasan", to: "/overview", icon: ChartBarIcon },
@@ -31,6 +32,7 @@ const navigation = [
 
 // Adapted from the official shadcn/ui sidebar-07 block (Base UI / nova).
 export function AppSidebar() {
+  const account = useAccount();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -63,19 +65,24 @@ export function AppSidebar() {
           <SidebarGroupLabel>Ruang kerja</SidebarGroupLabel>
           <nav aria-label="Navigasi utama">
             <SidebarMenu>
-              {navigation.map(({ title, to, icon: Icon }) => (
-                <SidebarMenuItem key={to}>
-                  <SidebarMenuButton
-                    tooltip={title}
-                    isActive={pathname.startsWith(to)}
-                    render={<Link to={to} search={{}} />}
-                    onClick={() => setOpenMobile(false)}
-                  >
-                    <Icon />
-                    <span>{title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {navigation
+                .filter(
+                  (item) =>
+                    item.to !== "/directory" || account?.role !== "sales_force"
+                )
+                .map(({ title, to, icon: Icon }) => (
+                  <SidebarMenuItem key={to}>
+                    <SidebarMenuButton
+                      tooltip={title}
+                      isActive={pathname.startsWith(to)}
+                      render={<Link to={to} search={{}} />}
+                      onClick={() => setOpenMobile(false)}
+                    >
+                      <Icon />
+                      <span>{title}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
             </SidebarMenu>
           </nav>
         </SidebarGroup>
@@ -85,7 +92,8 @@ export function AppSidebar() {
               Satu alur pelaporan, dua pilihan.
             </span>
             <p>
-              Sales Force dapat melapor melalui Dashboard Web atau Telegram Bot.
+              Pelaporan operasional melalui Telegram Bot. Formulir Web hanya
+              simulasi lokal.
             </p>
             <p>Data yang ditampilkan adalah data contoh.</p>
           </div>
@@ -97,9 +105,9 @@ export function AppSidebar() {
             <AvatarFallback>SV</AvatarFallback>
           </Avatar>
           <div className="grid min-w-0 text-xs group-data-[collapsible=icon]:hidden">
-            <span className="truncate font-medium">Ruang kerja demo</span>
+            <span className="truncate font-medium">{account?.name}</span>
             <span className="text-muted-foreground truncate">
-              Sales Force · Admin · Supervisor
+              {account && roleLabel(account.role)}
             </span>
           </div>
         </div>

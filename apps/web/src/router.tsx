@@ -19,6 +19,11 @@ import {
 } from "@/components/ui/empty";
 import { loadVisitData } from "@/data/visit-store";
 import { LoginPage } from "@/features/auth/pages/login-page";
+import {
+  currentAccount,
+  restoreSession,
+  safeReturn,
+} from "@/features/auth/session";
 import { DirectoryPage } from "@/features/directory/pages/directory-page";
 import {
   loadOutletDetail,
@@ -62,19 +67,43 @@ const rootRoute = createRootRoute({
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: "dashboard",
+  beforeLoad: async ({ location }) => {
+    let account;
+    try {
+      account = await restoreSession();
+    } catch {
+      if (currentAccount())
+        throw new Error("Koneksi terputus. Muat ulang untuk memeriksa sesi.");
+    }
+    if (!account)
+      throw redirect({
+        to: "/login",
+        search: { redirect: safeReturn(location.href) },
+        replace: true,
+      });
+  },
+  pendingComponent: () => <p role="status">Memeriksa sesi…</p>,
+  errorComponent: () => (
+    <p role="alert">
+      Sesi tidak dapat diperiksa. Periksa koneksi dan muat ulang halaman.
+    </p>
+  ),
   component: DashboardLayout,
   notFoundComponent: NotFoundPage,
 });
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: safeReturn(search.redirect),
+  }),
   component: LoginPage,
 });
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   beforeLoad: () => {
-    throw redirect({ to: "/login", replace: true });
+    throw redirect({ to: "/overview", replace: true });
   },
 });
 const overviewRoute = createRoute({
@@ -113,7 +142,15 @@ const directoryRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: "/directory",
   loader: loadVisitData,
-  component: DirectoryPage,
+  component: () =>
+    currentAccount()?.role === "sales_force" ? (
+      <p role="alert">
+        Akses tidak diizinkan. Halaman pemantauan hanya untuk Admin dan
+        Supervisor.
+      </p>
+    ) : (
+      <DirectoryPage />
+    ),
 });
 
 const outletsRoute = createRoute({

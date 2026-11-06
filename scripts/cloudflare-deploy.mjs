@@ -89,7 +89,16 @@ export async function deploy(
         recursive: true,
         force: true,
       });
+      const apiUrl = URL.parse(env.API_URL ?? "");
+      if (
+        !apiUrl ||
+        apiUrl.protocol !== "https:" ||
+        apiUrl.origin !== env.API_URL
+      )
+        throw new Error("Web build requires an approved HTTPS API origin");
+      localEnv.VITE_API_URL = apiUrl.origin;
       local(["build:web"]);
+      delete localEnv.VITE_API_URL;
     }
     const account = env.CLOUDFLARE_ACCOUNT_ID;
     const target = await verify(worker, {

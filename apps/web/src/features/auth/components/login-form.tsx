@@ -1,9 +1,6 @@
-import { EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
-import { Link } from "@tanstack/react-router";
-import { cn } from "cn";
-import { useRef, useState, type SubmitEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,168 +8,200 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@/components/ui/input-group";
 
-// Adapted from the official shadcn/ui login-03 block (Base UI / nova).
-export function LoginForm() {
-  const emailRef = useRef<HTMLInputElement>(null);
-  const passwordRef = useRef<HTMLInputElement>(null);
-  const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState({ email: "", password: "" });
-  const [submitted, setSubmitted] = useState(false);
+import { api, finishLogin, restoreSession, safeReturn } from "../session";
 
-  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const email = emailRef.current;
-    const password = passwordRef.current;
-    if (!email || !password) return;
-
-    // Inspect browser validity only; credentials are never copied into app state,
-    // sent over the network, logged, or persisted.
-    const nextErrors = {
-      email: email.validity.valueMissing
-        ? "Masukkan alamat email."
-        : !email.validity.valid
-          ? "Masukkan alamat email yang valid."
-          : "",
-      password: password.validity.valueMissing ? "Masukkan kata sandi." : "",
-    };
-    setErrors(nextErrors);
-    setSubmitted(false);
-    if (nextErrors.email || nextErrors.password) {
-      (nextErrors.email ? email : password).focus();
+interface TelegramLogin {
+  auth(
+    options: {
+      client_id: number;
+      scope: ["profile"];
+      nonce: string;
+      lang: string;
+    },
+    callback: (result: { id_token?: string; error?: string }) => void
+  ): void;
+  close(): void;
+}
+declare global {
+  interface Window {
+    Telegram?: { Login: TelegramLogin };
+  }
+}
+let sdk: Promise<void> | undefined;
+function loadSdk() {
+  return (sdk ??= new Promise<void>((resolve, reject) => {
+    if (window.Telegram?.Login) {
+      resolve();
       return;
     }
-
-    event.currentTarget.reset();
-    setShowPassword(false);
-    setSubmitted(true);
+    const script = document.createElement("script");
+    const timer = window.setTimeout(() => {
+      script.remove();
+      sdk = undefined;
+      reject(
+        new Error(
+          "Telegram tidak dapat dimuat. Periksa koneksi lalu coba lagi."
+        )
+      );
+    }, 15000);
+    script.src = "https://oauth.telegram.org/js/telegram-login.js?6";
+    script.async = true;
+    script.onload = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    script.onerror = () => {
+      clearTimeout(timer);
+      script.remove();
+      sdk = undefined;
+      reject(new Error("Telegram tidak dapat dimuat."));
+    };
+    document.head.append(script);
+  }));
+}
+interface Ready {
+  clientId: number;
+  challenge: string;
+  nonce: string;
+  expiresAt: number;
+}
+export function LoginForm() {
+  const [ready, setReady] = useState<Ready | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("Menyiapkan login…");
+  const attempt = useRef(0);
+  const timer = useRef<number | undefined>(undefined);
+  const mounted = useRef(false);
+  const destination = () =>
+    safeReturn(new URLSearchParams(location.search).get("redirect"));
+  async function prepare() {
+    setReady(null);
+    setMessage("Menyiapkan login…");
+    try {
+      const [config, challenge] = await Promise.all([
+        api<{ clientId: number }>("/auth/config"),
+        api<Omit<Ready, "clientId">>("/auth/challenge", { method: "POST" }),
+        loadSdk(),
+      ]);
+      if (!mounted.current) return;
+      setReady({ ...challenge, clientId: config.clientId });
+      setMessage("");
+    } catch {
+      if (mounted.current)
+        setMessage("Login tidak tersedia. Periksa koneksi atau hubungi Admin.");
+    }
   }
-
+  useEffect(() => {
+    mounted.current = true;
+    void restoreSession()
+      .then((account) => {
+        if (account && mounted.current) location.replace(destination());
+      })
+      .catch(() => {});
+    void prepare();
+    return () => {
+      mounted.current = false;
+      attempt.current++;
+      clearTimeout(timer.current);
+      window.Telegram?.Login.close();
+    };
+  }, []);
+  function cancel(text = "Login dibatalkan. Silakan coba lagi.") {
+    attempt.current++;
+    clearTimeout(timer.current);
+    window.Telegram?.Login.close();
+    setBusy(false);
+    setReady(null);
+    setMessage(text);
+  }
+  function open() {
+    if (!ready || !window.Telegram?.Login) return;
+    if (ready.expiresAt <= Date.now() + 5000) {
+      setReady(null);
+      setMessage("Persiapan login kedaluwarsa. Silakan siapkan ulang.");
+      return;
+    }
+    const current = ++attempt.current;
+    setBusy(true);
+    setMessage(
+      "Selesaikan login di jendela Telegram. Jika tidak muncul, izinkan popup."
+    );
+    timer.current = window.setTimeout(
+      () =>
+        cancel(
+          "Login kehabisan waktu atau popup diblokir. Izinkan popup lalu coba lagi."
+        ),
+      90000
+    );
+    try {
+      // No await before auth: window.open runs within this real click gesture.
+      window.Telegram.Login.auth(
+        {
+          client_id: ready.clientId,
+          scope: ["profile"],
+          nonce: ready.nonce,
+          lang: "id",
+        },
+        (result) => {
+          if (attempt.current !== current || !mounted.current) return;
+          clearTimeout(timer.current);
+          if (!result.id_token || result.error) {
+            cancel();
+            return;
+          }
+          setMessage("Memverifikasi akun…");
+          void finishLogin(result.id_token, ready.challenge)
+            .then(() => {
+              if (mounted.current && attempt.current === current)
+                location.replace(destination());
+            })
+            .catch(() => {
+              if (mounted.current)
+                cancel(
+                  "Login ditolak atau sesi berakhir. Pastikan akun telah disetujui Admin."
+                );
+            });
+        }
+      );
+    } catch {
+      cancel("Popup tidak dapat dibuka. Izinkan popup lalu coba lagi.");
+    }
+  }
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader className="text-center">
-          <CardTitle className="text-xl">
-            <h1>Selamat datang kembali</h1>
-          </CardTitle>
-          <CardDescription>
-            Masuk ke Sales Visit untuk melanjutkan pelaporan kunjungan.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            noValidate
-            autoComplete="off"
-            aria-describedby="login-prototype"
-            onSubmit={handleSubmit}
-          >
-            <FieldGroup>
-              <FieldDescription id="login-prototype" className="text-center">
-                Login belum tersedia. Formulir ini hanya untuk mencoba validasi.
-                Jangan gunakan email atau kata sandi asli.
-              </FieldDescription>
-              <Field data-invalid={!!errors.email}>
-                <FieldLabel htmlFor="login-email">Email</FieldLabel>
-                <Input
-                  ref={emailRef}
-                  id="login-email"
-                  type="email"
-                  placeholder="nama@contoh.com"
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  required
-                  aria-invalid={!!errors.email}
-                  aria-describedby={
-                    errors.email ? "login-email-error" : undefined
-                  }
-                  onInput={() => {
-                    setErrors((previous) => ({ ...previous, email: "" }));
-                    setSubmitted(false);
-                  }}
-                />
-                {errors.email && (
-                  <FieldError id="login-email-error">{errors.email}</FieldError>
-                )}
-              </Field>
-              <Field data-invalid={!!errors.password}>
-                <FieldLabel htmlFor="login-password">Kata sandi</FieldLabel>
-                <InputGroup>
-                  <InputGroupInput
-                    ref={passwordRef}
-                    id="login-password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="off"
-                    required
-                    aria-invalid={!!errors.password}
-                    aria-describedby={
-                      errors.password ? "login-password-error" : undefined
-                    }
-                    onInput={() => {
-                      setErrors((previous) => ({ ...previous, password: "" }));
-                      setSubmitted(false);
-                    }}
-                  />
-                  <InputGroupAddon align="inline-end">
-                    <InputGroupButton
-                      size="icon-sm"
-                      aria-label={
-                        showPassword
-                          ? "Sembunyikan kata sandi"
-                          : "Tampilkan kata sandi"
-                      }
-                      aria-pressed={showPassword}
-                      aria-controls="login-password"
-                      onClick={() => setShowPassword((previous) => !previous)}
-                    >
-                      {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
-                    </InputGroupButton>
-                  </InputGroupAddon>
-                </InputGroup>
-                {errors.password && (
-                  <FieldError id="login-password-error">
-                    {errors.password}
-                  </FieldError>
-                )}
-              </Field>
-              <Field>
-                <Button type="submit">Login</Button>
-                <FieldDescription role="status" className="text-center">
-                  {submitted
-                    ? "Login belum tersedia. Isian telah dikosongkan tanpa dikirim atau disimpan. Silakan lihat Dashboard demo."
-                    : "Tidak ada proses autentikasi. Isian tidak dikirim atau disimpan."}
-                </FieldDescription>
-              </Field>
-              <Field>
-                <Link
-                  to="/overview"
-                  data-slot="button"
-                  className={cn(buttonVariants({ variant: "outline" }))}
-                >
-                  Lihat Dashboard Demo
-                </Link>
-                <FieldDescription className="text-center">
-                  Jelajahi data contoh tanpa login.
-                </FieldDescription>
-              </Field>
-            </FieldGroup>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+    <Card>
+      <CardHeader className="text-center">
+        <CardTitle className="text-xl">
+          <h1>Selamat datang kembali</h1>
+        </CardTitle>
+        <CardDescription>
+          Masuk dengan akun Telegram yang telah disetujui Admin.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <Button disabled={!ready || busy} onClick={open}>
+          Masuk dengan Telegram
+        </Button>
+        <p
+          role="status"
+          aria-live="polite"
+          className="text-muted-foreground text-center text-sm"
+        >
+          {message}
+        </p>
+        {busy ? (
+          <Button variant="outline" onClick={() => cancel()}>
+            Batal
+          </Button>
+        ) : (
+          <Button variant="outline" onClick={() => void prepare()}>
+            Siapkan ulang login
+          </Button>
+        )}
+        <p className="text-muted-foreground text-center text-xs">
+          Dashboard masih menampilkan data contoh. Pelaporan Web belum tersedia.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
