@@ -30,7 +30,8 @@ export const visitStockReportInputSchema = z.strictObject({
 });
 
 export const createVisitSchema = z.strictObject({
-  outletId: identifierSchema,
+  // Exact opaque stored key: validate blankness, never resolve a trimmed alias.
+  outletId: z.string().refine((id) => id.trim().length > 0),
   visitedAt: timestamp,
   notes: visitSchema.shape.notes,
   followUp: visitSchema.shape.followUp,

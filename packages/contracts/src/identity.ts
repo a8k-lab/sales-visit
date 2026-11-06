@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { BotPlanningService } from "./planning.ts";
+import type { BotVisitService } from "./visit-wizard.ts";
 
 export const telegramIdSchema = z.string().regex(/^[1-9][0-9]*$/);
 export const botActorSchema = z
@@ -34,7 +35,8 @@ export type IdentityResult<T> =
         | "not_pending"
         | "sales_force_unavailable";
     };
-export interface BotIdentityService extends BotPlanningService {
+export interface BotIdentityService
+  extends BotPlanningService, BotVisitService {
   register(actor: BotActor): Promise<IdentityResult<Account>>;
   me(actor: BotActor): Promise<IdentityResult<Account | null>>;
   pending(

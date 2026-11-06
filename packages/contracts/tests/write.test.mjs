@@ -51,6 +51,22 @@ test("write contracts exclude server-owned fields and normalize timestamps", () 
   }
 });
 
+test("Visit Outlet keys preserve exact opaque values, never trimmed aliases", () => {
+  for (const outletId of [" outlet-1 ", "Outlet 日本", "~reserved"]) {
+    assert.equal(
+      createVisitSchema.parse({ outletId, visitedAt: report.reportedAt })
+        .outletId,
+      outletId
+    );
+  }
+  for (const outletId of ["", "   "])
+    assert.equal(
+      createVisitSchema.safeParse({ outletId, visitedAt: report.reportedAt })
+        .success,
+      false
+    );
+});
+
 test("write items require unique Products and safe nonnegative integers", () => {
   for (const quantity of [
     -1,
