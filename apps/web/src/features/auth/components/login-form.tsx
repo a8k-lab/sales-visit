@@ -194,6 +194,14 @@ export function LoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        {sessionStorage.getItem("sales-visit.session-ended") && (
+          <p
+            role="status"
+            className="text-muted-foreground text-center text-sm"
+          >
+            Sesi Anda telah berakhir. Silakan masuk kembali.
+          </p>
+        )}
         <Button disabled={!ready || busy} onClick={open}>
           Masuk dengan Telegram
         </Button>

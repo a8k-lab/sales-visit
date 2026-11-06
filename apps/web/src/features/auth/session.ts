@@ -49,7 +49,11 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     signal: AbortSignal.timeout(15000),
   });
   if (response.status === 401) {
-    clearSession();
+    // An older in-flight request must not clear a freshly issued session.
+    if (credential && token() === credential) {
+      sessionStorage.setItem("sales-visit.session-ended", "1");
+      clearSession();
+    }
     throw new Error("Sesi berakhir atau login ditolak. Silakan masuk kembali.");
   }
   if (!response.ok)
@@ -61,11 +65,13 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 export async function restoreSession() {
-  if (!token()) {
+  const credential = token();
+  if (!credential) {
     account = null;
     return null;
   }
   const result = await api<{ account: Account }>("/auth/me");
+  if (token() !== credential) return account;
   account = result.account;
   notify();
   return account;
@@ -76,12 +82,14 @@ export async function finishLogin(idToken: string, challenge: string) {
     { method: "POST", body: JSON.stringify({ idToken, challenge }) }
   );
   sessionStorage.setItem(key, result.token);
+  sessionStorage.removeItem("sales-visit.session-ended");
   account = result.account;
   notify();
 }
 export async function logout() {
   // Keep the credential on network failure so revocation can be retried.
   await api("/auth/logout", { method: "POST" });
+  sessionStorage.removeItem("sales-visit.session-ended");
   clearSession();
 }
 export function safeReturn(value: unknown) {
