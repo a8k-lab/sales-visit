@@ -66,6 +66,8 @@ export async function deploy(
     const localEnv = {
       PATH: env.PATH,
       HOME: env.HOME,
+      PNPM_HOME: env.PNPM_HOME,
+      XDG_DATA_HOME: env.XDG_DATA_HOME,
       TMPDIR: env.TMPDIR,
       CI: "true",
       LEFTHOOK: "0",

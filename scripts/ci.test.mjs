@@ -736,6 +736,8 @@ test("guarded Wrangler subprocess pins cwd/config/account/immutable target; supp
     env: {
       PATH: "/synthetic",
       HOME: "/synthetic-home",
+      PNPM_HOME: "/synthetic-pnpm-home",
+      XDG_DATA_HOME: "/synthetic-data-home",
       CLOUDFLARE_ACCOUNT_ID: account,
       CLOUDFLARE_API_TOKEN: token,
       RELEASE_REVISION: revision,
@@ -768,6 +770,10 @@ test("guarded Wrangler subprocess pins cwd/config/account/immutable target; supp
   assert.equal(opts.env.CLOUDFLARE_ACCOUNT_ID, account);
   assert.equal(opts.env.WRANGLER_CI_MATCH_TAG, "immutable-api");
   assert.equal(opts.env.UNTRUSTED, undefined);
+  for (const [, , options] of calls) {
+    assert.equal(options.env.PNPM_HOME, "/synthetic-pnpm-home");
+    assert.equal(options.env.XDG_DATA_HOME, "/synthetic-data-home");
+  }
   assert.equal(opts.stdio, "ignore");
   assert.equal(args.includes("--env"), false);
   assert.equal(args.includes("--name"), false);
