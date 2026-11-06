@@ -107,6 +107,10 @@ test("group middleware ignores ordinary text and allows only private commands to
       "/tambahjadwal sf-01 out-01 senin",
       "/jadwal",
       "/help",
+      "/users",
+      "/setrole 100 admin",
+      "/disable 100",
+      "/enable 100",
     ]) {
       await message(text, command(text), type);
       assert.deepEqual(replies, [

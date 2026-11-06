@@ -1,5 +1,10 @@
 # Authenticated Telegram Visit wizard
 
+Later account-lifecycle update: `/users`, `/setrole`, `/disable` and `/enable`
+now ship with audited API operations; see the [current parity handoff](telegram-bot-parity.md).
+The lifecycle exclusions below describe this wizard's original implementation
+milestone, not current Bot capabilities.
+
 Implemented minimal Visit flow; not full parity with the teammate bot. Builds on
 [the integration alignment](telegram-bot-integration-alignment.md) and ADRs
 0002, 0003 and 0005. Registration, Outlet management and recurring Schedule

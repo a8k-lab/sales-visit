@@ -1,8 +1,9 @@
 # Identity foundation and operator bootstrap
 
 Identity storage now supports Bot registration and Admin approval/rejection via
-an internal API Service Binding. OIDC, recovery and general account management
-remain deferred. The Visit/Stock Report write resolver remains deny-by-default. Existing public business reads must not join or return
+an internal API Service Binding. Audited user listing, role changes and
+disable/enable are also implemented; see the [parity handoff](../../docs/design/telegram-bot-parity.md).
+OIDC, recovery and SF reassignment remain deferred. The Visit/Stock Report write resolver remains deny-by-default. Existing public business reads must not join or return
 these tables; protect operational reads before using real identities/data.
 The independently operated Telegraf/PostgreSQL bot is unchanged and remains
 operational until a separately verified cutover. No import or original-bot
@@ -24,7 +25,7 @@ cutover occurs. For the independent test deployment's remote operator steps, see
   restrictive FK actions. It is deliberately **not unique**. Provisionally, one
   User can reference zero or one SF; multiple Users can reference the same SF.
   This is storage flexibility, not permission to share staff access. The Bot
-  approval operation atomically refuses an SF linked to **any** other account,
+  approval and role-change operations atomically refuse an SF linked to **any** other account,
   including disabled accounts. Sharing/reassignment requires a reviewed policy. A true
   many-to-many association would require another migration; adding uniqueness
   later requires reviewing/deduplicating existing links. Admin/Supervisor do not
@@ -50,8 +51,9 @@ The database supports pending → active(role), pending → rejected, active →
 disabled (retain role), disabled → active, and rejected → pending. The latter
 is **not approved reapplication policy**. CHECKs validate stored states, not
 actor authorization, prior-state transitions, role-change history or last-Admin
-protection. No RBAC hierarchy is implied. Requiring SF for report-capable users
-belongs to the future authorized operation, not a speculative storage rule.
+protection. These are enforced by API lifecycle operations, not by CHECKs.
+No RBAC hierarchy is implied. Active SF submission requires a verified current
+SF association at the API boundary; storage alone does not grant access.
 
 ## Controlled first-Admin provisioning
 
@@ -128,8 +130,11 @@ This is minimal operator support, not a general-purpose seeder or account tool.
 
 ### Audit and recovery release gates
 
-Migration `0002_open_lucky_pierre.sql` adds `access_audit`. Application registration,
-approval and rejection write an event atomically with their lifecycle changes.
+Migration `0002_open_lucky_pierre.sql` adds `access_audit`; additive migration
+`0005_good_puff_adder.sql` extends its action CHECK to setrole/disable/enable,
+preserving populated history, constraints and index with foreign keys enabled.
+Application registration, approval, rejection and role/status changes write an
+event atomically with their lifecycle changes.
 Events include a unique event/correlation ID, actor User (self for registration),
 target User, action, before/after status/role/SF, and database UTC milliseconds.
 Registration also records the newly attached Telegram ID, not profile payloads.
@@ -141,21 +146,23 @@ insert, and audit insert. Existing registrations return unchanged with no new
 event. For decisions, an audit INSERT checks active Admin, pending/unassigned
 target, and existing/unclaimed SF inside the transaction; the UPDATE is gated by
 that event's random ID. Either both commit or neither does. Replays/losing races
-return unchanged-state errors and add no event. Future lifecycle writers must
-use the same conditional authorization/claim policy and audited atomicity.
+return unchanged-state errors and add no event. Role/status operations use the
+same audit-gated conditional transaction, returning success without a new event
+for an already satisfied desired state. Existing SF links remain reserved through
+disable and non-SF role changes; replacing links is not supported. All active
+Admins are protected against demotion/disable, with an explicit transaction-time
+last-active-Admin count guard. Future lifecycle writers must preserve this policy.
 
 The bootstrap SQL above is intentionally unchanged. Operator accountability
 remains an external restricted change record, not an application audit event or
 a tamper-proof database guarantee. If that process cannot be provided, do not
 provision. Audit access is internal/operator-only; agree restricted retention
-and backup policy before production use. Future role/link changes,
-disable/reactivate and recovery must add corresponding audited operations.
+and backup policy before production use. Link reassignment and recovery require
+separately reviewed audited operations; the Bot offers no bypass for active Admins.
 
-Later lifecycle operations must enforce the last-active-Admin rule atomically,
-including concurrent disable/demotion, and define verified operator recovery for
-lost/compromised Telegram accounts. Recovery must revoke old sessions/bindings,
+Verified operator recovery for lost/compromised Telegram accounts remains undefined. Recovery must revoke old sessions/bindings,
 retain history and produce audit evidence; this first-Admin template is **not**
 a recovery bypass. Define rejected-account reapplication policy, exclusive-role
-permissions, SF verification/cardinality, retention and concurrent authorization
-checks before implementing operations. OIDC linking, sessions, signed-claim
+permissions, SF verification/cardinality and retention before expanding lifecycle
+operations. OIDC linking, sessions, signed-claim
 validation, two-channel pairing and read authorization remain separate milestones.

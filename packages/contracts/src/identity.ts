@@ -33,7 +33,11 @@ export type IdentityResult<T> =
         | "forbidden"
         | "not_found"
         | "not_pending"
-        | "sales_force_unavailable";
+        | "sales_force_unavailable"
+        | "invalid_transition"
+        | "protected_admin"
+        | "last_admin"
+        | "association_locked";
     };
 export interface BotIdentityService
   extends BotPlanningService, BotVisitService {
@@ -43,6 +47,13 @@ export interface BotIdentityService
     actor: BotActor,
     after?: string
   ): Promise<IdentityResult<{ accounts: Account[]; next: string | null }>>;
+  users(
+    actor: BotActor,
+    after?: string
+  ): Promise<IdentityResult<{ accounts: Account[]; next: string | null }>>;
+  setRole(actor: BotActor, input: unknown): Promise<IdentityResult<Account>>;
+  disable(actor: BotActor, input: unknown): Promise<IdentityResult<Account>>;
+  enable(actor: BotActor, input: unknown): Promise<IdentityResult<Account>>;
   approve(actor: BotActor, input: unknown): Promise<IdentityResult<Account>>;
   reject(actor: BotActor, input: unknown): Promise<IdentityResult<Account>>;
 }
@@ -62,6 +73,8 @@ export const approvalSchema = z
       ? !!input.salesForceId
       : input.salesForceId === undefined
   );
+// Same explicit association rule as approval, including the legacy sales alias.
+export const roleChangeSchema = approvalSchema;
 export const rejectionSchema = z
   .object({ telegramUserId: telegramIdSchema })
   .strict();

@@ -310,3 +310,47 @@ test("additive upgrade preserves all previous business rows and relationships", 
   telegram(db, "linked", "123");
   assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 });
+
+test("audit action upgrade preserves populated history, constraints, index and FKs", (t) => {
+  const db = database(t);
+  for (const file of readdirSync(migrations)
+    .filter((name) => name.endsWith(".sql") && name < "0005")
+    .toSorted())
+    apply(db, file);
+  user(db, "admin", "active", "admin");
+  telegram(db, "admin", "900");
+  const insert = (action, id = action) =>
+    db
+      .prepare(
+        "INSERT INTO access_audit (id, actor_user_id, target_user_id, action, before_state, after_state, created_at) VALUES (?, 'admin', 'admin', ?, 'null', '{}', 123)"
+      )
+      .run(id, action);
+  for (const action of ["register", "approve", "reject"]) insert(action);
+  assert.throws(() => insert("setrole"));
+  const before = db.prepare("SELECT * FROM access_audit ORDER BY id").all();
+  apply(db, "0005_good_puff_adder.sql");
+  assert.deepEqual(
+    db.prepare("SELECT * FROM access_audit ORDER BY id").all(),
+    before
+  );
+  for (const action of ["setrole", "disable", "enable"]) insert(action);
+  assert.throws(() => insert("delete"));
+  assert.throws(() =>
+    db.exec("UPDATE access_audit SET before_state = 'invalid'")
+  );
+  assert.throws(() => db.exec("UPDATE access_audit SET created_at = 1.5"));
+  assert.throws(() =>
+    db.exec("UPDATE access_audit SET actor_user_id = 'missing'")
+  );
+  assert.throws(() =>
+    db.exec("UPDATE access_audit SET target_user_id = 'missing'")
+  );
+  assert.ok(
+    db
+      .prepare("PRAGMA index_list(access_audit)")
+      .all()
+      .some((i) => i.name === "access_audit_target_idx")
+  );
+  assert.equal(db.prepare("PRAGMA foreign_keys").get().foreign_keys, 1);
+  assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+});

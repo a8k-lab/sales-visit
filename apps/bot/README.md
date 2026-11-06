@@ -21,7 +21,9 @@ replacement require the private-terminal confirmations in the runbook;
 
 ## Commands (private chat only)
 
-- `/start`, `/help`: account-aware welcome/help, Admin guidance when active.
+- `/start`, `/help`: Indonesian welcome and nine-section role-aware guide; safely
+  packed replies and explicit differences from the original bot. See the
+  [current command parity matrix and handoff](../../docs/design/telegram-bot-parity.md).
 - `/register`: pending account from the verified update's `message.from.id`.
 - `/me`: own role, status, Telegram display snapshot and Sales Force link.
 - `/salesvisit`: active Sales Force starts/resumes a durable minimal Visit draft.
@@ -33,14 +35,25 @@ replacement require the private-terminal confirmations in the runbook;
   The canonical `sales_force` spelling also works. The SF ID is an existing
   opaque business-record ID, **not** a Telegram ID or profile name.
 - `/reject TELEGRAM_ID`: active Admin rejects a pending registration.
+- `/users [KURSOR]`: active Admin lists all accounts, ten per keyset page.
+- `/setrole TELEGRAM_ID admin|supervisor` or
+  `/setrole TELEGRAM_ID sales SALES_FORCE_ID` (also accepts `sales_force`):
+  active Admin changes an active account's role, with verified SF association.
+- `/disable TELEGRAM_ID`, `/enable TELEGRAM_ID`: active Admin disables an
+  active account or reactivates a disabled one, retaining role and SF link.
+  Active Admins cannot be demoted/disabled; the last active Admin is explicitly
+  protected in the transaction. Recovery requires a separately reviewed operator
+  process. Same-state repeats succeed without another audit event.
 
 All user-facing messages are Indonesian. **Telegram user IDs** in registration
 commands are canonical positive decimal strings (no signs, exponents or leading
 zeroes). Planning business IDs are opaque strings; see the grammar below. Names/usernames are
 optional display snapshots at first registration and are never matching keys.
 An existing registration is unchanged, including rejected/disabled accounts.
-Rejected reapplication, reactivation, reassignment and role changes are deferred.
-Repeated decisions do not mutate or create another audit event.
+Rejected reapplication and SF reassignment remain deferred. Role changes never
+replace an existing SF link or release it when moving to Admin/Supervisor.
+Disabled accounts retain their claims. Repeated approval/rejection decisions do
+not mutate or create another audit event; lifecycle same-state retries are no-ops.
 
 **Verification policy:** the Admin must verify the person's Telegram identity
 and the intended existing SF business record out of band before approval.
@@ -50,7 +63,8 @@ never performed. An SF already linked to any account (even disabled) cannot be
 claimed. The schema's non-unique FK is unchanged to avoid inventing a global
 cardinality/migration policy; the conditional approval transaction enforces this
 restriction for all application approval writers. Operators must not bypass it.
-Admin/Supervisor have no SF link. Active Sales Force can submit minimal Visits
+Approval gives Admin/Supervisor no SF link; later role changes preserve a
+pre-existing link as a reservation, not permission to submit. Active Sales Force can submit minimal Visits
 through the private RPC wizard; public Visit/Stock Report HTTP writes still deny
 all requests.
 
@@ -128,8 +142,8 @@ const token = /^[A-Za-z0-9_.-]+$/.test(id)
 console.log(token);
 ```
 
-This grammar does not change legacy `/approve` or `/pending`: approval's existing
-SF argument is still a simple whitespace-free ID and its identity contract trims
+This grammar does not change `/approve` or `/pending`: approval and `/setrole`'s
+SF argument is a simple whitespace-free ID and its identity contract trims
 it; do not use planning tokens there. Linking legacy whitespace-bearing SF IDs
 requires a separately reviewed identity-contract change, not a Bot bypass.
 
@@ -158,7 +172,9 @@ details use exact epoch milliseconds; legacy null updated time remains unknown.
    the caller capability, not a per-user permission or a caller-ID header.
 4. API validates input, resolves the actor from D1 on each protected call, and
    checks current role/status and SF scope. Approval checks active Admin
-   permissions in the decision transaction itself.
+   permissions in the decision transaction itself. Role/status management checks
+   current actor, target transition, Admin protections and SF claims in the same
+   serialized D1 batch as audit + mutation; no client-claimed role is accepted.
    Registration creates User + identity + audit atomically. Decisions condition
    on pending/unassigned state and unclaimed SF; lifecycle/audit roll back
    together. See [identity invariants and bootstrap](../../packages/db/IDENTITY.md).
@@ -312,5 +328,9 @@ Security differences: private-only handling, canonical string IDs, no rejected
 reapplication, explicit verified SF association, API-owned authorization, atomic
 auditing/claims, bounded lists/body, safe errors and no raw-update/token logs.
 Deferred: OIDC/Web sessions/read authorization, Stock Report/financial reporting
-wizards, schedule editing/deletion/exceptions/effective dates, other account lifecycle commands, history,
-exports, financial measures, imports and production cutover.
+wizards, schedule editing/deletion/exceptions/effective dates, SF reassignment,
+rejected reapplication, Admin incident recovery, history, exports, financial
+measures, imports and production cutover. Migration `0005_good_puff_adder.sql`
+expands lifecycle audit actions; separately approved releases must apply it before
+API then Bot deployment. No credentials, resources or deployment settings change
+in this parity work.

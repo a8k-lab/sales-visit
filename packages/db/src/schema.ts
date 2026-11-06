@@ -121,7 +121,7 @@ export const accessAudit = sqliteTable(
         onUpdate: "restrict",
       }),
     action: text("action", {
-      enum: ["register", "approve", "reject"],
+      enum: ["register", "approve", "reject", "setrole", "disable", "enable"],
     }).notNull(),
     before: text("before_state").notNull(),
     after: text("after_state").notNull(),
@@ -130,7 +130,7 @@ export const accessAudit = sqliteTable(
   (table) => [
     check(
       "access_audit_action_valid",
-      sql`${table.action} in ('register', 'approve', 'reject')`
+      sql`${table.action} in ('register', 'approve', 'reject', 'setrole', 'disable', 'enable')`
     ),
     check(
       "access_audit_states_json",
