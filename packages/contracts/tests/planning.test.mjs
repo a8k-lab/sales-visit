@@ -47,6 +47,52 @@ test("outlet operation inputs are strict, bounded and separate from stored model
   );
 });
 
+test("planning read timestamps accept signed safe integers without transformation", () => {
+  for (const timestamp of [
+    -Number.MAX_SAFE_INTEGER,
+    -86400000,
+    -1,
+    0,
+    1,
+    Number.MAX_SAFE_INTEGER,
+  ]) {
+    const outlet = {
+      id: "o",
+      name: "Legacy",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    assert.deepEqual(outletDetailSchema.parse(outlet), outlet);
+    const schedule = {
+      id: "s",
+      salesForceId: "sf",
+      outletId: "o",
+      weekday: 1,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    assert.deepEqual(visitScheduleSchema.parse(schedule), schedule);
+  }
+  for (const timestamp of [
+    1.5,
+    NaN,
+    Infinity,
+    Number.MAX_SAFE_INTEGER + 1,
+    -Number.MAX_SAFE_INTEGER - 1,
+    "-1",
+  ]) {
+    assert.equal(
+      outletDetailSchema.safeParse({
+        id: "o",
+        name: "Legacy",
+        createdAt: timestamp,
+        updatedAt: null,
+      }).success,
+      false
+    );
+  }
+});
+
 test("ISO weekdays and Indonesian boundary conversion agree for all seven days", () => {
   for (const [i, day] of [
     "senin",

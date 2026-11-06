@@ -97,8 +97,9 @@ Lists return `{ items, next }`, at most **50** rows ordered by opaque internal
 ID ascending (SQLite BINARY). Pass `next` as `after`, retaining the same filters;
 null ends traversal. Each call is a consistent snapshot, not a multi-page frozen
 snapshot: concurrent insertions may precede an already consumed cursor. Cursors
-are not credentials. Details include epoch-millisecond storage timestamps (Outlet
-`updatedAt` nullable); schedules additionally include business SF/Outlet names,
+are not credentials. Details include signed safe-integer epoch-millisecond storage
+timestamps, preserving pre-1970 legacy values (Outlet `updatedAt` nullable);
+schedules additionally include business SF/Outlet names,
 not Telegram/User profile data. Existing public `Outlet` remains `{ id, name }`.
 
 Inputs are strict; operation IDs and names are trimmed, nonblank, bounded to 256

@@ -120,6 +120,88 @@ async function setup(t, legacy = false) {
   return { db, rpc, api: await mf.getWorker("api") };
 }
 
+test("Outlet RPC preserves signed legacy timestamps across reads and mutations", async (t) => {
+  const { db, rpc } = await setup(t);
+  const createdAt = -86400000;
+  const updatedAt = -1;
+  await db
+    .prepare(
+      "INSERT INTO outlets (id, name, created_at, updated_at) VALUES ('negative-time', 'Legacy', ?, ?)"
+    )
+    .bind(createdAt, updatedAt)
+    .run();
+  const expected = {
+    id: "negative-time",
+    name: "Legacy",
+    createdAt,
+    updatedAt,
+  };
+  await t.test("list", async () => {
+    assert.deepEqual(await rpc("listOutlets", 1, {}), {
+      ok: true,
+      data: { items: [expected], next: null },
+    });
+  });
+  await t.test("retrieve", async () => {
+    assert.deepEqual(await rpc("getOutlet", 1, { id: expected.id }), {
+      ok: true,
+      data: expected,
+    });
+  });
+  await t.test(
+    "update returns committed row without changing creation time",
+    async () => {
+      const result = await rpc("updateOutlet", 1, {
+        id: expected.id,
+        name: "Renamed",
+      });
+      assert.equal(result.ok, true);
+      assert.equal(result.data.createdAt, createdAt);
+      assert.equal(result.data.name, "Renamed");
+      assert.ok(Number.isSafeInteger(result.data.updatedAt));
+      assert.deepEqual(
+        await db
+          .prepare(
+            "SELECT id, name, created_at AS createdAt, updated_at AS updatedAt FROM outlets WHERE id = ?"
+          )
+          .bind(expected.id)
+          .first(),
+        result.data
+      );
+    }
+  );
+  await t.test(
+    "delete returns original signed timestamps and removes only the row",
+    async () => {
+      await db
+        .prepare(
+          "INSERT INTO outlets (id, name, created_at, updated_at) VALUES ('negative-delete', 'Legacy', ?, ?)"
+        )
+        .bind(createdAt, updatedAt)
+        .run();
+      assert.deepEqual(
+        await rpc("deleteOutlet", 1, { id: "negative-delete" }),
+        { ok: true, data: { ...expected, id: "negative-delete" } }
+      );
+      assert.equal(
+        await db
+          .prepare("SELECT id FROM outlets WHERE id = 'negative-delete'")
+          .first(),
+        null
+      );
+      assert.equal(
+        (
+          await db
+            .prepare("SELECT created_at FROM outlets WHERE id = ?")
+            .bind(expected.id)
+            .first()
+        ).created_at,
+        createdAt
+      );
+    }
+  );
+});
+
 test("documented optional synthetic schedule seed is repeatable without report writes", async (t) => {
   const { db, rpc } = await setup(t);
   const apply = async (file) => {

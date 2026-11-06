@@ -11,7 +11,8 @@ const printable = (value: string) =>
   );
 export const planningIdSchema = identifierSchema.max(256).refine(printable);
 const nameSchema = z.string().trim().min(1).max(256).refine(printable);
-const timestampSchema = z.number().int().nonnegative().safe();
+// Stored epoch milliseconds may predate 1970; never normalize legacy values.
+const timestampSchema = z.number().int().safe();
 export const outletDetailSchema = outletSchema.extend({
   createdAt: timestampSchema,
   updatedAt: timestampSchema.nullable(),
