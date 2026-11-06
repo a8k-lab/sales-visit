@@ -1,6 +1,7 @@
 import {
   approvalSchema,
   rejectionSchema,
+  roleChangeSchema,
   type Account,
   type BotIdentityService,
   type IdentityResult,
@@ -8,6 +9,7 @@ import {
 import { Bot, type Context } from "grammy";
 
 import { actor } from "../actor.ts";
+import { label, replyBlocks } from "../planning/shared.ts";
 
 const approvalUsage =
   "Format: /approve TELEGRAM_ID admin|supervisor\natau /approve TELEGRAM_ID sales SALES_FORCE_ID\nPastikan identitas Sales Force sudah diverifikasi sebelum menyetujui.";
@@ -157,6 +159,64 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
     for (const account of page.accounts) await ctx.reply(profile(account));
     if (page.next) await ctx.reply(`Berikutnya: /pending ${page.next}`);
   });
+  bot.command("users", async (ctx) => {
+    const args = ctx.match.trim().split(/\s+/).filter(Boolean);
+    if (args.length > 1) {
+      await ctx.reply("Format: /users [KURSOR]");
+      return;
+    }
+    const page = await result(ctx, await api.users(actor(ctx), args[0]));
+    if (!page) return;
+    await replyBlocks(ctx, [
+      page.accounts.length
+        ? "DAFTAR PENGGUNA"
+        : "Belum ada pengguna terdaftar.",
+      ...page.accounts.map((account) =>
+        [
+          `Nama: ${label([account.firstName, account.lastName].filter(Boolean).join(" ")) || "-"}`,
+          `Telegram ID: ${account.telegramUserId}`,
+          `Role: ${account.role ?? "-"}`,
+          `Status: ${account.status}`,
+          `Sales Force ID: ${label(account.salesForceId ?? "-")}`,
+        ].join("\n")
+      ),
+      ...(page.next ? [`Berikutnya: /users ${page.next}`] : []),
+    ]);
+  });
+  bot.command("setrole", async (ctx) => {
+    const args = ctx.match.trim().split(/\s+/);
+    const input = {
+      telegramUserId: args[0],
+      role: args[1],
+      ...(args[2] ? { salesForceId: args[2] } : {}),
+    };
+    if (args.length > 3 || !roleChangeSchema.safeParse(input).success) {
+      await ctx.reply(
+        "Format: /setrole TELEGRAM_ID admin|supervisor\natau /setrole TELEGRAM_ID sales SALES_FORCE_ID\nRole sales_force juga diterima. Verifikasi ID bisnis SF; asosiasi yang sudah ada tidak dapat diganti."
+      );
+      return;
+    }
+    const account = await result(ctx, await api.setRole(actor(ctx), input));
+    if (account)
+      await ctx.reply(
+        `Role pengguna ${account.telegramUserId}: ${account.role}. Asosiasi Sales Force: ${label(account.salesForceId ?? "-")}.`
+      );
+  });
+  for (const command of ["disable", "enable"] as const) {
+    bot.command(command, async (ctx) => {
+      const args = ctx.match.trim().split(/\s+/);
+      const input = { telegramUserId: args[0] };
+      if (args.length !== 1 || !rejectionSchema.safeParse(input).success) {
+        await ctx.reply(`Format: /${command} TELEGRAM_ID`);
+        return;
+      }
+      const account = await result(ctx, await api[command](actor(ctx), input));
+      if (account)
+        await ctx.reply(
+          `Akun ${account.telegramUserId} ${account.status === "disabled" ? "dinonaktifkan" : "aktif kembali"}. Role dan asosiasi Sales Force dipertahankan. Pengulangan tidak membuat audit tambahan.`
+        );
+    });
+  }
   bot.command("approve", async (ctx) => {
     const args = ctx.match.trim().split(/\s+/);
     const input = {
