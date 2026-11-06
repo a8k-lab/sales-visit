@@ -12,7 +12,13 @@ import {
 
 import { planningBatch } from "./planning-access.ts";
 
-const fields = "id, name, created_at AS createdAt, updated_at AS updatedAt";
+const fields =
+  "id, name, business_id AS businessId, no_rs AS noRs, created_at AS createdAt, updated_at AS updatedAt";
+function key(input: { id: string } | { businessId: string }) {
+  return "id" in input
+    ? { column: "id", value: input.id }
+    : { column: "business_id", value: input.businessId };
+}
 // D1 stores signed 64-bit integers; validate before conversion to JS numbers.
 // Reject rather than implicitly repair either timestamp during a mutation.
 const reportableTimestamps = `typeof(created_at) = 'integer'
@@ -60,14 +66,15 @@ export class OutletOperations {
   ): Promise<PlanningResult<OutletDetail>> {
     const parsed = outletKeySchema.safeParse(input);
     if (!parsed.success) return { ok: false, code: "invalid" };
+    const selected = key(parsed.data);
     const result = await planningBatch(
       this.db,
       actor,
       "monitoring",
       (guard) => [
         {
-          sql: `SELECT ${fields} FROM outlets WHERE id = ? AND ${guard}`,
-          values: [parsed.data.id],
+          sql: `SELECT ${fields} FROM outlets WHERE ${selected.column} = ? AND ${guard}`,
+          values: [selected.value],
         },
       ]
     );
@@ -84,11 +91,18 @@ export class OutletOperations {
     if (!parsed.success) return { ok: false, code: "invalid" };
     const result = await planningBatch(this.db, actor, "admin", (guard) => [
       {
-        sql: `INSERT INTO outlets (id, name, updated_at) SELECT ?, ?, unixepoch() * 1000 WHERE ${guard} RETURNING ${fields}`,
-        values: [crypto.randomUUID(), parsed.data.name],
+        sql: `INSERT INTO outlets (id, business_id, no_rs, name, updated_at) SELECT ?, ?, ?, ?, unixepoch() * 1000 WHERE ${guard} ON CONFLICT (business_id) DO NOTHING RETURNING ${fields}`,
+        values: [
+          crypto.randomUUID(),
+          parsed.data.businessId,
+          parsed.data.noRs,
+          parsed.data.name,
+        ],
       },
     ]);
     if (!result.ok) return result;
+    if (!result.data[0]!.results.length)
+      return { ok: false, code: "duplicate" };
     return {
       ok: true,
       data: outletDetailSchema.parse(result.data[0]!.results[0]),
@@ -101,14 +115,15 @@ export class OutletOperations {
   ): Promise<PlanningResult<OutletDetail>> {
     const parsed = updateOutletSchema.safeParse(input);
     if (!parsed.success) return { ok: false, code: "invalid" };
+    const selected = key(parsed.data);
     const result = await planningBatch(this.db, actor, "admin", (guard) => [
       {
-        sql: `UPDATE outlets SET name = ?, updated_at = unixepoch() * 1000 WHERE id = ? AND ${guard} AND ${reportableTimestamps} RETURNING ${fields}`,
-        values: [parsed.data.name, parsed.data.id],
+        sql: `UPDATE outlets SET name = ?, no_rs = COALESCE(?, no_rs), updated_at = unixepoch() * 1000 WHERE ${selected.column} = ? AND ${guard} AND ${reportableTimestamps} RETURNING ${fields}`,
+        values: [parsed.data.name, parsed.data.noRs ?? null, selected.value],
       },
       {
-        sql: `SELECT id FROM outlets WHERE id = ? AND ${guard}`,
-        values: [parsed.data.id],
+        sql: `SELECT id FROM outlets WHERE ${selected.column} = ? AND ${guard}`,
+        values: [selected.value],
       },
     ]);
     if (!result.ok) return result;
@@ -126,14 +141,15 @@ export class OutletOperations {
   ): Promise<PlanningResult<OutletDetail>> {
     const parsed = outletKeySchema.safeParse(input);
     if (!parsed.success) return { ok: false, code: "invalid" };
+    const selected = key(parsed.data);
     const result = await planningBatch(this.db, actor, "admin", (guard) => [
       {
-        sql: `DELETE FROM outlets WHERE id = ? AND ${guard} AND ${reportableTimestamps} AND ${unreferenced} RETURNING ${fields}`,
-        values: [parsed.data.id],
+        sql: `DELETE FROM outlets WHERE ${selected.column} = ? AND ${guard} AND ${reportableTimestamps} AND ${unreferenced} RETURNING ${fields}`,
+        values: [selected.value],
       },
       {
-        sql: `SELECT (${reportableTimestamps}) AS reportable FROM outlets WHERE id = ? AND ${guard}`,
-        values: [parsed.data.id],
+        sql: `SELECT (${reportableTimestamps}) AS reportable FROM outlets WHERE ${selected.column} = ? AND ${guard}`,
+        values: [selected.value],
       },
     ]);
     if (!result.ok) return result;

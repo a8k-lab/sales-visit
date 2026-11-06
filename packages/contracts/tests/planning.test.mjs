@@ -17,14 +17,27 @@ import {
 } from "@sales-visit/contracts";
 
 test("outlet operation inputs are strict, bounded and separate from stored models", () => {
-  assert.deepEqual(createOutletSchema.parse({ name: "  Toko sintetis  " }), {
-    name: "Toko sintetis",
-  });
+  assert.deepEqual(
+    createOutletSchema.parse({
+      name: "  Toko sintetis  ",
+      businessId: "001",
+      noRs: "0002",
+    }),
+    {
+      name: "Toko sintetis",
+      businessId: "001",
+      noRs: "0002",
+    }
+  );
   assert.ok(
     updateOutletSchema.safeParse({ id: "opaque-key", name: "Toko" }).success
   );
   for (const name of ["", "  ", "x".repeat(257), "a\u0000b", 1])
-    assert.equal(createOutletSchema.safeParse({ name }).success, false);
+    assert.equal(
+      createOutletSchema.safeParse({ name, businessId: "001", noRs: "002" })
+        .success,
+      false
+    );
   for (const id of ["", " ", "x".repeat(257), "a\nb", 1])
     assert.equal(outletKeySchema.safeParse({ id }).success, false);
   for (const extra of [
@@ -42,6 +55,8 @@ test("outlet operation inputs are strict, bounded and separate from stored model
     outletDetailSchema.safeParse({
       id: "o",
       name: "Legacy",
+      businessId: null,
+      noRs: null,
       createdAt: 1,
       updatedAt: null,
     }).success
@@ -52,7 +67,7 @@ test("planning inputs reject every C1 control while supporting Unicode names", (
   for (let code = 0x80; code <= 0x9f; code++) {
     const value = `a${String.fromCharCode(code)}b`;
     for (const [schema, input] of [
-      [createOutletSchema, { name: value }],
+      [createOutletSchema, { name: value, businessId: "001", noRs: "002" }],
       [updateOutletSchema, { id: "valid", name: value }],
       [outletKeySchema, { id: value }],
       [outletListSchema, { after: value }],
@@ -74,7 +89,10 @@ test("planning inputs reject every C1 control while supporting Unicode names", (
       );
   }
   const name = "Toko Café 日本 🏪";
-  assert.deepEqual(createOutletSchema.parse({ name }), { name });
+  assert.deepEqual(
+    createOutletSchema.parse({ name, businessId: "001", noRs: "0002" }),
+    { name, businessId: "001", noRs: "0002" }
+  );
   assert.deepEqual(updateOutletSchema.parse({ id: "toko-日本", name }), {
     id: "toko-日本",
     name,
@@ -100,6 +118,8 @@ test("planning IDs preserve exact whitespace in inputs, reads and cursors", () =
     outletDetailSchema.parse({
       id,
       name: "Legacy",
+      businessId: null,
+      noRs: null,
       createdAt: 0,
       updatedAt: null,
     }).id,
@@ -157,6 +177,8 @@ test("planning read timestamps accept signed safe integers without transformatio
     const outlet = {
       id: "o",
       name: "Legacy",
+      businessId: null,
+      noRs: null,
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -189,6 +211,61 @@ test("planning read timestamps accept signed safe integers without transformatio
       false
     );
   }
+});
+
+test("business metadata validation never rewrites identifiers and rejects mixed namespaces", () => {
+  const input = { businessId: " 00Ab ", noRs: " 000x ", name: "Name" };
+  assert.deepEqual(createOutletSchema.parse(input), input);
+  for (const value of [
+    "",
+    " ",
+    "x".repeat(257),
+    "a\u0000b",
+    "a\u007fb",
+    "a\u202eb",
+    "a\u0085b",
+    1,
+  ]) {
+    for (const field of ["businessId", "noRs"])
+      assert.equal(
+        createOutletSchema.safeParse({ ...input, [field]: value }).success,
+        false
+      );
+  }
+  assert.equal(outletKeySchema.safeParse({ businessId: "0001" }).success, true);
+  assert.equal(
+    outletKeySchema.safeParse({ id: "0001", businessId: "0001" }).success,
+    false
+  );
+  assert.equal(
+    updateOutletSchema.safeParse({ ...input, id: "internal" }).success,
+    false
+  );
+  assert.equal(
+    scheduleFilterSchema.safeParse({ telegramUserId: "900719925474099312345" })
+      .success,
+    true
+  );
+  assert.equal(
+    scheduleFilterSchema.safeParse({ telegramUserId: "3", salesForceId: "3" })
+      .success,
+    false
+  );
+  for (const telegramUserId of [
+    "03",
+    "0",
+    "-3",
+    "+3",
+    "3.0",
+    "3e0",
+    " 3",
+    "3".repeat(257),
+    3,
+  ])
+    assert.equal(
+      scheduleFilterSchema.safeParse({ telegramUserId }).success,
+      false
+    );
 });
 
 test("ISO weekdays and Indonesian boundary conversion agree for all seven days", () => {

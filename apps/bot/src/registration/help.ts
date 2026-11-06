@@ -57,7 +57,9 @@ export function helpSections(account: Account | null): string[] {
             "/jadwalsales sf=sf-01 hari=jumat — Filter ID bisnis SF dan hari.",
             "/jadwalsales [hari=HARI] [sf=SALES_FORCE_ID] [after=KURSOR]",
             "Salin perintah Berikutnya untuk mempertahankan filter.",
-            "Berbeda dari bot asal: filter SF bisnis, bukan Telegram ID posisi pertama.",
+            "/jadwalsales HARI atau /jadwalsales TELEGRAM_ID [HARI] — Filter posisi seperti bot asal.",
+            "Contoh: /jadwalsales 123456789 JuMaT; lanjut: /jadwalsales 123456789 jumat after=KURSOR.",
+            "Jangan campur filter posisi dengan hari=/sf=. Telegram ID wajib asosiasi SF aktif unik.",
           ]
         : ["Pemantauan jadwal tersedia untuk Admin dan Supervisor aktif."]
     ),
@@ -67,8 +69,9 @@ export function helpSections(account: Account | null): string[] {
       monitor
         ? [
             "/outlets [KURSOR] — Daftar Outlet dengan halaman berikutnya.",
-            "/outlet OUTLET_ID — Detail Outlet; contoh: /outlet out-01.",
-            "ID adalah token internal, bukan ID bisnis Outlet/No. RS dari bot asal.",
+            "/outlet BUSINESS_ID — Detail Outlet; contoh: /outlet 00123.",
+            "/outletinternal INTERNAL_ID — Lookup eksplisit data lama, tanpa fallback bisnis.",
+            "ID Outlet Bisnis dan No. RS disimpan sebagai teks, nol awal tetap; belum didata untuk data lama.",
           ]
         : [
             "Daftar/detail Outlet hanya untuk Admin dan Supervisor aktif. Sales Force memilih token Outlet dari jadwal sendiri atau operator.",
@@ -104,13 +107,16 @@ export function helpSections(account: Account | null): string[] {
       "OUTLET ADMIN COMMANDS",
       admin
         ? [
-            "/tambahoutlet NAMA_OUTLET — Buat Outlet dengan ID otomatis.",
-            "Contoh: /tambahoutlet Toko Sintetis Jakarta",
-            "/editoutlet OUTLET_ID NAMA_BARU — Ubah nama saja.",
-            "/hapusoutlet OUTLET_ID KONFIRMASI — Hapus jika tidak dirujuk.",
+            "/tambahoutlet BUSINESS_ID NO_RS NAMA_OUTLET — Ketiga bidang wajib.",
+            "Contoh: /tambahoutlet 00123 00045 Toko Sintetis Jakarta",
+            "/editoutlet BUSINESS_ID NO_RS_BARU NAMA_OUTLET_BARU — ID bisnis tetap.",
+            "/hapusoutlet BUSINESS_ID KONFIRMASI — Hapus jika tidak dirujuk.",
+            "/editoutletinternal INTERNAL_ID NO_RS_BARU NAMA_OUTLET_BARU — Data lama.",
+            "/hapusoutletinternal INTERNAL_ID KONFIRMASI — Data lama, perlindungan sama.",
+            "Sintaks tambah nama-saja lama dihentikan; bukan mode kompatibilitas. Jangan kirim nama lama sebagai tiga argumen.",
             "/tambahjadwal SALES_FORCE_ID OUTLET_ID HARI — Buat rencana mingguan.",
             "Contoh: /tambahjadwal sf-01 out-01 senin",
-            "No. RS dan ID bisnis Outlet belum didukung. Jadwal adalah rencana, bukan Visit selesai.",
+            "OUTLET_ID pada /tambahjadwal tetap internal, SALES_FORCE_ID adalah ID bisnis SF. Jadwal bukan Visit selesai.",
           ]
         : ["Pemeliharaan Outlet dan pembuatan jadwal hanya untuk Admin aktif."]
     ),
@@ -133,7 +139,7 @@ export function helpSections(account: Account | null): string[] {
     ]),
     section(9, "IMPORTANT NOTES", [
       "- Gunakan chat pribadi; grup tidak dilayani.",
-      "- Telegram ID dari /me berbeda dari ID bisnis Sales Force dan token Outlet.",
+      "- Telegram ID dari /me, ID bisnis Sales Force, ID Outlet Bisnis dan internal ID/token Outlet berbeda. No. RS bukan nomor telepon dan tidak unik.",
       "- HARI: senin, selasa, rabu, kamis, jumat, sabtu, minggu.",
       "- Spasi memisahkan argumen; nama Outlet boleh memakai spasi, tanpa underscore wajib.",
       "- ID/kursor perencanaan: salin token persis, termasuk awalan ~ (base64url UTF-8 tanpa padding). Bukan kredensial.",

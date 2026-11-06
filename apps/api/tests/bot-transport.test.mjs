@@ -81,7 +81,7 @@ test("ambiguous create RPC transport failure is acknowledged without retry or ra
         date: 1,
         chat: { id: 1, type: "private" },
         from: { id: 1, first_name: "Synthetic", is_bot: false },
-        text: "/tambahoutlet Synthetic",
+        text: "/tambahoutlet 001 002 Synthetic",
         entities: [{ type: "bot_command", offset: 0, length: 13 }],
       },
     }),

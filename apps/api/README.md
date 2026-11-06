@@ -167,6 +167,30 @@ contracts, role permissions, ISO/Indonesian weekdays, safe error codes,
 50-row keyset pagination, additive migration prerequisites and optional local
 synthetic schedule fixtures. All public business reads remain synthetic-only.
 
+Outlet creation requires `{ businessId, noRs, name }`; both identifiers are opaque
+strings (1–256 UTF-16 units, nonblank, no control/format characters), preserving
+leading zeros/case. Business ID is unique and immutable through RPC; No. RS is not
+unique and is not a phone number. Keys explicitly select `{ businessId }` or
+`{ id }` (internal), never both or automatic fallback. Updates take the selected
+key plus name/No. RS; legacy internal updates may omit No. RS to preserve null.
+No ID changes/backfill/import operation is exposed. `duplicate` also covers a
+business-ID collision, enforced by D1 `ON CONFLICT` even for concurrent creates.
+
+`listSchedules` accepts optional `telegramUserId` **instead of** `salesForceId`.
+Canonical decimal strings only, max 256 characters, never JS Numbers. Resolution
+and query share the authorized D1 batch. Only a current active SF account with an
+existing SF and exactly one account reserving that SF is accepted; otherwise
+`association_unavailable`. Scalar subqueries avoid duplicate plans. Named SF
+filters still select the business plan; role/status/link changes do not move it.
+Private Schedule details add Outlet business ID/No. RS and nullable verified
+Telegram ID. Public `/outlets` still projects **only `{ id, name }`**; no other
+public response was expanded. No private RPC may be proxied without authorization.
+
+Before separately approved API-before-Bot release, apply only pending
+`0006_windy_black_crow.sql` after backing up/verifying D1; 0005 is already deployed.
+Follow [the manual checklist](../../docs/design/telegram-bot-parity.md#manual-release-checklist).
+No remote migration or deployment is run by this change.
+
 ### Idempotency
 
 Record IDs remain opaque strings, not sequential counters. The server derives

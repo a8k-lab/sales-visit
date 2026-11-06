@@ -43,6 +43,13 @@
       "when": 1793964753872,
       "tag": "0005_good_puff_adder",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793972945418,
+      "tag": "0006_windy_black_crow",
+      "breakpoints": true
     }
   ]
 }

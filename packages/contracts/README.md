@@ -55,7 +55,18 @@ names to that representation. Planning timestamps are integer epoch milliseconds
 not Visit/Stock Report event-time ISO strings. `BotIdentityService` extends
 `BotPlanningService` for the existing private Service Binding, not public HTTP.
 See [the foundation guide](../../docs/design/outlet-schedule-foundation.md) for
-permissions, pagination, error codes and deferred business ID/`no_rs` semantics.
+permissions, pagination and error codes. Private `OutletDetail` adds nullable
+`businessId`/`noRs`; public `Outlet` remains `{ id, name }`. Creation requires
+both metadata strings plus name. Business ID is unique when present; No. RS is
+nonunique, not contact data. Input identifiers preserve case/leading zeros and
+reject blank, >256 UTF-16 units and control/format characters. Keys are exactly
+`{ id }` (internal) or `{ businessId }` (business), not both. Updates cannot
+replace either ID; internal legacy updates may omit No. RS. Monitoring filters
+accept `telegramUserId` (canonical decimal string, max 256) or `salesForceId`, not
+both; own filters accept neither. Private Schedule details include Outlet
+business metadata and nullable verified current Telegram ID. `duplicate` includes
+business-ID collisions; `association_unavailable` means the requested Telegram
+account has no unique active SF association. Authorization/resolution stays API-owned.
 
 ## Checks
 

@@ -987,9 +987,18 @@ test("registration, authorization and verified webhook across real Worker RPC + 
               "/users [KURSOR]",
               "/disable TELEGRAM_ID",
               "/enable TELEGRAM_ID",
+              "/tambahoutlet BUSINESS_ID NO_RS NAMA_OUTLET",
+              "/editoutlet BUSINESS_ID NO_RS_BARU NAMA_OUTLET_BARU",
+              "/hapusoutlet BUSINESS_ID KONFIRMASI",
+              "/outletinternal INTERNAL_ID",
+              "/jadwalsales TELEGRAM_ID [HARI]",
+              "/jadwalsales 123456789 JuMaT",
             ])
               assert.ok(guide.includes(example));
-            assert.doesNotMatch(guide, /\/tambahoutlet ID NO_RS/);
+            assert.doesNotMatch(
+              guide,
+              /No\. RS dan ID bisnis Outlet belum didukung|bukan Telegram ID posisi pertama/
+            );
           }
         }
         await webhook(900, "/start");

@@ -60,7 +60,9 @@ const errors = {
   not_found: "Outlet tidak ditemukan.",
   referenced:
     "Outlet masih dirujuk Jadwal, Visit, atau Stock Report; tidak dapat dihapus.",
-  duplicate: "Penugasan yang sama sudah ada pada hari tersebut.",
+  duplicate: "ID bisnis Outlet atau penugasan yang sama sudah ada.",
+  association_unavailable:
+    "Asosiasi Telegram ke Sales Force aktif tidak ditemukan atau tidak unik. Hubungi Admin; gunakan filter sf= hanya untuk rencana bisnis yang terverifikasi.",
   reference_not_found:
     "Sales Force atau Outlet tidak ditemukan. Periksa ID bisnis yang dipilih.",
   unavailable:

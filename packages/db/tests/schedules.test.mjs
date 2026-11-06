@@ -11,7 +11,7 @@ test("additive schedule migration preserves existing history and restricts assig
   db.exec("PRAGMA foreign_keys = ON");
   const dir = new URL("../migrations/", import.meta.url);
   const files = readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
+    .filter((f) => f.endsWith(".sql") && f <= "0003_\uffff")
     .toSorted();
   for (const file of files.slice(0, -1))
     db.exec(readFileSync(new URL(file, dir), "utf8"));
