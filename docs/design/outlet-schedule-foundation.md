@@ -1,6 +1,8 @@
 # Outlet & Schedule backend foundation
 
-Implemented backend scope; no Telegram commands or dashboard integration yet.
+Implemented backend scope, now consumed by the Telegram integration described in
+[Bot commands and grammar](../../apps/bot/README.md#outlet--schedule-command-grammar).
+No dashboard integration yet.
 Behavioral reference: [rtrivaldo/telegram_bot](https://github.com/rtrivaldo/telegram_bot/tree/e7de4a9965b2a815160bd389a89be5fa6b1b73a7),
 particularly `src/services/{outlet,schedule}.service.ts` and
 `src/repositories/schedule.repository.ts`. Credit to its original contributors
@@ -27,8 +29,8 @@ no source, seed identities or business data were copied. See the broader
   6 sabtu, 7 minggu**. This differs from JS `Date.getDay()` (Sunday=0).
   `indonesianWeekdaySchema` trims/lowercases Indonesian names into this numeric
   representation. RPC inputs accept only canonical integers, not strings.
-  No weekday filter means all days, not implicitly today. A future `/jadwal`
-  handler should compute today's name using `Intl.DateTimeFormat("id-ID",
+  No weekday filter means all days, not implicitly today. The `/jadwal`
+  handler computes today's name using `Intl.DateTimeFormat("id-ID",
   { weekday: "long", timeZone: "Asia/Jakarta" })`, then use that schema.
 - Unique `(sales_force_id, outlet_id, weekday)` prevents identical assignments.
   Multiple Outlets per SF, multiple SF per Outlet, and different weekdays for
@@ -122,9 +124,9 @@ the input length limit. No shared Visit/Stock Report identifier behavior or
 stored rows are changed. IDs longer than 256 characters require a reviewed
 operation-limit change before management or use as a page cursor through RPC.
 
-## Future Bot use and synthetic provisioning
+## Bot use and synthetic provisioning
 
-After trusted private-chat handling, future command code can call:
+After trusted private-chat handling, command code calls the existing RPCs:
 
 ```ts
 // actor is derived from the authenticated update, never command arguments.
@@ -137,9 +139,11 @@ const created = await env.IDENTITY.createSchedule(adminActor, {
 });
 ```
 
-Handle result codes, bounded pages and Telegram message limits in the next PR.
+The Bot handles all result codes, opaque token round-tripping, filter-preserving
+pages and bounded plain-text Telegram messages. See its README for exact grammar
+and limitations; no new RPC or schema changes are needed for this integration.
 Do not expose this capability through a public HTTP proxy/test-auth bypass.
-No such handlers or operational CLI are implemented here. `createSchedule` has
+Telegram handlers now exist; no operational provisioning CLI is introduced. `createSchedule` has
 no retry receipt: an identical retry returns `duplicate`, not a second row.
 Outlet create has no idempotency key; reconcile list results after an ambiguous
 transport failure before retrying. Updates are last-write-wins; no revision
@@ -180,6 +184,5 @@ unavailable; migration must precede future API release.
 Existing public business GETs remain backward-compatible, unauthenticated and
 **synthetic-only**; they expose neither schedules nor private identity fields.
 Visit/Stock Report HTTP writes remain deny-by-default. Do not load real Outlet
-names or other business data while these reads are public. Web/OIDC, Telegram
-commands, Visit wizard, real-data import, remote migrations/deployment and bot
-cutover are outside this change.
+names or other business data while these reads are public. Web/OIDC, Visit wizard, real-data import, remote migrations/deployment and bot
+cutover remain outside this foundation and its Telegram integration.

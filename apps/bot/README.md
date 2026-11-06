@@ -1,4 +1,4 @@
-# Telegram registration & approval
+# Telegram registration, Outlet & recurring schedules
 
 grammY Worker with local development and a single Cloudflare test deployment
 configuration. See the [deployment runbook](../../docs/deployment.md) for current
@@ -25,8 +25,9 @@ replacement require the private-terminal confirmations in the runbook;
   opaque business-record ID, **not** a Telegram ID or profile name.
 - `/reject TELEGRAM_ID`: active Admin rejects a pending registration.
 
-All user-facing messages are Indonesian. IDs in commands are canonical positive
-decimal strings (no signs, exponents or leading zeroes). Names/usernames are
+All user-facing messages are Indonesian. **Telegram user IDs** in registration
+commands are canonical positive decimal strings (no signs, exponents or leading
+zeroes). Planning business IDs are opaque strings; see the grammar below. Names/usernames are
 optional display snapshots at first registration and are never matching keys.
 An existing registration is unchanged, including rejected/disabled accounts.
 Rejected reapplication, reactivation, reassignment and role changes are deferred.
@@ -42,6 +43,92 @@ cardinality/migration policy; the conditional approval transaction enforces this
 restriction for all application approval writers. Operators must not bypass it.
 Admin/Supervisor have no SF link. Even approved Sales Force cannot submit reports
 yet: existing Visit/Stock Report HTTP writes still deny all requests.
+
+## Outlet & Schedule command grammar
+
+Private chat, active accounts only. Brackets mean optional arguments; do not type
+the brackets. Arguments are whitespace-separated; quoted strings are **not** a
+supported ID syntax. Names consume the remaining text and may contain spaces.
+
+| Command                                                       | Role                                           |
+| ------------------------------------------------------------- | ---------------------------------------------- |
+| `/outlets [KURSOR]`                                           | Admin, Supervisor                              |
+| `/outlet OUTLET_ID`                                           | Admin, Supervisor                              |
+| `/tambahoutlet NAMA_OUTLET`                                   | Admin                                          |
+| `/editoutlet OUTLET_ID NAMA_BARU`                             | Admin                                          |
+| `/hapusoutlet OUTLET_ID KONFIRMASI`                           | Admin; literal uppercase `KONFIRMASI` required |
+| `/jadwal [HARI\|semua] [after=KURSOR]`                        | Sales Force; own linked business record only   |
+| `/jadwalsales [hari=HARI] [sf=SALES_FORCE_ID] [after=KURSOR]` | Admin, Supervisor                              |
+| `/tambahjadwal SALES_FORCE_ID OUTLET_ID HARI`                 | Admin                                          |
+
+`HARI`: senin, selasa, rabu, kamis, jumat, sabtu, minggu (case-insensitive).
+`/jadwal` defaults to today in **Asia/Jakarta**, not UTC; `/jadwal semua` shows
+all recurring days. Its follow-up command fixes the original weekday, even over
+midnight. To pass `after=`, specify the day or `semua` first.
+`/jadwalsales` defaults to all days/all SF. Its named options may be in any order,
+with each key at most once; unknown keys are rejected. `/jadwal` rejects SF
+selection entirely. A supplied cursor cannot change the API's own-SF scope.
+
+Examples with synthetic, simple IDs (replace Outlet IDs with actual returned IDs):
+
+```text
+/tambahoutlet Toko Sintetis Jakarta
+/outlet out-01
+/editoutlet out-01 Nama Baru Sintetis
+/hapusoutlet out-01 KONFIRMASI
+/tambahjadwal sf-01 out-01 senin
+/jadwal
+/jadwal MINGGU
+/jadwal semua
+/jadwalsales hari=senin sf=sf-01
+```
+
+Outlet IDs are internal opaque keys, not a business code or `no_rs`. SF IDs are
+business-record IDs, **not Telegram IDs**. There is no Bot SF lookup/provisioning
+command yet: obtain verified synthetic SF IDs from the operator. Duplicate Outlet
+names are allowed; identify records by their returned ID. Deletion is blocked by
+any Schedule, Visit or Stock Report reference; Bot never bypasses that rule.
+Schedules are weekly plans, **not completed Visits**. No edit/delete, exceptions,
+effective dates, enforcement, `/salesvisit`, `/konfirmasi`, or `/batal` is added.
+
+### Exact opaque token format (planning commands only)
+
+- Raw token: nonempty ASCII `[A-Za-z0-9_.-]+`, validated against API limits.
+- Otherwise: `~` followed by **canonical unpadded base64url of the exact UTF-8
+  bytes**. Preserve leading/trailing whitespace, Unicode, punctuation and case;
+  never trim or normalize a decoded ID. `~` is reserved, so an ID starting with
+  `~` itself must be encoded. No `=`, `+`, `/`, or whitespace in encoded tokens.
+- Noncanonical encodings (including encoded simple IDs), invalid UTF-8, blank
+  decoded IDs, control characters, or IDs over the API's 256 UTF-16-unit limit
+  are rejected. Tokens are not credentials or secrets. Cursors use exactly this
+  same format, not Telegram user IDs or offsets.
+- Copy ID tokens and complete `Berikutnya:` commands exactly. Pages contain at
+  most 50 records; next commands retain all filters. No next command means the
+  last page. Pages are live snapshots, not a frozen export.
+
+For an operator who already holds an exact synthetic SF/Outlet ID, this local
+Node.js expression produces the same token (do not use sensitive business data):
+
+```js
+const id = " SF 日本 + ";
+const token = /^[A-Za-z0-9_.-]+$/.test(id)
+  ? id
+  : "~" + Buffer.from(id, "utf8").toString("base64url");
+console.log(token);
+```
+
+This grammar does not change legacy `/approve` or `/pending`: approval's existing
+SF argument is still a simple whitespace-free ID and its identity contract trims
+it; do not use planning tokens there. Linking legacy whitespace-bearing SF IDs
+requires a separately reviewed identity-contract change, not a Bot bypass.
+
+Responses use plain text, never Markdown/HTML parse mode. Record blocks are packed
+into messages of at most 4096 UTF-16 units (no message per row for normal pages).
+Names are display-truncated after 256 Unicode code points with `…`, and control/
+format characters are replaced in display labels only. IDs are never truncated:
+stored IDs outside API operation limits are explicitly marked unmanageable, and
+an unusable next cursor stops navigation with an operator message. Timestamp
+details use exact epoch milliseconds; legacy null updated time remains unknown.
 
 ## Trust and persistence
 
@@ -59,13 +146,21 @@ yet: existing Visit/Stock Report HTTP writes still deny all requests.
    compromised bound Worker can impersonate actors. Binding configuration is
    the caller capability, not a per-user permission or a caller-ID header.
 4. API validates input, resolves the actor from D1 on each protected call, and
-   checks current active Admin permissions in the decision transaction itself.
+   checks current role/status and SF scope. Approval checks active Admin
+   permissions in the decision transaction itself.
    Registration creates User + identity + audit atomically. Decisions condition
    on pending/unassigned state and unclaimed SF; lifecycle/audit roll back
    together. See [identity invariants and bootstrap](../../packages/db/IDENTITY.md).
 
+Planning commands acknowledge processed updates even when API transport or
+Telegram delivery fails; they never automatically retry a create. An ambiguous
+failure can mean the mutation committed: reconcile `/outlets` or `/jadwalsales`
+before manually repeating it. A failed reply may leave no visible confirmation.
+There is no durable deduplication receipt: duplicate upstream deliveries can
+still create duplicate-named Outlets. This is not exactly-once processing.
+
 Telegram replies/decision notifications are not transactional with D1. Failed
-notification does not undo approval; `/me` is authoritative. A transport failure
+notification does not undo approval; `/me` is authoritative. For registration/approval, a transport failure
 returns retryable HTTP 500; retrying registration/decisions cannot duplicate or
 change committed decisions. Exactly-once replies/notification redelivery are not
 promised. There is no conversation state in this milestone. Existing public
@@ -165,6 +260,14 @@ bootstrap template. A test-only bound caller exercises API input validation;
 it is never bundled into app entrypoints. Tests cover idempotence, concurrent
 claims/decisions, forbidden roles/states, rollback on forced failures, audit,
 public spoofing, actual sender/private-chat enforcement and Indonesian commands.
+`bot-planning.test.mjs` additionally exercises Outlet CRUD, all roles/states,
+weekly provisioning and monitoring, deterministic Sunday-UTC/Monday-Jakarta
+own-day queries, opaque whitespace-bearing IDs/cursors, 50-row pagination,
+plain-text output, maximum Unicode IDs, legacy long names, and message bounds.
+It also verifies registration/approval regressions and acknowledged delivery
+failures. `bot-transport.test.mjs` uses a test-only faulting named RPC worker to
+verify ambiguous create failures are sanitized, acknowledged and called once.
+All planning result codes and exact 4096-unit packing boundaries have helper tests.
 Only Telegram `getMe`/`sendMessage` are simulated, using synthetic credentials;
 no real Telegram/Cloudflare resource calls occur. Miniflare is pinned to the beta
 matching the repository's Wrangler/workerd compatibility date, and uses its
@@ -180,7 +283,10 @@ approval UX are adapted from **rtrivaldo and the original contributors** to
 [rtrivaldo/telegram_bot](https://github.com/rtrivaldo/telegram_bot), inspected at
 `e7de4a9965b2a815160bd389a89be5fa6b1b73a7`, especially
 `src/bot/commands/auth.commands.ts`, `src/bot/bot.ts`,
-`src/services/auth.service.ts`, and `src/repositories/user.repository.ts`.
+`src/services/auth.service.ts`, and `src/repositories/user.repository.ts`. Outlet/Schedule behavior additionally
+references `src/services/schedule.service.ts` (Jakarta weekday names, own versus
+monitoring views) and the backend foundation's Outlet reference checks. We use
+explicit, documented commands and opaque tokens rather than its legacy IDs.
 This is a new grammY/API/D1 implementation, not an import of Telegraf, Express,
 Node runtime, PostgreSQL or seed data. The reference declares ISC in package.json
 but has no standalone LICENSE; confirm reuse terms with its maintainer before
@@ -190,5 +296,5 @@ Security differences: private-only handling, canonical string IDs, no rejected
 reapplication, explicit verified SF association, API-owned authorization, atomic
 auditing/claims, bounded lists/body, safe errors and no raw-update/token logs.
 Deferred: OIDC/Web sessions/read authorization, reporting wizard and durable
-state, Outlet/schedule workflows, other account lifecycle commands, history,
+state, schedule editing/deletion/exceptions/effective dates, other account lifecycle commands, history,
 exports, financial measures, imports and production cutover.
