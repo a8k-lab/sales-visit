@@ -106,12 +106,12 @@ async function setup(t, legacy = false) {
     ]);
   }
   const probe = await mf.getWorker("probe");
-  const rpc = async (method, by, input) => {
+  const rpc = async (method, by, ...inputs) => {
     const response = await probe.fetch("https://test/", {
       method: "POST",
       body: JSON.stringify({
         method,
-        args: [typeof by === "object" ? by : actor(by), input],
+        args: [typeof by === "object" ? by : actor(by), ...inputs],
       }),
     });
     assert.equal(response.status, 200);
@@ -119,6 +119,55 @@ async function setup(t, legacy = false) {
   };
   return { db, rpc, api: await mf.getWorker("api") };
 }
+
+test("optional planning filters default through one-argument Worker RPC calls", async (t) => {
+  const { rpc } = await setup(t);
+  const calls = [
+    ["listOutlets", 1],
+    ["listSchedules", 2],
+    ["ownSchedule", 3],
+  ];
+  for (const [method, by] of calls) {
+    assert.deepEqual(await rpc(method, by), {
+      ok: true,
+      data: { items: [], next: null },
+    });
+    assert.deepEqual(await rpc(method, by, null), {
+      ok: false,
+      code: "invalid",
+    });
+  }
+  const id = (await rpc("createOutlet", 1, { name: "Default filters" })).data
+    .id;
+  for (const [salesForceId, weekday] of [
+    ["sf-a", 1],
+    ["sf-a", 7],
+    ["sf-b", 2],
+  ]) {
+    assert.equal(
+      (await rpc("createSchedule", 1, { salesForceId, outletId: id, weekday }))
+        .ok,
+      true
+    );
+  }
+  for (const [i, [method, by]] of calls.entries()) {
+    // No second array element is serialized: only actor reaches Worker RPC.
+    const result = await rpc(method, by);
+    assert.equal(result.ok, true);
+    assert.equal(result.data.items.length, [1, 3, 2][i]);
+    assert.equal(result.data.next, null);
+    assert.deepEqual(result, await rpc(method, by, {}));
+  }
+  assert.deepEqual(
+    (await rpc("ownSchedule", 3)).data.items
+      .map((s) => s.weekday)
+      .toSorted((a, b) => a - b),
+    [1, 7]
+  );
+  assert.equal((await rpc("listSchedules", 3)).code, "forbidden");
+  assert.equal((await rpc("listOutlets", 3)).code, "forbidden");
+  assert.equal((await rpc("ownSchedule", 5)).code, "forbidden");
+});
 
 test("planning RPC rejects C1 inputs without mutations and retains Unicode names", async (t) => {
   const { db, rpc } = await setup(t);
