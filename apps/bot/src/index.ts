@@ -1,6 +1,6 @@
 import { Bot, webhookCallback } from "grammy";
 
-import { registerCommands } from "./registration/commands.ts";
+import { installCommands } from "./commands.ts";
 import { readUpdate } from "./webhook.ts";
 
 export default {
@@ -49,7 +49,7 @@ export default {
         body: update,
       });
       const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
-      registerCommands(bot, env.IDENTITY);
+      installCommands(bot, env.IDENTITY);
       return await webhookCallback(bot, "cloudflare-mod", {
         secretToken: env.TELEGRAM_WEBHOOK_SECRET,
         onTimeout: "throw",

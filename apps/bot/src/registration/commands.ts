@@ -2,11 +2,12 @@ import {
   approvalSchema,
   rejectionSchema,
   type Account,
-  type BotActor,
   type BotIdentityService,
   type IdentityResult,
 } from "@sales-visit/contracts";
 import { Bot, type Context } from "grammy";
+
+import { actor } from "../actor.ts";
 
 const approvalUsage =
   "Format: /approve TELEGRAM_ID admin|supervisor\natau /approve TELEGRAM_ID sales SALES_FORCE_ID\nPastikan identitas Sales Force sudah diverifikasi sebelum menyetujui.";
@@ -32,15 +33,6 @@ function statusMessage(account: Account | null): string {
       return "Akun kamu sedang dinonaktifkan (disabled). Hubungi administrator.";
   }
 }
-function actor(ctx: Context): BotActor {
-  // The private-chat middleware below validated the actual message sender.
-  return {
-    telegramUserId: String(ctx.from!.id),
-    username: ctx.from!.username,
-    firstName: ctx.from!.first_name,
-    lastName: ctx.from!.last_name,
-  };
-}
 async function result<T>(
   ctx: Context,
   response: IdentityResult<T>
@@ -62,23 +54,6 @@ function profile(account: Account): string {
   ].join("\n");
 }
 export function registerCommands(bot: Bot, api: BotIdentityService) {
-  bot.use(async (ctx, next) => {
-    if (
-      !ctx.message ||
-      !ctx.from ||
-      ctx.from.is_bot ||
-      !Number.isSafeInteger(ctx.from.id) ||
-      ctx.from.id <= 0
-    )
-      return;
-    if (ctx.chat?.type !== "private") {
-      await ctx.reply(
-        "Gunakan chat pribadi dengan bot untuk registrasi dan administrasi."
-      );
-      return;
-    }
-    await next();
-  });
   bot.command("register", async (ctx) => {
     const account = await result(ctx, await api.register(actor(ctx)));
     if (account) await ctx.reply(statusMessage(account));
@@ -178,11 +153,6 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
       "Maaf, permintaan registrasi kamu ditolak oleh administrator."
     );
   });
-  bot.on("message:text", (ctx) =>
-    ctx.reply(
-      "Ketik /help untuk melihat perintah yang tersedia. Pelaporan belum tersedia."
-    )
-  );
 }
 async function notify(ctx: Context, telegramUserId: string, text: string) {
   try {
