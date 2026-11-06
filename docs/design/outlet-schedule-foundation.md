@@ -93,6 +93,16 @@ record-existence diagnostics. No SQL details or profile payloads are returned.
 Validation occurs before database access; malformed input returns `invalid`
 regardless of actor permission.
 
+Outlet update/delete also check timestamp types and the signed JavaScript safe
+integer range inside the mutation SQL, in the same authorized D1 batch as the
+existence diagnostics. If either stored timestamp cannot satisfy the numeric
+read contract, authorized mutations return `unavailable` without modifying the
+row (including no implicit repair of `updated_at` during update). D1's wider
+signed 64-bit values are preserved for explicit operator review, never rounded
+into response values. Safe negative timestamps and nullable `updated_at` remain
+supported. The numeric read contract does not represent integers beyond that
+safe range.
+
 Lists return `{ items, next }`, at most **50** rows ordered by opaque internal
 ID ascending (SQLite BINARY). Pass `next` as `after`, retaining the same filters;
 null ends traversal. Each call is a consistent snapshot, not a multi-page frozen

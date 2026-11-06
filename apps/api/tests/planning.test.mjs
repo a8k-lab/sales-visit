@@ -120,6 +120,82 @@ async function setup(t, legacy = false) {
   return { db, rpc, api: await mf.getWorker("api") };
 }
 
+test("Outlet mutations reject unreportable 64-bit timestamps atomically", async (t) => {
+  const { db, rpc } = await setup(t);
+  // Bind decimal text and cast inside SQLite: JS numbers would lose precision.
+  const unsafe = [
+    "9007199254740992",
+    "9007199254740993",
+    "9223372036854775807",
+    "-9007199254740992",
+    "-9007199254740993",
+    "-9223372036854775808",
+  ];
+  const snapshot = (id) =>
+    db
+      .prepare(
+        "SELECT id, name, CAST(created_at AS TEXT) AS createdAt, CAST(updated_at AS TEXT) AS updatedAt FROM outlets WHERE id = ?"
+      )
+      .bind(id)
+      .first();
+  for (const field of ["created_at", "updated_at"]) {
+    for (const value of unsafe) {
+      for (const method of ["updateOutlet", "deleteOutlet"]) {
+        await t.test(`${method}: ${field}=${value}`, async () => {
+          const id = `${method}-${field}-${value}`;
+          await db
+            .prepare(
+              "INSERT INTO outlets (id, name, created_at, updated_at) VALUES (?, 'Unchanged', CAST(? AS INTEGER), CAST(? AS INTEGER))"
+            )
+            .bind(
+              id,
+              field === "created_at" ? value : "-1",
+              field === "updated_at" ? value : "0"
+            )
+            .run();
+          const before = await snapshot(id);
+          assert.equal(
+            before[field === "created_at" ? "createdAt" : "updatedAt"],
+            value
+          );
+          const input =
+            method === "updateOutlet"
+              ? { id, name: "Must not commit" }
+              : { id };
+          for (const by of [2, 3, 5, 7, 999])
+            assert.deepEqual(await rpc(method, by, input), {
+              ok: false,
+              code: "forbidden",
+            });
+          assert.deepEqual(await rpc(method, 1, input), {
+            ok: false,
+            code: "unavailable",
+          });
+          // Compare exact SQL text, not rounded D1/JS numeric conversions.
+          assert.deepEqual(await snapshot(id), before);
+        });
+      }
+    }
+  }
+  // The guard must not exclude either safe boundary or nullable updated_at.
+  for (const value of ["-9007199254740991", "9007199254740991"]) {
+    const id = `safe-${value}`;
+    await db
+      .prepare(
+        "INSERT INTO outlets (id, name, created_at) VALUES (?, 'Safe boundary', CAST(? AS INTEGER))"
+      )
+      .bind(id, value)
+      .run();
+    const updated = await rpc("updateOutlet", 1, { id, name: "Allowed" });
+    assert.equal(updated.ok, true);
+    assert.equal(updated.data.createdAt, Number(value));
+    const deleted = await rpc("deleteOutlet", 1, { id });
+    assert.equal(deleted.ok, true);
+    assert.equal(deleted.data.createdAt, Number(value));
+    assert.equal(await snapshot(id), null);
+  }
+});
+
 test("optional planning filters default through one-argument Worker RPC calls", async (t) => {
   const { rpc } = await setup(t);
   const calls = [
