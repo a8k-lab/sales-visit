@@ -15,13 +15,13 @@ pnpm dev:web
 
 This is a **public prototype**, not a production-ready authenticated application. It uses synthetic mock data and browser-local persistence; the login screen is not real authentication or access control. Do not enter sensitive or production data. Entries are specific to the browser and origin (local preview, production, and branch preview URLs do not share storage).
 
-Only `apps/web` is deployed. API, Telegram Bot, database, and authentication remain unconfigured and independently deployable. `wrangler.jsonc` serves the existing Vite `dist` output without a Worker entrypoint, SSR, or the Cloudflare Vite plugin. SPA fallback serves `index.html` for client-side routes such as `/login`, `/overview`, `/visits`, and `/visits/VST-0012`.
+This section covers only `apps/web`; API and Bot are independent deployment units, with deployed versions unverified until inspected. Web authentication remains unimplemented. `wrangler.jsonc` serves the existing Vite `dist` output without a Worker entrypoint, SSR, or the Cloudflare Vite plugin. SPA fallback serves `index.html` for client-side routes such as `/login`, `/overview`, `/visits`, and `/visits/VST-0012`.
 
 From the repository root:
 
 ```bash
 pnpm build:web
-pnpm deploy:web # Deploys the existing build; does not rebuild. Requires Cloudflare credentials.
+pnpm deploy:web # Guarded existing-Worker release; requires approved current-main settings.
 pnpm preview:web # Builds, then starts local Wrangler preview (no deployment/authentication).
 ```
 
@@ -29,24 +29,22 @@ To preview an already-built app locally, use `pnpm --filter @sales-visit/web pre
 
 The requested compatibility date is `2026-11-03`. A runtime that has not reached that date will reject local preview/deployment. For local fallback verification only, after building, use `pnpm --filter @sales-visit/web preview:worker --local --compatibility-date 2026-11-02`; keep the configured date unchanged and deploy once Cloudflare supports it.
 
-### Cloudflare Workers Builds settings
+### Deployment ownership
 
-Connect `a8k-lab/sales-visit` through **Workers & Pages → Create application → Import a repository** (Workers, not Pages), using:
+Use the [GitHub Actions CI/CD runbook](../../docs/ci-cd.md) for operator setup,
+verified URLs, account/token settings and current-main `RELEASE_REVISION`.
+Automatic CD is OFF until explicitly activated. Dispatch a validation-only run
+before any approved release. `pnpm build:web` validates a local build;
+`pnpm deploy:web` refuses dirty source and rebuilds from an isolated snapshot of
+the verified current-main revision, never trusting a pre-existing local `dist`.
+It reuses exactly the existing Worker `sales-visit`. The workflow builds Web once
+inside that guarded deploy path; earlier local builds are not deployment provenance.
 
-| Setting                                         | Value                                                  |
-| ----------------------------------------------- | ------------------------------------------------------ |
-| Worker name                                     | `sales-visit`                                          |
-| Production branch                               | `main`                                                 |
-| Root directory                                  | `/`                                                    |
-| Build command                                   | `pnpm build:web`                                       |
-| Deploy command                                  | `pnpm deploy:web`                                      |
-| Preview command                                 | `pnpm --filter @sales-visit/web exec wrangler preview` |
-| Node.js version (build variable `NODE_VERSION`) | `24`                                                   |
-| pnpm version                                    | `10.30.1` (root `packageManager`)                      |
-
-Install dependencies from the repository root with `pnpm install --frozen-lockfile` (Workers Builds normally detects pnpm from the lockfile). Keep build and deploy separate to avoid duplicate builds. No application environment variables or resource bindings are needed. Cloudflare manages deployment credentials through the Builds integration; do not commit credentials.
-
-The Cloudflare **Preview command** publishes a remote branch preview when preview builds are enabled; it is different from the local `pnpm preview:web` command. Do not run it merely to verify configuration locally.
+Do not create/import another application. Before Actions becomes the sole CD
+owner, inspect the existing Worker's **Settings → Builds / Git integration** and
+disable overlapping production/preview deployments. The former Workers Builds
+setup is superseded; local `pnpm preview:web` remains local and credential-free.
+No remote preview publication is part of CI/CD validation.
 
 ## First milestone
 

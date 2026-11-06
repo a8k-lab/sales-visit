@@ -1,0 +1,98 @@
+name: CI
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.paths.outputs.web }}
+      api: ${{ steps.paths.outputs.api }}
+      bot: ${{ steps.paths.outputs.bot }}
+      db: ${{ steps.paths.outputs.db }}
+      helpers: ${{ steps.paths.outputs.helpers }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+      - id: paths
+        run: node scripts/ci/changes.mjs
+  quality:
+    runs-on: ubuntu-latest
+    needs: changes
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: pnpm check
+      - if: needs.changes.outputs.helpers == 'true'
+        run: pnpm test:deployment
+      - if: needs.changes.outputs.helpers == 'true'
+        run: bash scripts/ci/lint-workflows.sh
+  web:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: pnpm --filter @sales-visit/web typecheck
+      - run: pnpm build:web
+  api:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: >-
+          pnpm --filter @sales-visit/contracts
+          --filter @sales-visit/db --filter @sales-visit/api typecheck
+      - run: pnpm --filter @sales-visit/contracts --filter @sales-visit/db test
+      - run: node --test apps/api/tests/{api,identity,planning}.test.mjs
+      - if: needs.changes.outputs.db == 'true'
+        run: pnpm --filter @sales-visit/db db:check
+  bot:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.bot == 'true'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: pnpm --filter @sales-visit/bot typecheck
+      - run: node --test apps/api/tests/bot-*.test.mjs
+  ci-required:
+    name: CI required
+    runs-on: ubuntu-latest
+    needs: [changes, quality, web, api, bot]
+    if: always()
+    steps:
+      - name: Require successful or intentionally skipped jobs
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node --input-type=module -e '
+            const jobs = JSON.parse(process.env.RESULTS);
+            const allowed = ["success", "skipped"];
+            if (Object.values(jobs).some(j => !allowed.includes(j.result)))
+              process.exit(1);
+            if (jobs.changes.result !== "success" ||
+                jobs.quality.result !== "success") process.exit(1);
+          '

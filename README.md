@@ -2,7 +2,7 @@
 
 **Sales Visit** is a university **Computing Project** focused on digitizing field-sales visits and outlet reporting for a Telkomsel product-distribution workflow associated with partner **Citra Indah**.
 
-> **Project status:** The Web Dashboard uses synthetic mock data and browser-local storage. Shared contracts, the Drizzle/D1 schema and migrations, local Hono reads, and atomic/idempotent Visit and Stock Report write operations are implemented. Writes are integration-tested with injected trusted identities; the default runtime rejects all writes until real authentication is implemented. Telegram registration and Admin approval now use a private Worker Service Binding and audited D1 operations. API/frontend integration, Web authentication, Telegram reporting, and remote API/D1 deployment remain unimplemented.
+> **Project status:** The Web Dashboard uses synthetic mock data and browser-local storage. Shared contracts, the Drizzle/D1 schema and migrations, local Hono reads, and atomic/idempotent Visit and Stock Report write operations are implemented. Writes are integration-tested with injected trusted identities; the default runtime rejects all writes until real authentication is implemented. Telegram registration and Admin approval now use a private Worker Service Binding and audited D1 operations. API/frontend integration and Web authentication remain unimplemented. The [CI/CD runbook](docs/ci-cd.md) records current release policy: remote migration 0004 is operator-confirmed as applied, while deployed API/Bot versions remain unverified.
 
 ## Background
 
@@ -128,7 +128,8 @@ contacting Telegram or Cloudflare. The private-terminal test-bot helper is
 
 - **[CONTEXT.md](CONTEXT.md):** shared domain glossary and naming conventions.
 - **[Architecture Decision Records](docs/adr/):** decisions and alternatives behind the proposed system.
-- **[API + Bot test deployment](docs/deployment.md):** Cloudflare setup, guarded remote commands, test webhook and Admin bootstrap; deployment pending credentials.
+- **[GitHub Actions CI/CD](docs/ci-cd.md):** change-aware CI, existing-Worker release guards, operator setup and manual migration policy. Automatic CD is OFF; deployed API/Bot versions are unverified.
+- **[API + Bot test deployment](docs/deployment.md):** historical bootstrap and separate operator-only Telegram/recovery procedures; do not replay applied migrations.
 - **[Sales Visit FigJam](https://www.figma.com/board/xYjjlXsulf3fGKFFyNhd0W/Sales-Visit?node-id=0-1):** team brainstorming and research notes.
 - **[As-Is business flow](https://www.figma.com/board/xYjjlXsulf3fGKFFyNhd0W/Sales-Visit?node-id=104-115):** existing handwritten visit-report workflow.
 - **[Initial To-Be business flow](https://www.figma.com/board/xYjjlXsulf3fGKFFyNhd0W/Sales-Visit?node-id=105-147):** **outdated draft** drawn before confirming that Sales Force can use **both** Web and Telegram. Must be revised before treating it as the agreed flow.
@@ -158,7 +159,8 @@ Until confirmed, avoid presenting invented business calculations as actual opera
 
 The team's FigJam notes list a **static dashboard target of 3 November 2026** and a **planned partner discussion on 4 November 2026**. These dates reflect the working plan, not completed deliverables.
 
-The static Web workflow, local API/D1 reads, and protected write operations are
-implemented separately. The Web still uses synthetic mocks; connecting it to the
-API, implementing real authentication to enable writes, and Telegram reporting
-are future milestones. No API or D1 remote resources have been created or deployed.
+The static Web workflow, API/D1 operations and Telegram reporting are implemented
+as independent units. Web still uses synthetic mocks; API-backed Web operations
+and Web authentication remain future milestones. Existing Workers must be reused.
+The operator confirms remote D1 migration 0004 is applied; deployed API/Bot versions
+remain unverified until inspected. See the [release runbook](docs/ci-cd.md).
