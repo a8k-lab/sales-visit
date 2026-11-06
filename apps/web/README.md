@@ -34,8 +34,11 @@ The requested compatibility date is `2026-11-03`. A runtime that has not reached
 Use the [GitHub Actions CI/CD runbook](../../docs/ci-cd.md) for operator setup,
 verified URLs, account/token settings and current-main `RELEASE_REVISION`.
 Automatic CD is OFF until explicitly activated. Dispatch a validation-only run
-before any approved release. Keep build and deploy separate: `pnpm build:web`
-then `pnpm deploy:web`, reusing exactly the existing Worker `sales-visit`.
+before any approved release. `pnpm build:web` validates a local build;
+`pnpm deploy:web` refuses dirty source and rebuilds from an isolated snapshot of
+the verified current-main revision, never trusting a pre-existing local `dist`.
+It reuses exactly the existing Worker `sales-visit`. The workflow builds Web once
+inside that guarded deploy path; earlier local builds are not deployment provenance.
 
 Do not create/import another application. Before Actions becomes the sole CD
 owner, inspect the existing Worker's **Settings → Builds / Git integration** and

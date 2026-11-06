@@ -159,7 +159,8 @@ Until confirmed, avoid presenting invented business calculations as actual opera
 
 The team's FigJam notes list a **static dashboard target of 3 November 2026** and a **planned partner discussion on 4 November 2026**. These dates reflect the working plan, not completed deliverables.
 
-The static Web workflow, local API/D1 reads, and protected write operations are
-implemented separately. The Web still uses synthetic mocks; connecting it to the
-API, implementing real authentication to enable writes, and Telegram reporting
-are future milestones. No API or D1 remote resources have been created or deployed.
+The static Web workflow, API/D1 operations and Telegram reporting are implemented
+as independent units. Web still uses synthetic mocks; API-backed Web operations
+and Web authentication remain future milestones. Existing Workers must be reused.
+The operator confirms remote D1 migration 0004 is applied; deployed API/Bot versions
+remain unverified until inspected. See the [release runbook](docs/ci-cd.md).

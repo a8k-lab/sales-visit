@@ -18,12 +18,15 @@ The Computing Project prioritizes low ongoing cost and manageable operations. A 
 
 Use the Cloudflare Free tier for prototype/MVP where it satisfies requirements. This is a preferred deployment strategy, **not** a promise of unlimited free capacity or a lock-in that prevents future migration.
 
-### Current deployment scope (2026-11-03)
+### Current deployment scope (CI/CD foundation)
 
-Only the web dashboard is configured for deployment. It is a public prototype using synthetic mock data and browser-local persistence, not a production-ready authenticated application. The API now has local-only D1 read integration, shared migrations, and synthetic
-seeding; its placeholder binding is not a provisioned remote resource. API/bot
-remote deployment and real authentication remain future work. Each application
-retains an independent deployment boundary.
+Reuse the existing `sales-visit`, `sales-visit-api` and `sales-visit-bot` Workers.
+Only API binds D1 `DB`; its configured real UUID is not a placeholder. The operator
+confirms remote migration `0004_misty_red_skull.sql` is already applied and must
+not be reapplied. Deployed API/Bot versions remain unverified until inspected.
+The Web is still a public synthetic-data prototype, not an authenticated app.
+Each application retains an independent deployment boundary; automatic CD stays
+OFF until the operator completes the [runbook](../ci-cd.md).
 
 ## Consequences and risks
 

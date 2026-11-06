@@ -24,7 +24,7 @@ repeat on these resources. No frontend tests or business behavior were added.
 ## Pull requests and branch protection
 
 `.github/workflows/ci.yml` runs on **every** PR targeting `main`, including docs
-changes. No workflow-level path exclusion, `pull_request_target`, Cloudflare
+changes and PRs retargeted to `main` (`edited` events). No workflow-level path exclusion, `pull_request_target`, Cloudflare
 credentials or deployment environment is used. Permissions are `contents: read`.
 Checkout credentials are not persisted. Third-party actions are commit-SHA pinned;
 Node 24 and pnpm 10.30.1 are explicit. Installation uses the frozen lockfile.
@@ -63,7 +63,8 @@ contracts, DB and API tests. Bot checks typecheck its RPC dependency and run
 `apps/api/tests/bot-*.test.mjs`, including the API/Bot integration tests. Web checks
 typecheck and production build. DB changes also run Drizzle `db:check`; DB tests
 apply every SQL migration to local in-memory SQLite and exercise constraints.
-Deployment tooling/workflow changes run `pnpm test:deployment` and checksum-pinned
+Deployment tooling/workflow changes, app `package.json` deploy-script changes,
+app Wrangler configs and app scripts run `pnpm test:deployment` and checksum-pinned
 `actionlint` 1.7.12. These jobs need no external service credentials.
 
 ## Operator setup (do not automate)
@@ -152,6 +153,8 @@ Before any selected release is written, the helper:
 - Requires Bot's exact Service Binding/entrypoint and existing secret **names**
   `TELEGRAM_BOT_TOKEN`/`TELEGRAM_WEBHOOK_SECRET`, never their values.
 - Requires Web assets at `./dist` with SPA fallback and no Worker entrypoint.
+- Rejects explicitly disabled `workers_dev` before any upload; omission/default
+  or `true` is allowed, but the existing remote workers.dev origin must be enabled.
 
 The existing `scripts/cloudflare-remote.mjs` target validation remains in the API
 deploy path. Its migration/verification commands remain separate operator actions.
@@ -162,6 +165,79 @@ Unapproved `--name`, `--env` and extra CLI arguments are refused. No arbitrary
 Wrangler command can be supplied by dispatch. Local deploy commands now require
 the same token/account/URL settings and `RELEASE_REVISION` equal to current
 `main`; prefer the approved workflow rather than bypassing wrappers.
+
+### Source and Web artifact provenance
+
+The wrapper refuses tracked, staged and untracked working-tree changes. It then
+exports only tracked files from the verified Git commit into a private temporary
+snapshot; a later caller edit, ignored `.env`/`.dev.vars`, old `dist`, or original
+workspace symlink cannot become tagged source. Dependencies are installed from the
+frozen lockfile into that snapshot using the already populated pnpm store
+(`--offline --ignore-scripts`, no Cloudflare credentials). Preserve the configured
+pnpm store location; if required packages are unavailable offline, fail rather than
+fall back to the mutable checkout. Run the normal frozen install first.
+
+For Web the wrapper removes snapshot `dist` and runs the existing `pnpm build:web`
+there before invoking Wrangler from the snapshot workspace. An earlier caller
+`pnpm build:web` is useful for local validation but is never deployment provenance.
+The release orchestrator does not build Web twice: actual deployment builds in
+the wrapper; validation-only dispatch builds locally without invoking the wrapper.
+All snapshots are removed on ordinary success/failure, and the current-main check
+is repeated after preparation. Abrupt runner termination may leave a local temp
+directory; it contains no copied dotenv files or deployment credentials.
+
+### Bot RPC compatibility without Telegram credentials
+
+`BotIdentity` existence and `/health` alone do not prove `visitWizard` support.
+There is no existing public API compatibility endpoint or safe HTTP RPC probe.
+Do not add an auth bypass, invoke mutating RPCs, or use Telegram credentials.
+Instead, the release checks the verified active API's full Git revision tag:
+it must equal the release revision, or be an available ancestor with no changes
+to API/shared runtime inputs according to the same conservative impact rules
+(API, contracts, DB, root manifest/lockfile/toolchain). Current API/Bot integration
+tests validate the checked-out contract. Unknown history, missing tags or changed
+API inputs block Bot-only release even if the API is healthy; explicitly release
+current API first, then Bot, or select `all` if the existing targets pass preflight.
+Changes confined to Bot do not force an unchanged compatible API deployment.
+
+Immediately before Bot upload, both the orchestrator and direct guarded wrapper
+inspect API prerequisites, require this source-compatibility proof, and check API
+health. The orchestrator also refuses a changed API identity/version since its
+last verification. After a combined release, the newly verified API revision
+satisfies the proof. This is conservative source equivalence under sole CD
+ownership, not a claim of live RPC/Telegram E2E coverage.
+
+### Legacy entrypoint/binding recovery: stop rather than bypass
+
+The standard guard intentionally rejects an API without deployed `BotIdentity`
+or a Bot without the correct `IDENTITY` binding, including an `all` baseline.
+It also rejects wrong bindings: never classify a binding to another service as a
+safe missing-binding upgrade. An existing name is not proof that a legacy Worker
+is safe to overwrite. These are separate operator recovery cases, not dispatch
+options. No `skip-bindings`, `skip-migrations`, `force`, or unrestricted deployment
+escape hatch is implemented.
+
+For a legacy target that cannot pass preflight:
+
+1. Keep automatic CD OFF and stop other deployment/resource writers. Record the
+   precise guard failure, account, immutable Worker tag, active deployment/version,
+   database UUID/history through 0004, and existing secret names privately.
+2. Obtain operator/reviewer approval for the exact existing-resource repair and
+   recovery evidence. A normal `all` dispatch cannot repair it by weakening checks.
+3. Prepare a separately reviewed **single-target, exact-version repair**: for API,
+   permit only the recorded absent entrypoint as the pre-state, preserving account,
+   name, immutable identity, D1 binding/UUID/migration and isolated-source guards.
+   Require the repaired API entrypoint/version/revision and health as postconditions
+   before any Bot release. For a genuinely missing Bot binding, permit only that
+   recorded absence; add exactly `IDENTITY` → `sales-visit-api` / `BotIdentity` after
+   API compatibility succeeds, preserving both existing secret names and resource
+   identity. Never repair unknown/wrong bindings or missing resources by guessing.
+4. This pipeline does **not** implement or authorize that repair operation. Review
+   its narrowly scoped tooling/change record separately; do not run unguarded
+   Wrangler commands or add a permanent bypass to make this pipeline pass.
+5. After approved repair and independent post-verification, return to the unchanged
+   strict guards, run validation-only, then perform the approved baseline release.
+   Do not recreate Workers, reapply 0004, rotate secrets or change webhooks.
 
 ## Manual release and activating automatic CD
 
@@ -226,8 +302,12 @@ and use only this deployment owner; never grant broader account permissions to
 work around a guard refusal. GitHub environment deletion between existence check
 and job scheduling has a similar external-administration race. A healthy HTTP
 response verifies liveness, not D1 business operations or Telegram delivery.
-Tags describe deployed code, not an independent durable successful-smoke ledger;
-a smoke failure requires operator inspection before subsequent releases. No
+Tags describe uploaded code, not a durable successful-smoke ledger. Every automatic
+run rechecks health for all unchanged active Workers before returning success or
+mutating another target. Thus a same-revision rerun cannot silently turn an earlier
+committed-but-unhealthy upload green; it must obtain a fresh successful smoke check.
+An unhealthy unchanged Worker blocks the run without rebuilding/redeploying it.
+Investigate failures rather than assuming a tag means a successful release. No
 automatic schema rollback or webhook/secret changes are attempted.
 
 ## Separate manual D1 migration procedure
@@ -270,7 +350,7 @@ Deployment-helper tests mock Cloudflare and subprocesses, including dry-run,
 disabled automation, target errors, migrations, stale revisions and API-before-Bot
 failure handling. They do not need live credentials or perform remote operations.
 
-Implementation validation executed locally: 107 deployment-helper tests and
+Implementation validation executed locally: 127 deployment-helper tests and
 106 workspace tests passed (contracts 15, DB 14, API/Bot 77), frozen installation,
 workspace typechecks, Drizzle validation, lint/format, Web production build and
 `actionlint` 1.7.12. Web retains its existing >500 kB chunk-size warning. No live
