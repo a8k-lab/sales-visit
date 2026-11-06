@@ -25,6 +25,8 @@ export function wranglerArgs(worker, revision) {
     ...(worker === "api" ? ["--minify"] : []),
     "--config",
     "wrangler.jsonc",
+    "--env-file",
+    "/dev/null",
     "--tag",
     revision,
   ];
@@ -69,7 +71,6 @@ export async function deploy(
       CLOUDFLARE_ACCOUNT_ID: account,
       CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_API_TOKEN,
       WRANGLER_CI_MATCH_TAG: target.tag,
-      WRANGLER_LOAD_DOT_ENV_FILES: "false",
       WRANGLER_SEND_METRICS: "false",
       WRANGLER_LOG: "error",
       WRANGLER_LOG_PATH: "/dev/null",

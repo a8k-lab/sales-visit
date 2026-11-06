@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 
-import ts from "typescript";
+import { parse } from "jsonc-parser";
 
 import { validateRemoteTarget } from "../cloudflare-remote.mjs";
 
@@ -11,11 +11,12 @@ export const names = {
 };
 export const root = new URL("../../", import.meta.url);
 export function readJSON(path) {
-  const { config, error } = ts.parseConfigFileTextToJson(
-    path,
-    readFileSync(new URL(path, root), "utf8")
-  );
-  if (error) throw new Error(`Invalid JSON/JSONC: ${path}`);
+  const errors = [];
+  const config = parse(readFileSync(new URL(path, root), "utf8"), errors, {
+    allowTrailingComma: true,
+  });
+  if (errors.length || !config || typeof config !== "object")
+    throw new Error(`Invalid JSON/JSONC: ${path}`);
   return config;
 }
 export function loadTarget(worker) {
@@ -31,23 +32,26 @@ export function validateConfig(worker, config, account, overrides = []) {
   if (
     overrides.length ||
     config.env ||
-    (config.account_id && config.account_id !== account)
+    (config.account_id !== undefined && config.account_id !== account)
   )
     throw new Error("Unapproved environment/account/argument override");
   if (config.name !== names[worker]) throw new Error("Unexpected Worker name");
   // This release path has no alternate routes, environments or resource provisioning.
-  for (const key of [
-    "route",
-    "routes",
-    "build",
-    "legacy_env",
-    "kv_namespaces",
-    "r2_buckets",
-    "queues",
-    "durable_objects",
-    "dispatch_namespaces",
-  ])
-    if (config[key] !== undefined)
+  const allowed = new Set([
+    "$schema",
+    "name",
+    "main",
+    "account_id",
+    "compatibility_date",
+    "compatibility_flags",
+    "workers_dev",
+    "observability",
+    ...(worker === "api" ? ["d1_databases"] : []),
+    ...(worker === "bot" ? ["services", "secrets"] : []),
+    ...(worker === "web" ? ["assets"] : []),
+  ]);
+  for (const key of Object.keys(config))
+    if (!allowed.has(key))
       throw new Error(`Unapproved Wrangler setting: ${key}`);
   if (worker === "api") {
     validateRemoteTarget(config); // Preserve the original remote-operation safeguard.
@@ -55,8 +59,9 @@ export function validateConfig(worker, config, account, overrides = []) {
       config.d1_databases[0].migrations_dir !== "../../packages/db/migrations"
     )
       throw new Error("Unexpected migrations directory");
-    if (config.services?.length)
-      throw new Error("Unexpected API Service Binding");
+    const keys = ["binding", "database_name", "database_id", "migrations_dir"];
+    if (Object.keys(config.d1_databases[0]).some((key) => !keys.includes(key)))
+      throw new Error("Unapproved D1 setting");
   } else if (config.d1_databases?.length)
     throw new Error("Only API may bind D1");
   if (worker === "bot") {
@@ -120,7 +125,7 @@ export function validateBindings(worker, config, bindings) {
 export function requiredMigrations() {
   return readdirSync(new URL("packages/db/migrations/", root))
     .filter((f) => f.endsWith(".sql"))
-    .sort();
+    .toSorted();
 }
 export function validateMigrations(result, required = requiredMigrations()) {
   const query = result?.[0];
@@ -199,6 +204,13 @@ export async function inspect(
   if (version.id !== versions[0].version_id)
     throw new Error("Wrong deployed version");
   validateBindings(worker, config, version.resources?.bindings);
+  if (
+    worker === "api" &&
+    !version.resources?.script?.named_handlers?.some(
+      (h) => h.name === "BotIdentity"
+    )
+  )
+    throw new Error("Existing API BotIdentity entrypoint cannot be verified");
   const subdomain = (await api("/workers/subdomain")).subdomain;
   const enabled = (await api(`${prefix}/subdomain`)).enabled;
   if (

@@ -37,6 +37,8 @@ jobs:
       - run: pnpm check
       - if: needs.changes.outputs.helpers == 'true'
         run: pnpm test:deployment
+      - if: needs.changes.outputs.helpers == 'true'
+        run: bash scripts/ci/lint-workflows.sh
   web:
     runs-on: ubuntu-latest
     needs: changes
