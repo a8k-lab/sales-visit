@@ -6,7 +6,7 @@ import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 
 const actor = (id) => ({ telegramUserId: String(id) });
-async function setup(t) {
+async function setup(t, legacy = false) {
   const bundle = await build({
     entryPoints: [new URL("../src/worker.ts", import.meta.url).pathname],
     bundle: true,
@@ -42,6 +42,28 @@ async function setup(t) {
   for (const file of readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
     .toSorted()) {
+    if (legacy && file.startsWith("0003_")) {
+      await db.batch([
+        db.prepare(
+          "INSERT INTO outlets (id, name) VALUES ('legacy-o', 'Legacy synthetic')"
+        ),
+        db.prepare(
+          "INSERT INTO sales_force (id, name) VALUES ('legacy-s', 'Legacy SF')"
+        ),
+        db.prepare(
+          "INSERT INTO products (id, name) VALUES ('legacy-p', 'Legacy product')"
+        ),
+        db.prepare(
+          "INSERT INTO visits (id, outlet_id, sales_force_id, visited_at, submission_channel) VALUES ('legacy-v', 'legacy-o', 'legacy-s', 1, 'web')"
+        ),
+        db.prepare(
+          "INSERT INTO stock_reports (id, outlet_id, reporter_sales_force_id, visit_id, reported_at, submission_channel) VALUES ('legacy-r', 'legacy-o', 'legacy-s', 'legacy-v', 2, 'telegram')"
+        ),
+        db.prepare(
+          "INSERT INTO stock_report_items VALUES ('legacy-r', 'legacy-p', 7)"
+        ),
+      ]);
+    }
     const sql = readFileSync(new URL(file, dir), "utf8").replace(
       /^\s*--.*$/gm,
       ""
@@ -97,6 +119,57 @@ async function setup(t) {
   };
   return { db, rpc, api: await mf.getWorker("api") };
 }
+
+test("schedule migration upgrades populated D1 without resetting reporting history", async (t) => {
+  const { db, rpc } = await setup(t, true);
+  const outlet = await rpc("getOutlet", 1, { id: "legacy-o" });
+  assert.equal(outlet.data.name, "Legacy synthetic");
+  assert.equal(outlet.data.updatedAt, null);
+  assert.equal(
+    (
+      await db
+        .prepare("SELECT visited_at FROM visits WHERE id = 'legacy-v'")
+        .first()
+    ).visited_at,
+    1
+  );
+  assert.equal(
+    (
+      await db
+        .prepare("SELECT visit_id FROM stock_reports WHERE id = 'legacy-r'")
+        .first()
+    ).visit_id,
+    "legacy-v"
+  );
+  assert.equal(
+    (
+      await db
+        .prepare(
+          "SELECT quantity FROM stock_report_items WHERE stock_report_id = 'legacy-r'"
+        )
+        .first()
+    ).quantity,
+    7
+  );
+  assert.equal(
+    (
+      await rpc("createSchedule", 1, {
+        salesForceId: "legacy-s",
+        outletId: "legacy-o",
+        weekday: 7,
+      })
+    ).ok,
+    true
+  );
+  assert.equal(
+    (await rpc("deleteOutlet", 1, { id: "legacy-o" })).code,
+    "referenced"
+  );
+  assert.deepEqual(
+    (await db.prepare("PRAGMA foreign_key_check").all()).results,
+    []
+  );
+});
 
 test("role-aware recurring schedule provisioning and queries over Worker RPC", async (t) => {
   const { db, rpc, api } = await setup(t);
@@ -239,6 +312,27 @@ test("role-aware recurring schedule provisioning and queries over Worker RPC", a
       "salesForceName",
     ].toSorted()
   );
+
+  assert.deepEqual(
+    (await db.prepare("SELECT * FROM visit_schedules ORDER BY id").all())
+      .results,
+    before
+  );
+  await db
+    .prepare(
+      "CREATE TRIGGER fail_schedule AFTER INSERT ON visit_schedules BEGIN SELECT RAISE(ABORT, 'sensitive synthetic SQL detail'); END"
+    )
+    .run();
+  assert.deepEqual(
+    await rpc("createSchedule", 1, { ...assignment, weekday: 3 }),
+    { ok: false, code: "unavailable" }
+  );
+  assert.deepEqual(
+    (await db.prepare("SELECT * FROM visit_schedules ORDER BY id").all())
+      .results,
+    before
+  );
+  await db.prepare("DROP TRIGGER fail_schedule").run();
 
   // Permission and SF association are resolved again, including subsequent pages.
   const pendingOwn = await rpc("ownSchedule", 3, {});
