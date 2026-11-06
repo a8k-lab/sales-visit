@@ -203,6 +203,16 @@ export async function inspect(
   const version = await api(`${prefix}/versions/${versions[0].version_id}`);
   if (version.id !== versions[0].version_id)
     throw new Error("Wrong deployed version");
+  // Script-version metadata supplies bindings/handlers, not annotations.
+  // The Workers API accepts the verified Worker name; request the exact active
+  // version UUID, never "latest" (which may be an undeployed upload).
+  const annotatedVersion = await api(
+    `/workers/workers/${names[worker]}/versions/${version.id}`
+  );
+  if (annotatedVersion.id !== version.id)
+    throw new Error(
+      "Revision annotation does not belong to the active version"
+    );
   validateBindings(worker, config, version.resources?.bindings);
   if (
     worker === "api" &&
@@ -238,7 +248,7 @@ export async function inspect(
     tag: script.tag,
     deployment: deployment.id,
     version: version.id,
-    revision: version.annotations?.["workers/tag"],
+    revision: annotatedVersion.annotations?.["workers/tag"],
     url,
   };
 }

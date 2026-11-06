@@ -136,7 +136,12 @@ Before any selected release is written, the helper:
 - Lists existing scripts and requires exactly the intended name and immutable
   script tag. Missing/inaccessible Workers never become a create fallback.
 - Reads the active deployment/version; split traffic, unknown versions, binding
-  mismatches and inaccessible metadata fail closed.
+  mismatches and inaccessible metadata fail closed. Script-version metadata
+  (`/workers/scripts/{name}/versions/{version_id}`) supplies bindings/handlers;
+  the documented Worker-version endpoint
+  (`/workers/workers/{name}/versions/{version_id}`) supplies revision annotations.
+  Both responses must match the exact active deployment's version UUID, never
+  `latest`. Missing or incorrect commit annotations cannot pass post-deploy checks.
 - Requires API `DB` to match the configured real UUID and independently fetched
   D1 name `sales-visit`/UUID. Requires the deployed `BotIdentity` named entrypoint.
 - Uses only `SELECT name FROM d1_migrations ORDER BY id` and compares every local

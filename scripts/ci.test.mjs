@@ -57,7 +57,23 @@ const history = () => [
   { success: true, results: requiredMigrations().map((name) => ({ name })) },
 ];
 const url = (w) => `https://${names[w]}.verified-subdomain.workers.dev`;
-function fixture(worker = "api", replace = {}) {
+const oldVersion = "11111111-1111-4111-8111-111111111111";
+const newVersion = "22222222-2222-4222-8222-222222222222";
+const oldDeployment = "33333333-3333-4333-8333-333333333333";
+const newDeployment = "44444444-4444-4444-8444-444444444444";
+// Separate documented schemas: scripts/versions supplies resources, while
+// workers/versions supplies annotations. Neither is a combined response.
+// https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/versions/methods/get/
+// https://developers.cloudflare.com/api/resources/workers/subresources/beta/subresources/workers/subresources/versions/methods/get/
+function fixture(
+  worker = "api",
+  replace = {},
+  {
+    versionId = oldVersion,
+    deploymentId = oldDeployment,
+    annotations = { "workers/tag": older },
+  } = {}
+) {
   const prefix = `/workers/scripts/${names[worker]}`;
   const data = {
     "": { id: account },
@@ -68,18 +84,27 @@ function fixture(worker = "api", replace = {}) {
     [`${prefix}/deployments`]: {
       deployments: [
         {
-          id: "deployment-old",
-          versions: [{ version_id: "version-old", percentage: 100 }],
+          id: deploymentId,
+          created_on: "2026-11-06T00:00:00Z",
+          source: "api",
+          strategy: "percentage",
+          versions: [{ version_id: versionId, percentage: 100 }],
         },
       ],
     },
-    [`${prefix}/versions/version-old`]: {
-      id: "version-old",
-      annotations: { "workers/tag": older },
+    [`${prefix}/versions/${versionId}`]: {
+      id: versionId,
       resources: {
         bindings: bindings(worker),
         script: { named_handlers: [{ name: "BotIdentity" }] },
       },
+    },
+    [`/workers/workers/${names[worker]}/versions/${versionId}`]: {
+      id: versionId,
+      created_on: "2026-11-06T00:00:00Z",
+      number: 1,
+      urls: [],
+      annotations,
     },
     "/workers/subdomain": { subdomain: "verified-subdomain" },
     [`${prefix}/subdomain`]: { enabled: true },
@@ -239,6 +264,141 @@ for (const worker of workers)
       else assert.equal(options.method, "GET");
     }
   });
+test("successful deploy subprocess is verified using the active version's documented annotations", async () => {
+  const before = fixture();
+  const after = fixture(
+    "api",
+    {},
+    {
+      versionId: newVersion,
+      deploymentId: newDeployment,
+      annotations: { "workers/tag": revision },
+    }
+  );
+  let current = before;
+  const verify = () =>
+    inspect("api", { account, api: current.api, url: url("api") });
+  const state = await verify();
+  const calls = [];
+  await executePlan(["api"], {
+    states: { api: state },
+    revision,
+    check: () => {},
+    verify,
+    run: (args, env) =>
+      command(args, env, (binary, argv) => {
+        assert.equal(binary, "pnpm");
+        assert.deepEqual(argv, ["deploy:api"]);
+        assert.equal(env.RELEASE_REVISION, revision);
+        calls.push("deploy");
+        current = after;
+        return { status: 0 };
+      }),
+    health: async (target) => {
+      assert.equal(target.version, newVersion);
+      assert.equal(target.deployment, newDeployment);
+      assert.equal(target.revision, revision);
+      calls.push("health");
+    },
+    report: () => {},
+    env: {},
+  });
+  assert.deepEqual(calls, ["deploy", "health"]);
+  const paths = after.requests.map((r) => r.path);
+  assert.ok(
+    paths.includes(`/workers/scripts/${names.api}/versions/${newVersion}`)
+  );
+  assert.ok(
+    paths.includes(`/workers/workers/${names.api}/versions/${newVersion}`)
+  );
+  assert.ok(
+    paths.every(
+      (path) => !path.includes("latest") && !path.includes(oldVersion)
+    )
+  );
+});
+for (const [label, metadata, expected] of [
+  ["missing annotations", { id: newVersion }, /does not match/],
+  ["missing tag", { id: newVersion, annotations: {} }, /does not match/],
+  [
+    "incorrect revision",
+    { id: newVersion, annotations: { "workers/tag": older } },
+    /does not match/,
+  ],
+  [
+    "malformed revision",
+    { id: newVersion, annotations: { "workers/tag": "invalid" } },
+    /does not match/,
+  ],
+  [
+    "different version",
+    { id: oldVersion, annotations: { "workers/tag": revision } },
+    /active version/,
+  ],
+])
+  test(`post-deploy verification fails safely with ${label}`, async () => {
+    const before = fixture();
+    const after = fixture(
+      "api",
+      {
+        [`/workers/workers/${names.api}/versions/${newVersion}`]: {
+          created_on: "2026-11-06T00:00:00Z",
+          number: 2,
+          urls: [],
+          ...metadata,
+        },
+      },
+      { versionId: newVersion, deploymentId: newDeployment }
+    );
+    let current = before;
+    const verify = () =>
+      inspect("api", { account, api: current.api, url: url("api") });
+    const state = await verify();
+    const calls = [];
+    await assert.rejects(
+      executePlan(["api", "bot"], {
+        states: { api: state },
+        revision,
+        check: () => {},
+        verify,
+        run: (args) =>
+          command(args, {}, () => {
+            assert.deepEqual(args, ["deploy:api"]);
+            calls.push("deploy:api");
+            current = after;
+            return { status: 0 };
+          }),
+        health: () =>
+          assert.fail(
+            "unverified deployment must not pass health or release Bot"
+          ),
+        report: () => {},
+        env: {},
+      }),
+      expected
+    );
+    assert.deepEqual(calls, ["deploy:api"]);
+  });
+test("script-version identity and bindings remain independently verified", async () => {
+  for (const [value, expected] of [
+    [
+      { id: newVersion, resources: { bindings: bindings("api") } },
+      /Wrong deployed version/,
+    ],
+    [{ id: oldVersion, resources: { bindings: [] } }, /D1 binding/],
+  ]) {
+    await assert.rejects(
+      inspect("api", {
+        account,
+        url: url("api"),
+        api: fixture("api", {
+          [`/workers/scripts/${names.api}/versions/${oldVersion}`]: value,
+        }).api,
+      }),
+      expected
+    );
+  }
+});
 for (const [label, replace, expected] of [
   [
     "wrong authenticated account",
