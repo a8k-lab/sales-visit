@@ -18,7 +18,13 @@ const storedPlanningIdSchema = z.string().refine((id) => id.trim().length > 0);
 export const planningIdSchema = storedPlanningIdSchema
   .max(256)
   .refine(printable);
-const nameSchema = z.string().trim().min(1).max(256).refine(printable);
+const nameSchema = z
+  .string()
+  .refine(printable)
+  .refine((value) => !/\p{Cf}/u.test(value))
+  .trim()
+  .min(1)
+  .max(256);
 // Stored epoch milliseconds may predate 1970; never normalize legacy values.
 const timestampSchema = z.number().int().safe();
 // Private business metadata only; outletSchema remains the public projection.
@@ -119,7 +125,7 @@ export const ownScheduleFilterSchema = z
 export const scheduleFilterSchema = ownScheduleFilterSchema
   .extend({
     salesForceId: planningIdSchema.optional(),
-    telegramUserId: telegramUserIdSchema.optional(),
+    telegramUserId: telegramUserIdSchema.max(256).optional(),
   })
   .refine(
     (filter) =>

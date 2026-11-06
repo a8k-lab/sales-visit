@@ -29,7 +29,10 @@ export function jakartaWeekday(now = new Date()): number {
   );
 }
 function schedule(row: ScheduleDetail) {
-  return `Hari: ${indonesianWeekdays[row.weekday - 1]}\nNama Outlet: ${label(row.outletName)}\nID Outlet Bisnis: ${row.outletBusinessId === null ? "belum didata" : displayId(row.outletBusinessId)}\nNo. RS: ${row.outletNoRs === null ? "belum didata" : label(row.outletNoRs)}\nInternal ID/token (Visit): ${displayId(row.outletId)}\nSales Force: ${label(row.salesForceName)}\nSales Force ID bisnis: ${displayId(row.salesForceId)}\nTelegram ID: ${row.telegramUserId ?? "asosiasi aktif unik belum terverifikasi"}`;
+  return [
+    `Hari: ${indonesianWeekdays[row.weekday - 1]}\nNama Outlet: ${label(row.outletName)}\nID Outlet Bisnis: ${row.outletBusinessId === null ? "belum didata" : displayId(row.outletBusinessId)}\nNo. RS: ${row.outletNoRs === null ? "belum didata" : label(row.outletNoRs)}\nInternal ID/token (Visit): ${displayId(row.outletId)}`,
+    `Sales Force: ${label(row.salesForceName)}\nSales Force ID bisnis: ${displayId(row.salesForceId)}\nTelegram ID: ${row.telegramUserId === null ? "asosiasi aktif unik belum terverifikasi" : label(row.telegramUserId)}`,
+  ];
 }
 export function scheduleCommands(bot: Bot, api: BotIdentityService) {
   bot.command("jadwal", async (ctx) => {
@@ -58,7 +61,7 @@ export function scheduleCommands(bot: Bot, api: BotIdentityService) {
     const day = input.weekday ? indonesianWeekdays[input.weekday - 1] : "semua";
     await replyBlocks(ctx, [
       `JADWAL SAYA — ${day}\nRencana berulang, bukan Visit selesai.`,
-      ...page.items.map(schedule),
+      ...page.items.flatMap(schedule),
       ...(!page.items.length ? ["Tidak ada jadwal."] : []),
       ...(page.next ? [nextPage(`/jadwal ${day} after=`, page.next)] : []),
     ]);
@@ -85,7 +88,9 @@ export function scheduleCommands(bot: Bot, api: BotIdentityService) {
             if (positional.length !== 1) throw new Error("args");
             filter.weekday = indonesianWeekdaySchema.parse(positional[0]);
           } else {
-            filter.telegramUserId = telegramIdSchema.parse(positional[0]);
+            filter.telegramUserId = telegramIdSchema
+              .max(256)
+              .parse(positional[0]);
             if (positional[1])
               filter.weekday = indonesianWeekdaySchema.parse(positional[1]);
           }
@@ -132,7 +137,7 @@ export function scheduleCommands(bot: Bot, api: BotIdentityService) {
       .join(" ");
     await replyBlocks(ctx, [
       `JADWAL SALES FORCE${filters ? ` — ${filters}` : ""}\nRencana berulang, bukan Visit selesai.`,
-      ...page.items.map(schedule),
+      ...page.items.flatMap(schedule),
       ...(!page.items.length ? ["Tidak ada jadwal."] : []),
       ...(page.next
         ? [

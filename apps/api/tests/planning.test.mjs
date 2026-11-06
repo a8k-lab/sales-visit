@@ -6,6 +6,11 @@ import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 
 const actor = (id) => ({ telegramUserId: String(id) });
+const newOutlet = (name) => ({
+  name,
+  businessId: crypto.randomUUID(),
+  noRs: "0001",
+});
 async function setup(t, legacy = false) {
   const bundle = await build({
     entryPoints: [new URL("../src/worker.ts", import.meta.url).pathname],
@@ -64,6 +69,19 @@ async function setup(t, legacy = false) {
         ),
       ]);
     }
+    if (legacy && file.startsWith("0006_")) {
+      await db.batch([
+        db.prepare(
+          "INSERT INTO visit_schedules (id, sales_force_id, outlet_id, weekday) VALUES ('legacy-schedule', 'legacy-s', 'legacy-o', 1)"
+        ),
+        db.prepare(
+          "INSERT INTO users (id, status, role, sales_force_id) VALUES ('legacy-user', 'active', 'sales_force', 'legacy-s')"
+        ),
+        db.prepare(
+          `INSERT INTO telegram_visit_drafts (user_id, submission_key, sales_force_id, step, payload, last_message, expires_at) VALUES ('legacy-user', 'legacy-draft', 'legacy-s', 'review', '{"outletId":"legacy-o"}', 1, 1)`
+        ),
+      ]);
+    }
     const sql = readFileSync(new URL(file, dir), "utf8").replace(
       /^\s*--.*$/gm,
       ""
@@ -119,6 +137,219 @@ async function setup(t, legacy = false) {
   };
   return { db, rpc, api: await mf.getWorker("api") };
 }
+
+test("business identifiers are opaque, unique, immutable and explicitly namespaced", async (t) => {
+  const { db, rpc, api } = await setup(t);
+  const input = { businessId: "000123", noRs: "00045", name: "Synthetic" };
+  const races = await Promise.all(
+    Array.from({ length: 6 }, () => rpc("createOutlet", 1, input))
+  );
+  assert.equal(races.filter((r) => r.ok).length, 1);
+  assert.equal(races.filter((r) => r.code === "duplicate").length, 5);
+  const row = races.find((r) => r.ok).data;
+  assert.equal(row.businessId, "000123");
+  assert.equal(row.noRs, "00045");
+  assert.notEqual(row.id, row.businessId);
+  assert.equal(
+    (await rpc("createOutlet", 1, { ...input, businessId: "000124" })).ok,
+    true
+  ); // No. RS is not unique
+  await db
+    .prepare(
+      "INSERT INTO outlets (id, name) VALUES ('000123', 'Legacy collision')"
+    )
+    .run();
+  assert.equal(
+    (await rpc("getOutlet", 2, { businessId: "000123" })).data.id,
+    row.id
+  );
+  assert.equal(
+    (await rpc("getOutlet", 2, { id: "000123" })).data.name,
+    "Legacy collision"
+  );
+  assert.equal(
+    (await rpc("getOutlet", 1, { id: "000123", businessId: "000123" })).code,
+    "invalid"
+  );
+  assert.equal(
+    (await rpc("getOutlet", 1, { identifier: "000123" })).code,
+    "invalid"
+  );
+  const changed = await rpc("updateOutlet", 1, {
+    businessId: "000123",
+    noRs: "00046",
+    name: "Renamed",
+  });
+  assert.equal(changed.data.businessId, input.businessId);
+  assert.equal(changed.data.id, row.id);
+  assert.equal(changed.data.noRs, "00046");
+  assert.equal(
+    (
+      await rpc("updateOutlet", 1, {
+        id: row.id,
+        businessId: "replacement",
+        noRs: "x",
+        name: "No",
+      })
+    ).code,
+    "invalid"
+  );
+  for (const value of [
+    "",
+    " ",
+    "x".repeat(257),
+    "a\u0000b",
+    "a\u0085b",
+    "a\u202eb",
+    123,
+  ]) {
+    for (const field of ["businessId", "noRs"])
+      assert.equal(
+        (await rpc("createOutlet", 1, { ...input, [field]: value })).code,
+        "invalid"
+      );
+    assert.equal(
+      (
+        await rpc("updateOutlet", 1, {
+          businessId: input.businessId,
+          noRs: value,
+          name: "No",
+        })
+      ).code,
+      "invalid"
+    );
+  }
+  for (const incomplete of [
+    { name: "No" },
+    { ...input, noRs: undefined },
+    { ...input, businessId: undefined },
+  ])
+    assert.equal((await rpc("createOutlet", 1, incomplete)).code, "invalid");
+  for (const by of [3, 5, 6, 7, 8, 999]) {
+    for (const method of ["listOutlets", "getOutlet"])
+      assert.equal(
+        (
+          await rpc(
+            method,
+            by,
+            method === "getOutlet" ? { businessId: input.businessId } : {}
+          )
+        ).code,
+        "forbidden"
+      );
+  }
+  for (const by of [2, 3, 5, 6, 7, 8, 999]) {
+    for (const [method, data] of [
+      ["createOutlet", { ...input, businessId: "denied" }],
+      ["updateOutlet", { businessId: input.businessId, noRs: "x", name: "No" }],
+      ["deleteOutlet", { businessId: input.businessId }],
+    ])
+      assert.equal((await rpc(method, by, data)).code, "forbidden");
+  }
+  const publicRows = await (await api.fetch("https://api/outlets")).json();
+  assert.ok(
+    publicRows.every((o) => Object.keys(o).toSorted().join() === "id,name")
+  );
+  assert.equal(
+    (await rpc("getOutlet", 1, { id: "000123" })).data.businessId,
+    null
+  );
+  assert.equal(
+    (await rpc("deleteOutlet", 1, { businessId: input.businessId })).data.id,
+    row.id
+  );
+  assert.equal((await rpc("getOutlet", 1, { id: "000123" })).ok, true);
+});
+
+test("Telegram filters resolve only unique live SF links, never duplicate schedules", async (t) => {
+  const { db, rpc } = await setup(t);
+  const outlet = (await rpc("createOutlet", 1, newOutlet("Filter"))).data;
+  await rpc("createSchedule", 1, {
+    salesForceId: "sf-a",
+    outletId: outlet.id,
+    weekday: 1,
+  });
+  for (const telegramUserId of ["03", "0", "-3", "+3", "3.0", "3e0", " 3", 3])
+    assert.equal(
+      (await rpc("listSchedules", 1, { telegramUserId })).code,
+      "invalid"
+    );
+  assert.equal(
+    (
+      await rpc("listSchedules", 1, {
+        telegramUserId: "3",
+        salesForceId: "sf-a",
+      })
+    ).code,
+    "invalid"
+  );
+  assert.equal(
+    (await rpc("listSchedules", 3, { telegramUserId: "4" })).code,
+    "forbidden"
+  );
+  // Disabled link still reserves this SF, so selecting 3 must not guess.
+  assert.equal(
+    (await rpc("listSchedules", 1, { telegramUserId: "3" })).code,
+    "association_unavailable"
+  );
+  assert.equal(
+    (await rpc("listSchedules", 1, { salesForceId: "sf-a" })).data.items.length,
+    1
+  );
+  assert.equal(
+    (await rpc("listSchedules", 1, {})).data.items[0].telegramUserId,
+    null
+  );
+  await db
+    .prepare("UPDATE users SET sales_force_id = NULL WHERE id = 'u-9'")
+    .run();
+  const telegramUserId = "900719925474099312345";
+  await db
+    .prepare(
+      "UPDATE telegram_identities SET telegram_user_id = ? WHERE user_id = 'u-3'"
+    )
+    .bind(telegramUserId)
+    .run();
+  const page = await rpc("listSchedules", 2, { telegramUserId, weekday: 1 });
+  assert.equal(page.data.items.length, 1);
+  assert.equal(page.data.items[0].telegramUserId, telegramUserId);
+  assert.equal(page.data.items[0].outletNoRs, "0001");
+  assert.equal(
+    (await rpc("listSchedules", 2, { telegramUserId, weekday: 2 })).data.items
+      .length,
+    0
+  );
+  assert.equal(
+    (
+      await rpc("listSchedules", 2, {
+        telegramUserId,
+        after: page.data.items[0].id,
+      })
+    ).data.items.length,
+    0
+  );
+  for (const id of ["3", "999", "5", "8", "9"])
+    assert.equal(
+      (await rpc("listSchedules", 2, { telegramUserId: id })).code,
+      "association_unavailable"
+    );
+  for (const change of [
+    "status = 'disabled'",
+    "status = 'active', role = 'supervisor'",
+    "role = 'sales_force', sales_force_id = NULL",
+  ]) {
+    await db.prepare(`UPDATE users SET ${change} WHERE id = 'u-3'`).run();
+    assert.equal(
+      (await rpc("listSchedules", 2, { telegramUserId })).code,
+      "association_unavailable"
+    );
+    assert.equal(
+      (await rpc("listSchedules", 2, { salesForceId: "sf-a" })).data.items
+        .length,
+      1
+    );
+  }
+});
 
 test("Outlet mutations reject unreportable 64-bit timestamps atomically", async (t) => {
   const { db, rpc } = await setup(t);
@@ -213,7 +444,7 @@ test("optional planning filters default through one-argument Worker RPC calls", 
       code: "invalid",
     });
   }
-  const id = (await rpc("createOutlet", 1, { name: "Default filters" })).data
+  const id = (await rpc("createOutlet", 1, newOutlet("Default filters"))).data
     .id;
   for (const [salesForceId, weekday] of [
     ["sf-a", 1],
@@ -248,7 +479,7 @@ test("optional planning filters default through one-argument Worker RPC calls", 
 test("planning RPC rejects C1 inputs without mutations and retains Unicode names", async (t) => {
   const { db, rpc } = await setup(t);
   const name = "Toko Café 日本 🏪";
-  const created = await rpc("createOutlet", 1, { name });
+  const created = await rpc("createOutlet", 1, newOutlet(name));
   assert.equal(created.ok, true);
   assert.equal(created.data.name, name);
   const id = created.data.id;
@@ -256,7 +487,7 @@ test("planning RPC rejects C1 inputs without mutations and retains Unicode names
   for (const code of [0x80, 0x85, 0x9f]) {
     const invalid = `a${String.fromCharCode(code)}b`;
     for (const [method, by, input] of [
-      ["createOutlet", 1, { name: invalid }],
+      ["createOutlet", 1, newOutlet(invalid)],
       ["updateOutlet", 1, { id, name: invalid }],
       ["getOutlet", 1, { id: invalid }],
       ["deleteOutlet", 1, { id: invalid }],
@@ -438,6 +669,8 @@ test("Outlet RPC preserves signed legacy timestamps across reads and mutations",
   const expected = {
     id: "negative-time",
     name: "Legacy",
+    businessId: null,
+    noRs: null,
     createdAt,
     updatedAt,
   };
@@ -467,7 +700,7 @@ test("Outlet RPC preserves signed legacy timestamps across reads and mutations",
       assert.deepEqual(
         await db
           .prepare(
-            "SELECT id, name, created_at AS createdAt, updated_at AS updatedAt FROM outlets WHERE id = ?"
+            "SELECT id, name, business_id AS businessId, no_rs AS noRs, created_at AS createdAt, updated_at AS updatedAt FROM outlets WHERE id = ?"
           )
           .bind(expected.id)
           .first(),
@@ -545,11 +778,35 @@ test("documented optional synthetic schedule seed is repeatable without report w
   );
 });
 
-test("schedule migration upgrades populated D1 without resetting reporting history", async (t) => {
+test("0006 upgrades populated 0005 D1 without resetting reporting history or drafts", async (t) => {
   const { db, rpc } = await setup(t, true);
   const outlet = await rpc("getOutlet", 1, { id: "legacy-o" });
   assert.equal(outlet.data.name, "Legacy synthetic");
   assert.equal(outlet.data.updatedAt, null);
+  assert.equal(outlet.data.businessId, null);
+  assert.equal(outlet.data.noRs, null);
+  assert.equal(
+    (
+      await db
+        .prepare(
+          "SELECT outlet_id FROM visit_schedules WHERE id = 'legacy-schedule'"
+        )
+        .first()
+    ).outlet_id,
+    "legacy-o"
+  );
+  assert.deepEqual(
+    JSON.parse(
+      (
+        await db
+          .prepare(
+            "SELECT payload FROM telegram_visit_drafts WHERE user_id = 'legacy-user'"
+          )
+          .first()
+      ).payload
+    ),
+    { outletId: "legacy-o" }
+  );
   assert.equal(
     (
       await db
@@ -598,8 +855,8 @@ test("schedule migration upgrades populated D1 without resetting reporting histo
 
 test("role-aware recurring schedule provisioning and queries over Worker RPC", async (t) => {
   const { db, rpc, api } = await setup(t);
-  const o1 = (await rpc("createOutlet", 1, { name: "Outlet A" })).data.id;
-  const o2 = (await rpc("createOutlet", 1, { name: "Outlet B" })).data.id;
+  const o1 = (await rpc("createOutlet", 1, newOutlet("Outlet A"))).data.id;
+  const o2 = (await rpc("createOutlet", 1, newOutlet("Outlet B"))).data.id;
   const assignment = { salesForceId: "sf-a", outletId: o1, weekday: 1 };
   const created = await rpc("createSchedule", 1, assignment);
   assert.equal(created.ok, true);
@@ -735,6 +992,9 @@ test("role-aware recurring schedule provisioning and queries over Worker RPC", a
       "updatedAt",
       "outletName",
       "salesForceName",
+      "outletBusinessId",
+      "outletNoRs",
+      "telegramUserId",
     ].toSorted()
   );
 
@@ -838,14 +1098,14 @@ test("role-aware recurring schedule provisioning and queries over Worker RPC", a
 
 test("authorized Outlet CRUD over named RPC with migrated local D1", async (t) => {
   const { db, rpc, api } = await setup(t);
-  const create = await rpc("createOutlet", 1, { name: "  Toko sintetis  " });
+  const create = await rpc("createOutlet", 1, newOutlet("  Toko sintetis  "));
   assert.equal(create.ok, true);
   const id = create.data.id;
   assert.equal(create.data.name, "Toko sintetis");
   assert.equal(typeof create.data.updatedAt, "number");
   assert.notEqual(id, "1");
   assert.equal(
-    (await rpc("createOutlet", 1, { name: "Toko sintetis" })).ok,
+    (await rpc("createOutlet", 1, newOutlet("Toko sintetis"))).ok,
     true
   ); // names are labels, not unique keys
   for (const by of [3, 4, 5, 6, 7, 8, 9, 999]) {
@@ -855,7 +1115,7 @@ test("authorized Outlet CRUD over named RPC with migrated local D1", async (t) =
   const before = await db.prepare("SELECT * FROM outlets ORDER BY id").all();
   for (const by of [2, 3, 4, 5, 6, 7, 8, 9, 999]) {
     for (const [method, input] of [
-      ["createOutlet", { name: "Denied" }],
+      ["createOutlet", newOutlet("Denied")],
       ["updateOutlet", { id, name: "Denied" }],
       ["deleteOutlet", { id }],
     ])
@@ -915,7 +1175,7 @@ test("authorized Outlet CRUD over named RPC with migrated local D1", async (t) =
     .run();
   assert.equal((await rpc("deleteOutlet", 1, { id })).code, "referenced");
   const standalone = (
-    await rpc("createOutlet", 1, { name: "Standalone report" })
+    await rpc("createOutlet", 1, newOutlet("Standalone report"))
   ).data.id;
   await db
     .prepare(
@@ -927,7 +1187,7 @@ test("authorized Outlet CRUD over named RPC with migrated local D1", async (t) =
     (await rpc("deleteOutlet", 1, { id: standalone })).code,
     "referenced"
   );
-  const free = (await rpc("createOutlet", 1, { name: "Free" })).data.id;
+  const free = (await rpc("createOutlet", 1, newOutlet("Free"))).data.id;
   assert.equal((await rpc("deleteOutlet", 1, { id: free })).data.id, free);
   assert.equal((await rpc("getOutlet", 1, { id: free })).code, "not_found");
 
@@ -958,7 +1218,7 @@ test("authorized Outlet CRUD over named RPC with migrated local D1", async (t) =
       "CREATE TRIGGER fail_outlet BEFORE INSERT ON outlets BEGIN SELECT RAISE(ABORT, 'sensitive synthetic SQL detail'); END"
     )
     .run();
-  assert.deepEqual(await rpc("createOutlet", 1, { name: "Failure" }), {
+  assert.deepEqual(await rpc("createOutlet", 1, newOutlet("Failure")), {
     ok: false,
     code: "unavailable",
   });
@@ -967,7 +1227,7 @@ test("authorized Outlet CRUD over named RPC with migrated local D1", async (t) =
     .prepare("UPDATE users SET status = 'disabled' WHERE id = 'u-1'")
     .run();
   assert.equal(
-    (await rpc("createOutlet", 1, { name: "Revoked" })).code,
+    (await rpc("createOutlet", 1, newOutlet("Revoked"))).code,
     "forbidden"
   );
   assert.equal((await rpc("getOutlet", 1, { id })).code, "forbidden");

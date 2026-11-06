@@ -65,6 +65,8 @@ test("group middleware ignores ordinary text and allows only private commands to
               data: {
                 id: "out-test",
                 name: args[1].name,
+                businessId: args[1].businessId,
+                noRs: args[1].noRs,
                 createdAt: 1,
                 updatedAt: 1,
               },
@@ -120,8 +122,8 @@ test("group middleware ignores ordinary text and allows only private commands to
     }
   }
   await message(
-    "/tambahoutlet Private",
-    command("/tambahoutlet Private"),
+    "/tambahoutlet 001 002 Private",
+    command("/tambahoutlet 001 002 Private"),
     "private"
   );
   assert.match(replies.join("\n"), /berhasil dibuat/);
