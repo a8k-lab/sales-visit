@@ -1,8 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { rmSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { git } from "./ci/changes.mjs";
-import { cloudflare, inspect, root } from "./ci/targets.mjs";
+import { prepareSource } from "./ci/source.mjs";
+import { cloudflare, inspect, readJSON } from "./ci/targets.mjs";
 
 export function assertCurrentRevision(revision, run = git) {
   if (
@@ -38,6 +41,7 @@ export async function deploy(
     spawn = spawnSync,
     checkRevision = assertCurrentRevision,
     verify = inspect,
+    prepare = prepareSource,
   } = {}
 ) {
   for (const key of [
@@ -52,34 +56,68 @@ export async function deploy(
   const revision = env.RELEASE_REVISION;
   const args = wranglerArgs(worker, revision);
   checkRevision(revision);
-  const account = env.CLOUDFLARE_ACCOUNT_ID;
-  const target = await verify(worker, {
-    account,
-    api: cloudflare(account, env.CLOUDFLARE_API_TOKEN),
-    url: env[`${worker.toUpperCase()}_URL`],
-  });
-  checkRevision(revision);
-  const result = spawn("pnpm", args, {
-    cwd: fileURLToPath(new URL(`apps/${worker}/`, root)),
-    // Do not leak bindings, Wrangler responses, or local dotenv credentials.
-    stdio: "ignore",
-    env: {
+  const source = prepare(revision);
+  try {
+    // Install workspace links inside the snapshot, never against the mutable
+    // caller checkout. The prior frozen install populated pnpm's offline store.
+    const localEnv = {
       PATH: env.PATH,
       HOME: env.HOME,
       TMPDIR: env.TMPDIR,
       CI: "true",
-      CLOUDFLARE_ACCOUNT_ID: account,
-      CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_API_TOKEN,
-      WRANGLER_CI_MATCH_TAG: target.tag,
-      WRANGLER_SEND_METRICS: "false",
-      WRANGLER_LOG: "error",
-      WRANGLER_LOG_PATH: "/dev/null",
-    },
-  });
-  if (result.error || result.status !== 0)
-    throw new Error(
-      `Deployment failed: ${worker}; inspect privately before retrying`
-    );
+      LEFTHOOK: "0",
+    };
+    const local = (command) => {
+      const result = spawn("pnpm", command, {
+        cwd: source.directory,
+        env: localEnv,
+        stdio: "ignore",
+      });
+      if (result.error || result.status !== 0)
+        throw new Error(
+          "Isolated release install/build failed; no deployment invoked"
+        );
+    };
+    local(["install", "--offline", "--frozen-lockfile", "--ignore-scripts"]);
+    if (worker === "web") {
+      rmSync(join(source.directory, "apps/web/dist"), {
+        recursive: true,
+        force: true,
+      });
+      local(["build:web"]);
+    }
+    const account = env.CLOUDFLARE_ACCOUNT_ID;
+    const target = await verify(worker, {
+      account,
+      api: cloudflare(account, env.CLOUDFLARE_API_TOKEN),
+      url: env[`${worker.toUpperCase()}_URL`],
+      config: readJSON(
+        `apps/${worker}/wrangler.jsonc`,
+        pathToFileURL(`${source.directory}/`)
+      ),
+    });
+    checkRevision(revision);
+    const result = spawn("pnpm", args, {
+      cwd: join(source.directory, "apps", worker),
+      // Do not leak bindings, Wrangler responses, or local dotenv credentials.
+      stdio: "ignore",
+      env: {
+        ...localEnv,
+        CLOUDFLARE_ACCOUNT_ID: account,
+        CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_API_TOKEN,
+        WRANGLER_CI_MATCH_TAG: target.tag,
+        WRANGLER_SEND_METRICS: "false",
+        WRANGLER_LOG: "error",
+        WRANGLER_LOG_PATH: "/dev/null",
+      },
+    });
+    if (result.error || result.status !== 0)
+      throw new Error(
+        `Deployment failed: ${worker}; inspect privately before retrying`
+      );
+  } finally {
+    source.cleanup();
+  }
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {

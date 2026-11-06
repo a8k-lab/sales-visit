@@ -10,9 +10,9 @@ export const names = {
   bot: "sales-visit-bot",
 };
 export const root = new URL("../../", import.meta.url);
-export function readJSON(path) {
+export function readJSON(path, base = root) {
   const errors = [];
-  const config = parse(readFileSync(new URL(path, root), "utf8"), errors, {
+  const config = parse(readFileSync(new URL(path, base), "utf8"), errors, {
     allowTrailingComma: true,
   });
   if (errors.length || !config || typeof config !== "object")

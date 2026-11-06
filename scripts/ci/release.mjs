@@ -225,7 +225,8 @@ export async function release({
     );
     run(["--filter", "@sales-visit/db", "db:check"], local);
   }
-  if (targets.includes("web")) run(["build:web"], local);
+  // Actual Web releases build once inside the guarded, isolated deploy wrapper.
+  if (targets.includes("web") && decision.dryRun) run(["build:web"], local);
   await executePlan(targets, {
     dryRun: decision.dryRun,
     states,

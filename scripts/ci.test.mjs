@@ -25,11 +25,7 @@ import {
   validateConfig,
   validateMigrations,
 } from "./ci/targets.mjs";
-import {
-  assertCurrentRevision,
-  deploy,
-  wranglerArgs,
-} from "./cloudflare-deploy.mjs";
+import { assertCurrentRevision, deploy } from "./cloudflare-deploy.mjs";
 
 const account = "a".repeat(32);
 const revision = "b".repeat(40);
@@ -706,16 +702,28 @@ test("guarded Wrangler subprocess pins cwd/config/account/immutable target; supp
       UNTRUSTED: "unused",
     },
     checkRevision: () => {},
+    prepare: () => ({ directory: process.cwd(), cleanup: () => {} }),
     verify: async () => ({ tag: "immutable-api" }),
     spawn: (...args) => {
       calls.push(args);
       return { status: 0 };
     },
   });
-  const [binary, args, opts] = calls[0];
+  const [binary, args, opts] = calls.find((call) => call[1].includes("deploy"));
   assert.equal(binary, "pnpm");
-  assert.deepEqual(args, wranglerArgs("api", revision));
-  assert.ok(opts.cwd.endsWith("/apps/api/"));
+  assert.deepEqual(args, [
+    "exec",
+    "wrangler",
+    "deploy",
+    "--minify",
+    "--config",
+    "wrangler.jsonc",
+    "--env-file",
+    "/dev/null",
+    "--tag",
+    revision,
+  ]);
+  assert.ok(opts.cwd.endsWith("/apps/api"));
   assert.equal(opts.env.CLOUDFLARE_ACCOUNT_ID, account);
   assert.equal(opts.env.WRANGLER_CI_MATCH_TAG, "immutable-api");
   assert.equal(opts.env.UNTRUSTED, undefined);
