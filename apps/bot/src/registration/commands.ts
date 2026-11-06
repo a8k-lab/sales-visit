@@ -78,6 +78,37 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
     }
     const admin =
       response.data?.status === "active" && response.data.role === "admin";
+    const role = response.data?.status === "active" ? response.data.role : null;
+    const planning = [
+      ...(role === "admin" || role === "supervisor"
+        ? [
+            "/outlets [KURSOR] — Daftar Outlet",
+            "/outlet OUTLET_ID — Detail Outlet",
+            "/jadwalsales [hari=HARI] [sf=SALES_FORCE_ID] [after=KURSOR] — Pantau rencana",
+          ]
+        : []),
+      ...(admin
+        ? [
+            "/tambahoutlet NAMA_OUTLET",
+            "/editoutlet OUTLET_ID NAMA_BARU",
+            "/hapusoutlet OUTLET_ID KONFIRMASI — Hapus jika tidak dirujuk",
+            "/tambahjadwal SALES_FORCE_ID OUTLET_ID HARI",
+          ]
+        : []),
+      ...(role === "sales_force"
+        ? [
+            "/jadwal [HARI|semua] [after=KURSOR] — Rencana sendiri; tanpa HARI = hari ini WIB",
+          ]
+        : []),
+      ...(role
+        ? [
+            "HARI: senin, selasa, rabu, kamis, jumat, sabtu, minggu.",
+            "ID/kursor: salin token persis (termasuk awalan ~). ID sederhana boleh langsung; ID lain = ~ + base64url UTF-8 tanpa padding. Bukan kredensial.",
+            "Sales Force ID adalah ID bisnis, bukan Telegram ID. Nama Outlet boleh mengandung spasi dan tidak unik. Salin perintah Berikutnya agar filter tetap sama.",
+            "Jadwal adalah rencana berulang, bukan Visit selesai. Jangan ulangi pembuatan setelah kegagalan sebelum memeriksa daftar.",
+          ]
+        : []),
+    ].join("\n");
     await ctx.reply(
       "/start — Perkenalan\n/help — Bantuan\n/register — Registrasi\n/me — Profil dan status\n\n" +
         (admin
@@ -85,6 +116,7 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
             approvalUsage +
             "\n/reject TELEGRAM_ID — Tolak registrasi\n\n"
           : "Persetujuan akun hanya oleh administrator.\n\n") +
+        (planning ? planning + "\n\n" : "") +
         "Pelaporan Visit dan Stock Report belum tersedia. Jangan kirim data laporan melalui chat ini dulu."
     );
   });

@@ -3,6 +3,7 @@ import { type Bot } from "grammy";
 
 import { outletCommands } from "./outlets/commands.ts";
 import { registerCommands } from "./registration/commands.ts";
+import { scheduleCommands } from "./schedules/commands.ts";
 
 export function installCommands(bot: Bot, api: BotIdentityService) {
   bot.use(async (ctx, next) => {
@@ -33,6 +34,7 @@ export function installCommands(bot: Bot, api: BotIdentityService) {
     }
   });
   outletCommands(bot, api);
+  scheduleCommands(bot, api);
   bot.on("message:text", (ctx) =>
     ctx.reply(
       "Ketik /help untuk melihat perintah yang tersedia. Pelaporan belum tersedia."
