@@ -15,10 +15,11 @@ no source, seed identities or business data were copied. See the broader
 
 - Reuse `outlets.id` (opaque internal FK target) and `name` (non-unique label).
   The API generates a UUID on creation; callers cannot select/change IDs.
-  Only name is editable in this milestone. No business ID, `no_rs`, contact,
-  phone, territory or active flag is inferred. Business ID and `no_rs` remain
-  explicitly deferred until partner validation; they are distinct from each
-  other and the internal ID. This deliberately limits legacy command parity.
+  Migration 0006 adds nullable `business_id` (unique BINARY index) and `no_rs`
+  (nonunique), both opaque strings. Creation requires both plus name; updates
+  change name/No. RS, never either ID. Null metadata on legacy records remains
+  valid. No contact, phone, territory or active flag is inferred. No. RS is not
+  assumed to be a telephone. See [parity handoff](telegram-bot-parity.md).
 - Add nullable `outlets.updated_at`: null means the legacy row's last change
   time is unknown. API create/update sets integer epoch milliseconds at D1
   receipt (second precision). No fabricated migration-time backfill.
@@ -53,16 +54,16 @@ All methods extend the existing **named `BotIdentity` WorkerEntrypoint** and
 the capability; no additional binding/configuration or HTTP route is needed.
 The name is retained for deployment compatibility despite the broader scope.
 
-| Method           | Input (besides actor)                 | Active Admin    | Active Supervisor | Active SF          |
-| ---------------- | ------------------------------------- | --------------- | ----------------- | ------------------ |
-| `listOutlets`    | `{ after? }`                          | Yes             | Yes               | No                 |
-| `getOutlet`      | `{ id }`                              | Yes             | Yes               | No                 |
-| `createOutlet`   | `{ name }`                            | Yes             | No                | No                 |
-| `updateOutlet`   | `{ id, name }`                        | Yes             | No                | No                 |
-| `deleteOutlet`   | `{ id }`                              | If unreferenced | No                | No                 |
-| `listSchedules`  | `{ weekday?, salesForceId?, after? }` | Yes             | Yes               | No                 |
-| `ownSchedule`    | `{ weekday?, after? }`                | No              | No                | Own linked SF only |
-| `createSchedule` | `{ salesForceId, outletId, weekday }` | Yes             | No                | No                 |
+| Method           | Input (besides actor)                                    | Active Admin    | Active Supervisor | Active SF          |
+| ---------------- | -------------------------------------------------------- | --------------- | ----------------- | ------------------ |
+| `listOutlets`    | `{ after? }`                                             | Yes             | Yes               | No                 |
+| `getOutlet`      | `{ id }` or `{ businessId }`                             | Yes             | Yes               | No                 |
+| `createOutlet`   | `{ businessId, noRs, name }`                             | Yes             | No                | No                 |
+| `updateOutlet`   | key + `{ name, noRs }`                                   | Yes             | No                | No                 |
+| `deleteOutlet`   | `{ id }` or `{ businessId }`                             | If unreferenced | No                | No                 |
+| `listSchedules`  | `{ weekday?, salesForceId? OR telegramUserId?, after? }` | Yes             | Yes               | No                 |
+| `ownSchedule`    | `{ weekday?, after? }`                                   | No              | No                | Own linked SF only |
+| `createSchedule` | `{ salesForceId, outletId, weekday }`                    | Yes             | No                | No                 |
 
 Pending/rejected/disabled/unregistered actors get no protected access. SF with
 no valid SF association is also denied. Roles are exclusive: an Admin or
@@ -76,7 +77,14 @@ and checks **current** active status, role and (for own queries) existing SF lin
 Caller-supplied role/status/SF fields in actor envelopes are rejected. Selected
 SF in monitoring/provisioning inputs is a target/filter, never authorization.
 Own filters reject selected identities entirely; arbitrary page cursors cannot
-change the enforced SF scope. No identity profiles appear in planning results.
+change the enforced SF scope. No identity profiles appear in planning results;
+a nullable Telegram ID is included only for a unique current active SF link,
+visible to its own SF or authorized monitoring roles. Telegram filters resolve
+through identities → users → SF in the same authorized batch. All accounts
+reserving that SF count towards ambiguity, including disabled/role-changed users.
+Unlinked, disabled, missing or ambiguous targets return `association_unavailable`.
+Plans are SF-owned; this cannot prove historical Telegram-user ownership. Role
+changes never reassign plans; no historical crosswalk is guessed.
 
 Permission reads, guarded operations and diagnostic reads share a serialized
 D1 `batch`. Mutations also carry the authorization predicate in the actual SQL,
@@ -89,7 +97,8 @@ the existing identity batch pattern; Drizzle owns schema/migrations/relations.
 
 Use `PlanningResult<T>`: `{ ok: true, data }` or `{ ok: false, code }`.
 Codes: `invalid`, `forbidden`, `not_found` (Outlet), `referenced` (Outlet deletion),
-`duplicate` (assignment), `reference_not_found` (assignment SF/Outlet),
+`duplicate` (assignment or Outlet business ID), `reference_not_found` (assignment SF/Outlet),
+`association_unavailable` (Telegram target lacks a unique active SF link),
 `unavailable` (sanitized database failure). Unauthorized callers do not receive
 record-existence diagnostics. No SQL details or profile payloads are returned.
 Validation occurs before database access; malformed input returns `invalid`
@@ -111,8 +120,9 @@ null ends traversal. Each call is a consistent snapshot, not a multi-page frozen
 snapshot: concurrent insertions may precede an already consumed cursor. Cursors
 are not credentials. Details include signed safe-integer epoch-millisecond storage
 timestamps, preserving pre-1970 legacy values (Outlet `updatedAt` nullable);
-schedules additionally include business SF/Outlet names,
-not Telegram/User profile data. Existing public `Outlet` remains `{ id, name }`.
+schedules additionally include business SF/Outlet names, Outlet business ID/No. RS
+and nullable verified Telegram ID, never full User profiles. Private Outlet details
+include nullable business ID/No. RS. Existing public `Outlet` remains `{ id, name }`.
 
 Inputs are strict; names are trimmed, nonblank and bounded to 256 characters.
 Operation IDs and cursors are nonblank and bounded to 256 characters, but are
@@ -141,12 +151,13 @@ const created = await env.IDENTITY.createSchedule(adminActor, {
 
 The Bot handles all result codes, opaque token round-tripping, filter-preserving
 pages and bounded plain-text Telegram messages. See its README for exact grammar
-and limitations; no new RPC or schema changes are needed for this integration.
+and limitations. Migration 0006 must precede the updated API, then dependent Bot.
 Do not expose this capability through a public HTTP proxy/test-auth bypass.
 Telegram handlers now exist; no operational provisioning CLI is introduced. `createSchedule` has
 no retry receipt: an identical retry returns `duplicate`, not a second row.
-Outlet create has no idempotency key; reconcile list results after an ambiguous
-transport failure before retrying. Updates are last-write-wins; no revision
+Outlet create has no retry receipt; the unique business ID prevents duplicate
+business records. Reconcile list/detail results after an ambiguous transport failure
+before retrying; a retry returns `duplicate`, not the first creation receipt. Updates are last-write-wins; no revision
 locking or master-data audit trail is claimed. Access lifecycle audit remains
 unchanged. Production audit/retention and assignment management remain follow-up
 requirements before real operational use.

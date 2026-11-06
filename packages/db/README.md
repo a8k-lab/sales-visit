@@ -31,9 +31,19 @@ type. Only the API should access persistence; Web and Bot use the shared API.
   `stock_report_items`, `users`, `telegram_identities`, `access_audit`, and `visit_schedules`. Sales Force staff
   records and Outlet business records are not application accounts. See
   [identity invariants, operator bootstrap, audit and deferred decisions](IDENTITY.md).
-- Business IDs are caller-supplied opaque nonblank strings; `crypto.randomUUID()` is a
-  reasonable generator, but UUID syntax is not required by storage or contracts.
-  Names are required/nonblank, not unique: no business uniqueness rule is agreed.
+- Internal record IDs are opaque primary/FK keys; API Outlet creation generates
+  UUIDs. They are never replaced by business identifiers. Names are nonunique.
+- New `0006_windy_black_crow.sql` adds nullable TEXT `outlets.business_id` and
+  `no_rs`, plus BINARY/case-sensitive unique index `outlets_business_id_unique`.
+  Multiple null business IDs and duplicate No. RS values are valid. Existing rows
+  receive no invented metadata; leading zeros remain text. API creation requires
+  business ID, No. RS and name, bounds and validates identifiers without case
+  normalization. No. RS is opaque registration/reference data, not a telephone.
+  Update/delete retain internal IDs and all references. No previous migration
+  was edited. 0005 is already deployed; only genuinely pending 0006 is applied
+  manually after review/backup. See [release checklist](../../docs/design/telegram-bot-parity.md#manual-release-checklist).
+  Migration tests cover populated 0005 Visit/Stock Report/Schedule/draft references,
+  nullable legacy metadata, binary uniqueness and foreign keys.
 - Recurring `visit_schedules` link SF → Outlet with ISO weekday 1–7, integer
   millisecond timestamps, restrictive FKs and unique `(sales_force_id, outlet_id,
   weekday)`. Plans never create actual Visits. `outlets.updated_at` is nullable

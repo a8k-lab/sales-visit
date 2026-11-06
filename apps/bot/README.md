@@ -74,49 +74,86 @@ Private chat, active accounts only. Brackets mean optional arguments; do not typ
 the brackets. Arguments are whitespace-separated; quoted strings are **not** a
 supported ID syntax. Names consume the remaining text and may contain spaces.
 
-| Command                                                       | Role                                           |
-| ------------------------------------------------------------- | ---------------------------------------------- |
-| `/outlets [KURSOR]`                                           | Admin, Supervisor                              |
-| `/outlet OUTLET_ID`                                           | Admin, Supervisor                              |
-| `/tambahoutlet NAMA_OUTLET`                                   | Admin                                          |
-| `/editoutlet OUTLET_ID NAMA_BARU`                             | Admin                                          |
-| `/hapusoutlet OUTLET_ID KONFIRMASI`                           | Admin; literal uppercase `KONFIRMASI` required |
-| `/jadwal [HARI\|semua] [after=KURSOR]`                        | Sales Force; own linked business record only   |
-| `/jadwalsales [hari=HARI] [sf=SALES_FORCE_ID] [after=KURSOR]` | Admin, Supervisor                              |
-| `/tambahjadwal SALES_FORCE_ID OUTLET_ID HARI`                 | Admin                                          |
+| Command                                                       | Role                                         |
+| ------------------------------------------------------------- | -------------------------------------------- |
+| `/outlets [KURSOR]`                                           | Admin, Supervisor                            |
+| `/outlet BUSINESS_ID`                                         | Admin, Supervisor                            |
+| `/outletinternal INTERNAL_ID`                                 | Admin, Supervisor; explicit legacy lookup    |
+| `/tambahoutlet BUSINESS_ID NO_RS NAMA_OUTLET`                 | Admin                                        |
+| `/editoutlet BUSINESS_ID NO_RS_BARU NAMA_OUTLET_BARU`         | Admin                                        |
+| `/hapusoutlet BUSINESS_ID KONFIRMASI`                         | Admin; literal uppercase confirmation        |
+| `/editoutletinternal INTERNAL_ID NO_RS_BARU NAMA_OUTLET_BARU` | Admin; legacy metadata/name update           |
+| `/hapusoutletinternal INTERNAL_ID KONFIRMASI`                 | Admin; same deletion protections             |
+| `/jadwal [HARI\|semua] [after=KURSOR]`                        | Sales Force; own linked business record only |
+| `/jadwalsales [hari=HARI] [sf=SALES_FORCE_ID] [after=KURSOR]` | Admin, Supervisor                            |
+| `/jadwalsales [HARI \| TELEGRAM_ID [HARI]] [after=KURSOR]`    | Admin, Supervisor                            |
+| `/tambahjadwal SALES_FORCE_ID OUTLET_ID HARI`                 | Admin                                        |
 
 `HARI`: senin, selasa, rabu, kamis, jumat, sabtu, minggu (case-insensitive).
 `/jadwal` defaults to today in **Asia/Jakarta**, not UTC; `/jadwal semua` shows
 all recurring days. Its follow-up command fixes the original weekday, even over
 midnight. To pass `after=`, specify the day or `semua` first.
 `/jadwalsales` defaults to all days/all SF. Its named options may be in any order,
-with each key at most once; unknown keys are rejected. `/jadwal` rejects SF
+with each key at most once; unknown keys are rejected. Positional forms accept
+one day, one canonical decimal Telegram ID, or Telegram ID followed by day.
+Do not mix positional filters with `hari=`/`sf=`; only trailing `after=` is
+accepted with positional filters. Telegram IDs remain strings, never JS Numbers.
+The API resolves Telegram identity → active User with SF role → business SF,
+requiring exactly one account association (including reserved/disabled links).
+Missing, disabled, role-changed, unlinked or ambiguous targets return a safe
+association error, not all schedules or a guessed record. Named `sf=` still
+queries the business plan regardless of account availability. `/jadwal` rejects SF
 selection entirely. A supplied cursor cannot change the API's own-SF scope.
 
 Examples with synthetic, simple IDs (replace Outlet IDs with actual returned IDs):
 
 ```text
-/tambahoutlet Toko Sintetis Jakarta
-/outlet out-01
-/editoutlet out-01 Nama Baru Sintetis
-/hapusoutlet out-01 KONFIRMASI
+/tambahoutlet 00123 00045 Toko Sintetis Jakarta
+/outlet 00123
+/editoutlet 00123 00046 Nama Baru Sintetis
+/hapusoutlet 00123 KONFIRMASI
 /tambahjadwal sf-01 out-01 senin
 /jadwal
 /jadwal MINGGU
 /jadwal semua
 /jadwalsales hari=senin sf=sf-01
+/jadwalsales 123456789 SeNiN
+/outletinternal out-01
 ```
 
-Outlet IDs are internal opaque keys, not a business code or `no_rs`. SF IDs are
-business-record IDs, **not Telegram IDs**. There is no Bot SF lookup/provisioning
-command yet: obtain verified synthetic SF IDs from the operator. Duplicate Outlet
-names are allowed; identify records by their returned ID. Deletion is blocked by
+Outlet `BUSINESS_ID` is the unique, case-sensitive business identifier; `NO_RS`
+is an opaque registration/reference string, **not a telephone number** and not
+unique. Both preserve leading zeros and exact case; 1–256 UTF-16 units, nonblank,
+no control/format characters. Creation requires both plus a name. Business ID is
+immutable through these operations. Existing records retain null fields displayed
+as **belum didata**, not invented identifiers. No backfill/import operation is
+provided; a reviewed crosswalk is needed to enrich legacy business IDs.
+
+**Breaking grammar change:** the old `/tambahoutlet NAMA_OUTLET` and internal-ID
+edit/delete syntax are retired, not auto-detected. Do not send an old multiword
+name as a command; the first two tokens now always mean business ID and No. RS.
+There is no name-only creation compatibility path or duplicate-record workaround.
+Internal commands are explicit and never fall back to business IDs, even if the
+same token exists in both namespaces. They can update legacy No. RS/name, not IDs.
+
+`OUTLET_ID` in `/tambahjadwal` and `outlet TOKEN` in the Visit wizard **remain
+internal** immutable FK targets. Schedule replies include the internal token for
+that purpose. SF IDs are business-record IDs, **not Telegram IDs**. There is no
+Bot SF lookup/provisioning command yet: obtain verified synthetic SF IDs from
+the operator. Duplicate Outlet names are allowed. Deletion is blocked by
 any Schedule, Visit or Stock Report reference; Bot never bypasses that rule.
 Schedules are weekly plans, **not completed Visits**. No schedule edit/delete,
 exceptions, effective dates or enforcement is added. The separate Visit wizard
-accepts scheduled or unscheduled known Outlet tokens.
+accepts scheduled or unscheduled known Outlet tokens. Replies show Outlet name,
+business ID/No. RS, SF name/business ID and Indonesian day. A Telegram ID is shown
+only for a unique active SF association (own SF or authorized monitoring); missing
+associations are labeled, never guessed. Schedules are business-SF-owned, not a
+historical record of Telegram-user ownership; role changes never reassign plans.
 
 ### Exact opaque token format (planning commands and Visit Outlet entry)
+
+This encoding also applies to business IDs and No. RS arguments containing
+punctuation/Unicode/whitespace. No. RS is displayed as text, not dialable contact data.
 
 - Raw token: nonempty ASCII `[A-Za-z0-9_.-]+`, validated against API limits.
 - Otherwise: `~` followed by **canonical unpadded base64url of the exact UTF-8
@@ -331,6 +368,7 @@ Deferred: OIDC/Web sessions/read authorization, Stock Report/financial reporting
 wizards, schedule editing/deletion/exceptions/effective dates, SF reassignment,
 rejected reapplication, Admin incident recovery, history, exports, financial
 measures, imports and production cutover. Migration `0005_good_puff_adder.sql`
-expands lifecycle audit actions; separately approved releases must apply it before
-API then Bot deployment. No credentials, resources or deployment settings change
-in this parity work.
+is already deployed; the new pending migration is `0006_windy_black_crow.sql`.
+See the exact manual checklist and teammate handoff in
+[parity and handoff](../../docs/design/telegram-bot-parity.md). No credentials,
+resources, automatic CD settings, webhook or deployment bindings change here.
