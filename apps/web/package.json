@@ -7,7 +7,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --noEmit",
     "preview": "vite preview",
-    "deploy": "wrangler deploy",
+    "deploy": "node ../../scripts/cloudflare-deploy.mjs web",
     "preview:worker": "wrangler dev"
   },
   "dependencies": {

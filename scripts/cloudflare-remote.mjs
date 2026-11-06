@@ -46,16 +46,30 @@ export function run(action) {
     );
   }
   validateRemoteTarget(config);
-  const result = spawnSync("pnpm", ["exec", "wrangler", ...args], {
-    cwd,
-    stdio: "inherit",
-  });
+  // Deployment adds existing-resource/account checks; migration actions stay
+  // separate operator-only commands and retain the original target validation.
+  const result =
+    action === "deploy-api"
+      ? spawnSync(
+          process.execPath,
+          [
+            fileURLToPath(new URL("./cloudflare-deploy.mjs", import.meta.url)),
+            "api",
+          ],
+          { stdio: "inherit" }
+        )
+      : spawnSync("pnpm", ["exec", "wrangler", ...args], {
+          cwd,
+          stdio: "inherit",
+        });
   if (result.error) throw new Error("Could not start Wrangler");
   return result.status ?? 1;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
+    if (process.argv.length !== 3)
+      throw new Error("Remote operation arguments/overrides are not allowed");
     process.exitCode = run(process.argv[2]);
   } catch (error) {
     console.error(error.message);
