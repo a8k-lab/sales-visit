@@ -10,6 +10,7 @@ import { Bot, type Context } from "grammy";
 
 import { actor } from "../actor.ts";
 import { label, replyBlocks } from "../planning/shared.ts";
+import { helpSections } from "./help.ts";
 
 const approvalUsage =
   "Format: /approve TELEGRAM_ID admin|supervisor\natau /approve TELEGRAM_ID sales SALES_FORCE_ID\nPastikan identitas Sales Force sudah diverifikasi sebelum menyetujui.";
@@ -53,13 +54,15 @@ async function result<T>(
 }
 function profile(account: Account): string {
   return [
+    "━━━━━━━━━━━━━━━━━━━━",
     "PROFIL PENGGUNA",
+    "━━━━━━━━━━━━━━━━━━━━",
     `Telegram ID: ${account.telegramUserId}`,
-    `Username: ${account.username ?? "-"}`,
-    `Nama: ${[account.firstName, account.lastName].filter(Boolean).join(" ") || "-"}`,
+    `Username: ${label(account.username ?? "-")}`,
+    `Nama: ${label([account.firstName, account.lastName].filter(Boolean).join(" ")) || "-"}`,
     `Role: ${account.role ?? "-"}`,
     `Status: ${account.status}`,
-    `Sales Force ID: ${account.salesForceId ?? "-"}`,
+    `Sales Force ID: ${label(account.salesForceId ?? "-")}`,
     `Terdaftar: ${new Date(account.createdAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`,
   ].join("\n");
 }
@@ -75,9 +78,17 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
       return;
     }
     await ctx.reply(
-      "Selamat datang di Sales Visit!\n\n" +
-        statusMessage(response.data) +
-        "\nKetik /help untuk bantuan."
+      [
+        "Halo! Selamat datang di Sales Visit Bot.",
+        "",
+        "Gunakan /register untuk mendaftarkan akun.",
+        "Gunakan /me untuk melihat profil.",
+        "Gunakan /help untuk melihat panduan.",
+        "Gunakan /salesvisit untuk membuat laporan kunjungan (Sales Force aktif).",
+        "",
+        statusMessage(response.data),
+        "Layanan hanya melalui chat pribadi.",
+      ].join("\n")
     );
   });
   bot.command("help", async (ctx) => {
@@ -86,51 +97,7 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
       await result(ctx, response);
       return;
     }
-    const admin =
-      response.data?.status === "active" && response.data.role === "admin";
-    const role = response.data?.status === "active" ? response.data.role : null;
-    const planning = [
-      ...(role === "admin" || role === "supervisor"
-        ? [
-            "/outlets [KURSOR] — Daftar Outlet",
-            "/outlet OUTLET_ID — Detail Outlet",
-            "/jadwalsales [hari=HARI] [sf=SALES_FORCE_ID] [after=KURSOR] — Pantau rencana",
-          ]
-        : []),
-      ...(admin
-        ? [
-            "/tambahoutlet NAMA_OUTLET",
-            "/editoutlet OUTLET_ID NAMA_BARU",
-            "/hapusoutlet OUTLET_ID KONFIRMASI — Hapus jika tidak dirujuk",
-            "/tambahjadwal SALES_FORCE_ID OUTLET_ID HARI",
-          ]
-        : []),
-      ...(role === "sales_force"
-        ? [
-            "/jadwal [HARI|semua] [after=KURSOR] — Rencana sendiri; tanpa HARI = hari ini WIB",
-            "/salesvisit — Mulai/lanjut draf Visit (24 jam). outlet TOKEN → waktu sekarang atau DD-MM-YYYY HH:mm WIB → catatan ISI → tindaklanjut ISI → pratinjau.",
-            "Opsional: catatan lewati dan tindaklanjut lewati. /konfirmasi — Kirim/cek hasil; /batal — Buang draf yang belum tersimpan.",
-          ]
-        : []),
-      ...(role
-        ? [
-            "HARI: senin, selasa, rabu, kamis, jumat, sabtu, minggu.",
-            "ID/kursor: salin token persis (termasuk awalan ~). ID sederhana boleh langsung; ID lain = ~ + base64url UTF-8 tanpa padding. Bukan kredensial.",
-            "Sales Force ID adalah ID bisnis, bukan Telegram ID. Nama Outlet boleh mengandung spasi dan tidak unik. Salin perintah Berikutnya agar filter tetap sama.",
-            "Jadwal adalah rencana berulang, bukan Visit selesai. Jangan ulangi pembuatan setelah kegagalan sebelum memeriksa daftar.",
-          ]
-        : []),
-    ].join("\n");
-    await ctx.reply(
-      "/start — Perkenalan\n/help — Bantuan\n/register — Registrasi\n/me — Profil dan status\n\n" +
-        (admin
-          ? "/pending [KURSOR] — Permintaan registrasi\n" +
-            approvalUsage +
-            "\n/reject TELEGRAM_ID — Tolak registrasi\n\n"
-          : "Persetujuan akun hanya oleh administrator.\n\n") +
-        (planning ? planning + "\n\n" : "") +
-        "Visit minimal tersedia untuk Sales Force aktif melalui /salesvisit. Stock Report dan metrik keuangan belum tersedia. Pesan biasa tidak membuat Visit."
-    );
+    await replyBlocks(ctx, helpSections(response.data));
   });
   bot.command("me", async (ctx) => {
     const response = await api.me(actor(ctx));
@@ -154,10 +121,11 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
       await ctx.reply("Tidak ada permintaan registrasi.");
       return;
     }
-    await ctx.reply("DAFTAR PERMINTAAN REGISTRASI");
-    // One bounded profile per message avoids Telegram's 4096-character limit.
-    for (const account of page.accounts) await ctx.reply(profile(account));
-    if (page.next) await ctx.reply(`Berikutnya: /pending ${page.next}`);
+    await replyBlocks(ctx, [
+      "DAFTAR PERMINTAAN REGISTRASI",
+      ...page.accounts.map(profile),
+      ...(page.next ? [`Berikutnya: /pending ${page.next}`] : []),
+    ]);
   });
   bot.command("users", async (ctx) => {
     const args = ctx.match.trim().split(/\s+/).filter(Boolean);
