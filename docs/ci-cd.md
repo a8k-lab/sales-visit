@@ -85,6 +85,8 @@ Deployment tooling/workflow changes run `pnpm test:deployment` and checksum-pinn
 4. Set **repository** variable `CLOUDFLARE_ENVIRONMENT` to that exact existing
    environment name (letters, digits, `_`, `-`). The plan job reads the GitHub API
    to confirm it exists before the release job references it; it never creates it.
+   Only the plan job adds `actions: read` for Get an Environment; the release job
+   retains `contents: read` with no GitHub write permissions.
    Do not rename/delete it concurrently with a release.
 5. Configure the following variables/secrets manually:
 
@@ -268,7 +270,7 @@ Deployment-helper tests mock Cloudflare and subprocesses, including dry-run,
 disabled automation, target errors, migrations, stale revisions and API-before-Bot
 failure handling. They do not need live credentials or perform remote operations.
 
-Implementation validation executed locally: 100 deployment-helper tests and
+Implementation validation executed locally: 107 deployment-helper tests and
 106 workspace tests passed (contracts 15, DB 14, API/Bot 77), frozen installation,
 workspace typechecks, Drizzle validation, lint/format, Web production build and
 `actionlint` 1.7.12. Web retains its existing >500 kB chunk-size warning. No live
@@ -291,4 +293,5 @@ References: [GitHub concurrency](https://docs.github.com/en/actions/how-tos/writ
 [environment protection](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments),
 [Cloudflare script inspection](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/methods/list/),
 [deployment inspection](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/methods/list/),
+[Worker-version annotations](https://developers.cloudflare.com/api/resources/workers/subresources/beta/subresources/workers/subresources/versions/methods/get/),
 [D1 read-only query permissions](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/query/).

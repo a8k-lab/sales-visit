@@ -24,6 +24,9 @@ concurrency:
 jobs:
   plan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # Get an Environment; no Actions write access.
     outputs:
       ready: ${{ steps.environment.outputs.ready }}
     steps:
