@@ -192,6 +192,13 @@ export async function release({
   for (const worker of prerequisites) states[worker] = await verify(worker);
   const targets = decision.manual ? decision.targets : select(states, revision);
   report(`Affected Workers: ${targets.join(", ") || "none"}`);
+  // A revision tag records an upload, not a successful smoke check. Recheck
+  // every unchanged active Worker, including an earlier partial/failed release,
+  // before a no-op run can succeed or another target can be deployed.
+  if (!decision.manual) {
+    for (const worker of workers.filter((w) => !targets.includes(w)))
+      await health(states[worker]);
+  }
   if (!targets.length) return;
   if (targets.includes("bot") && !targets.includes("api"))
     await health(states.api);
