@@ -572,6 +572,443 @@ test("registration, authorization and verified webhook across real Worker RPC + 
         );
       }
     );
+    const manage = (method, target, extra = {}, by = 900) =>
+      rpc(method, actor(by), { telegramUserId: String(target), ...extra });
+    const auditCount = async (id) =>
+      (
+        await db
+          .prepare(
+            `SELECT count(*) AS n FROM access_audit WHERE target_user_id =
+       (SELECT user_id FROM telegram_identities WHERE telegram_user_id = ?)`
+          )
+          .bind(String(id))
+          .first()
+      ).n;
+
+    await t.test(
+      "user listing is Admin-only, bounded and keyset complete",
+      async () => {
+        for (const id of [100, 901, 902, 903, 904, 905, 999]) {
+          assert.equal((await rpc("users", actor(id))).code, "forbidden");
+          for (const method of ["setRole", "disable", "enable"])
+            assert.equal(
+              (
+                await manage(
+                  method,
+                  100,
+                  method === "setRole" ? { role: "supervisor" } : {},
+                  id
+                )
+              ).code,
+              "forbidden"
+            );
+        }
+        const ids = [];
+        let after = "";
+        do {
+          const page = (await rpc("users", actor(900), after)).data;
+          assert.ok(page.accounts.length <= 10);
+          ids.push(...page.accounts.map((a) => a.id));
+          after = page.next;
+        } while (after);
+        assert.equal(new Set(ids).size, ids.length);
+        assert.equal(ids.length, await count("telegram_identities"));
+        assert.equal((await rpc("users", actor(900), 2)).code, "invalid");
+        assert.equal(
+          (await rpc("users", actor(900), "x".repeat(257))).code,
+          "invalid"
+        );
+        assert.equal(
+          (await rpc("users", { ...actor(900), role: "admin" })).code,
+          "invalid"
+        );
+        await webhook(900, "/users");
+        assert.match(sent.at(-1).text, /Berikutnya: \/users/);
+        const next = sent.at(-1).text.match(/Berikutnya: (\/users \S+)/)[1];
+        await webhook(900, next);
+        assert.match(sent.at(-1).text, /DAFTAR PENGGUNA/);
+        await webhook(901, "/users");
+        assert.match(sent.at(-1).text, /Akses ditolak/);
+        await webhook(900, "/users cursor extra");
+        assert.match(sent.at(-1).text, /Format:/);
+      }
+    );
+
+    await t.test(
+      "strict management validation and invalid status transitions",
+      async () => {
+        for (const method of ["setRole", "disable", "enable"]) {
+          for (const telegramUserId of [
+            "01",
+            "-1",
+            "@admin",
+            "1e3",
+            100,
+            "100 ",
+          ])
+            assert.equal(
+              (
+                await rpc(method, actor(900), {
+                  telegramUserId,
+                  ...(method === "setRole" ? { role: "admin" } : {}),
+                })
+              ).code,
+              "invalid"
+            );
+          assert.equal(
+            (
+              await manage(
+                method,
+                999,
+                method === "setRole" ? { role: "admin" } : {}
+              )
+            ).code,
+            "not_found"
+          );
+          assert.equal(
+            (
+              await manage(
+                method,
+                904,
+                method === "setRole" ? { role: "admin" } : {}
+              )
+            ).code,
+            "invalid_transition"
+          );
+          assert.equal(
+            (
+              await manage(
+                method,
+                905,
+                method === "setRole" ? { role: "admin" } : {}
+              )
+            ).code,
+            "invalid_transition"
+          );
+          assert.equal(
+            (
+              await rpc(
+                method,
+                { ...actor(900), salesForceId: "sf-test" },
+                { telegramUserId: "100", role: "admin" }
+              )
+            ).code,
+            "invalid"
+          );
+        }
+        for (const extra of [
+          { role: "owner" },
+          { role: "sales" },
+          { role: "admin", salesForceId: "sf-test" },
+          { role: "admin", actor: "900" },
+        ])
+          assert.equal((await manage("setRole", 100, extra)).code, "invalid");
+        await webhook(900, "/setrole 100 sales");
+        assert.match(sent.at(-1).text, /SALES_FORCE_ID/);
+        for (const text of [
+          "/disable",
+          "/enable 100 extra",
+          "/setrole 100 admin extra extra",
+          "/setrole @someone admin",
+        ]) {
+          await webhook(900, text);
+          assert.match(sent.at(-1).text, /Format:/);
+        }
+      }
+    );
+
+    await t.test(
+      "audited concurrent/repeated role changes and exclusive SF claims",
+      async () => {
+        await db
+          .prepare(
+            "INSERT INTO sales_force (id, name) VALUES ('sf-management', 'Synthetic')"
+          )
+          .run();
+        for (const id of [300, 301]) {
+          await register(id);
+          await approve(900, id);
+        }
+        const before = await count("access_audit");
+        const claims = await Promise.all(
+          [300, 301].map((id) =>
+            manage("setRole", id, {
+              role: "sales",
+              salesForceId: "sf-management",
+            })
+          )
+        );
+        assert.equal(claims.filter((r) => r.ok).length, 1);
+        assert.equal(claims.find((r) => !r.ok).code, "sales_force_unavailable");
+        assert.equal(await count("access_audit"), before + 1);
+        const winner = claims.find((r) => r.ok).data.telegramUserId;
+        const loser = winner === "300" ? 301 : 300;
+        const n = await auditCount(winner);
+        const repeats = await Promise.all(
+          Array.from({ length: 5 }, () =>
+            manage("setRole", winner, {
+              role: "sales_force",
+              salesForceId: "sf-management",
+            })
+          )
+        );
+        assert.ok(repeats.every((r) => r.ok));
+        assert.equal(await auditCount(winner), n);
+        assert.equal(
+          (
+            await manage("setRole", winner, {
+              role: "sales",
+              salesForceId: "sf-other",
+            })
+          ).code,
+          "association_locked"
+        );
+        const disabled = await Promise.all(
+          Array.from({ length: 4 }, () => manage("disable", winner))
+        );
+        assert.ok(disabled.every((r) => r.ok && r.data.status === "disabled"));
+        assert.equal(await auditCount(winner), n + 1);
+        assert.equal(
+          (await rpc("ownSchedule", actor(winner))).code,
+          "forbidden"
+        );
+        assert.equal(
+          (
+            await rpc("visitWizard", actor(winner), {
+              action: "start",
+              messageId: 999,
+            })
+          ).code,
+          "forbidden"
+        );
+        assert.equal(
+          (await manage("setRole", winner, { role: "admin" })).code,
+          "invalid_transition"
+        );
+        assert.equal(
+          (
+            await manage("setRole", loser, {
+              role: "sales",
+              salesForceId: "sf-management",
+            })
+          ).code,
+          "sales_force_unavailable"
+        );
+        const enabled = await Promise.all(
+          Array.from({ length: 4 }, () => manage("enable", winner))
+        );
+        assert.ok(
+          enabled.every((r) => r.ok && r.data.salesForceId === "sf-management")
+        );
+        assert.equal(await auditCount(winner), n + 2);
+        await webhook(900, `/setrole ${winner} supervisor`);
+        assert.match(sent.at(-1).text, /supervisor/);
+        assert.equal(
+          (await rpc("me", actor(winner))).data.salesForceId,
+          "sf-management"
+        );
+        assert.equal(
+          (await rpc("ownSchedule", actor(winner))).code,
+          "forbidden"
+        );
+        // Role changes reserve the original link, never release it to another User.
+        assert.equal(
+          (
+            await manage("setRole", loser, {
+              role: "sales",
+              salesForceId: "sf-management",
+            })
+          ).code,
+          "sales_force_unavailable"
+        );
+        await webhook(900, `/disable ${loser}`);
+        assert.match(sent.at(-1).text, /dinonaktifkan/);
+        await webhook(loser, "/outlets");
+        assert.match(sent.at(-1).text, /Akses ditolak/);
+        await webhook(900, `/enable ${loser}`);
+        assert.match(sent.at(-1).text, /aktif kembali/);
+        const events = (
+          await db
+            .prepare(
+              "SELECT * FROM access_audit WHERE action IN ('setrole','disable','enable') ORDER BY rowid"
+            )
+            .all()
+        ).results;
+        assert.equal(events.length, 6);
+        for (const e of events) {
+          const prior = JSON.parse(e.before_state),
+            after = JSON.parse(e.after_state);
+          assert.equal(e.actor_user_id, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+          assert.notDeepEqual(prior, after);
+          if (e.action !== "setrole") {
+            assert.equal(prior.role, after.role);
+            assert.equal(prior.salesForceId, after.salesForceId);
+          }
+        }
+        // Audit INSERT and following UPDATE must roll back together on failure.
+        await db
+          .prepare(
+            "CREATE TRIGGER fail_management BEFORE UPDATE ON users BEGIN SELECT RAISE(ABORT, 'synthetic rollback'); END"
+          )
+          .run();
+        const auditBefore = await count("access_audit");
+        await assert.rejects(() => manage("disable", loser));
+        assert.equal(await count("access_audit"), auditBefore);
+        assert.equal((await rpc("me", actor(loser))).data.status, "active");
+        await db.prepare("DROP TRIGGER fail_management").run();
+        await db
+          .prepare(
+            "CREATE TRIGGER fail_management_audit BEFORE INSERT ON access_audit BEGIN SELECT RAISE(ABORT, 'synthetic audit rollback'); END"
+          )
+          .run();
+        await assert.rejects(() => manage("disable", loser));
+        assert.equal((await rpc("me", actor(loser))).data.status, "active");
+        await db.prepare("DROP TRIGGER fail_management_audit").run();
+      }
+    );
+
+    await t.test(
+      "concurrent promotion/disable serializes without removing an active Admin",
+      async () => {
+        await register(320);
+        await approve(900, 320);
+        const n = await auditCount(320);
+        const outcomes = await Promise.all([
+          manage("setRole", 320, { role: "admin" }),
+          manage("disable", 320),
+        ]);
+        assert.equal(outcomes.filter((r) => r.ok).length, 1);
+        const account = (await rpc("me", actor(320))).data;
+        assert.ok(
+          (account.role === "admin" && account.status === "active") ||
+            (account.role === "supervisor" && account.status === "disabled")
+        );
+        assert.equal(await auditCount(320), n + 1);
+        if (account.role === "admin") {
+          // Restore the synthetic fixture via operator-only SQL for the following
+          // last-Admin test; application commands intentionally cannot do this.
+          await db
+            .prepare("UPDATE users SET role = 'supervisor' WHERE id = ?")
+            .bind(account.id)
+            .run();
+        }
+      }
+    );
+
+    await t.test(
+      "Admin protection, explicit last-Admin invariant and live revocation",
+      async () => {
+        const before = await count("access_audit");
+        for (const response of await Promise.all([
+          manage("disable", 900),
+          manage("setRole", 900, { role: "supervisor" }),
+        ]))
+          assert.equal(response.code, "last_admin");
+        assert.equal(await count("access_audit"), before);
+        await register(310);
+        await approve(900, 310);
+        await webhook(900, "/setrole 310 admin");
+        assert.equal((await rpc("me", actor(310))).data.role, "admin");
+        for (const response of await Promise.all([
+          manage("disable", 900, {}, 310),
+          manage("disable", 310),
+          manage("setRole", 900, { role: "supervisor" }, 310),
+          manage("setRole", 310, { role: "supervisor" }),
+        ]))
+          assert.equal(response.code, "protected_admin");
+        // Operator revocation is test-only; bot offers no active-Admin bypass.
+        await db
+          .prepare(
+            "UPDATE users SET status = 'disabled' WHERE id = (SELECT user_id FROM telegram_identities WHERE telegram_user_id = '310')"
+          )
+          .run();
+        for (const method of ["users", "pending"])
+          assert.equal((await rpc(method, actor(310))).code, "forbidden");
+        for (const method of ["disable", "enable", "setRole"])
+          assert.equal(
+            (
+              await manage(
+                method,
+                100,
+                method === "setRole" ? { role: "admin" } : {},
+                310
+              )
+            ).code,
+            "forbidden"
+          );
+        for (const path of ["/setrole", "/disable", "/enable"])
+          assert.equal(
+            (
+              await api.fetch("https://api" + path, {
+                method: "POST",
+                body: "{}",
+              })
+            ).status,
+            404
+          );
+      }
+    );
+
+    await t.test(
+      "nine-section help, real grammar, role-aware UX and Telegram bounds",
+      async () => {
+        const titles = [
+          "USER COMMANDS",
+          "SALES COMMANDS",
+          "ADMIN & SUPERVISOR COMMANDS",
+          "OUTLET COMMANDS",
+          "ADMIN COMMANDS",
+          "OUTLET ADMIN COMMANDS",
+          "AVAILABLE ROLES",
+          "SALES VISIT INPUT FORMAT",
+          "IMPORTANT NOTES",
+        ];
+        for (const id of [900, 901, 902, 903, 904, 999]) {
+          const start = sent.length;
+          await webhook(id, "/help");
+          const messages = sent.slice(start);
+          assert.ok(messages.length >= 1 && messages.length <= 4);
+          for (const message of messages) {
+            assert.ok(message.text.length > 0 && message.text.length <= 4096);
+            assert.equal(message.parse_mode, undefined);
+          }
+          const guide = messages.map((m) => m.text).join("\n");
+          titles.forEach((title, i) =>
+            assert.ok(guide.includes(`${i + 1}. ${title}`))
+          );
+          assert.match(guide, /belum ada Periode/);
+          assert.match(guide, /Stock Report belum dikumpulkan/);
+          assert.doesNotMatch(guide, /\/test\b/);
+          if (id === 900) {
+            for (const example of [
+              "/setrole 123456789 sales sf-01",
+              "/approve 123456789 sales sf-01",
+              "/jadwalsales sf=sf-01 hari=jumat",
+              "/users [KURSOR]",
+              "/disable TELEGRAM_ID",
+              "/enable TELEGRAM_ID",
+            ])
+              assert.ok(guide.includes(example));
+            assert.doesNotMatch(guide, /\/tambahoutlet ID NO_RS/);
+          }
+        }
+        await webhook(900, "/start");
+        assert.match(
+          sent.at(-1).text,
+          /Halo! Selamat datang di Sales Visit Bot/
+        );
+        await webhook(900, "/me");
+        assert.match(
+          sent.at(-1).text,
+          /PROFIL PENGGUNA[\s\S]*Telegram ID: 900[\s\S]*Sales Force ID:/
+        );
+        assert.ok(sent.every((m) => m.text.length <= 4096));
+        assert.deepEqual(
+          (await db.prepare("PRAGMA foreign_key_check").all()).results,
+          []
+        );
+      }
+    );
   } finally {
     await mf.dispose();
   }
