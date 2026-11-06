@@ -168,12 +168,68 @@ export const outlets = sqliteTable(
     id: id(),
     name: text("name").notNull(),
     createdAt: createdAt(),
+    // Null for legacy rows whose last modification time is unknown.
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
   },
   (table) => [
     check("outlets_id_nonblank", sql`length(trim(${table.id})) > 0`),
     check("outlets_name_nonblank", sql`length(trim(${table.name})) > 0`),
   ]
 );
+
+// ISO weekday: Monday=1 (senin), Sunday=7 (minggu). A plan, never a Visit.
+export const visitSchedules = sqliteTable(
+  "visit_schedules",
+  {
+    id: id(),
+    salesForceId: text("sales_force_id")
+      .notNull()
+      .references(() => salesForce.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    outletId: text("outlet_id")
+      .notNull()
+      .references(() => outlets.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    weekday: integer("weekday").notNull(),
+    createdAt: createdAt(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (table) => [
+    check("visit_schedules_id_nonblank", sql`length(trim(${table.id})) > 0`),
+    check(
+      "visit_schedules_weekday_valid",
+      sql`typeof(${table.weekday}) = 'integer' and ${table.weekday} between 1 and 7`
+    ),
+    check(
+      "visit_schedules_timestamps_integer",
+      sql`typeof(${table.createdAt}) = 'integer' and typeof(${table.updatedAt}) = 'integer'`
+    ),
+    unique("visit_schedules_assignment_unique").on(
+      table.salesForceId,
+      table.outletId,
+      table.weekday
+    ),
+    index("visit_schedules_outlet_idx").on(table.outletId),
+    index("visit_schedules_weekday_idx").on(table.weekday),
+  ]
+);
+
+export const visitSchedulesRelations = relations(visitSchedules, ({ one }) => ({
+  salesForce: one(salesForce, {
+    fields: [visitSchedules.salesForceId],
+    references: [salesForce.id],
+  }),
+  outlet: one(outlets, {
+    fields: [visitSchedules.outletId],
+    references: [outlets.id],
+  }),
+}));
 
 export const products = sqliteTable(
   "products",
@@ -307,11 +363,13 @@ export const stockReportItems = sqliteTable(
 
 export const salesForceRelations = relations(salesForce, ({ many }) => ({
   users: many(users),
+  visitSchedules: many(visitSchedules),
   visits: many(visits),
   stockReports: many(stockReports),
 }));
 
 export const outletsRelations = relations(outlets, ({ many }) => ({
+  visitSchedules: many(visitSchedules),
   visits: many(visits),
   stockReports: many(stockReports),
 }));
