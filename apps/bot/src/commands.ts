@@ -4,6 +4,7 @@ import { type Bot } from "grammy";
 import { outletCommands } from "./outlets/commands.ts";
 import { registerCommands } from "./registration/commands.ts";
 import { scheduleCommands } from "./schedules/commands.ts";
+import { visitCommands } from "./visits/commands.ts";
 
 export function installCommands(bot: Bot, api: BotIdentityService) {
   bot.use(async (ctx, next) => {
@@ -30,6 +31,7 @@ export function installCommands(bot: Bot, api: BotIdentityService) {
     await next();
   });
   registerCommands(bot, api);
+  visitCommands(bot, api);
   // Planning deliveries are acknowledged even if a reply fails: Telegram must
   // not redeliver a non-idempotent create after an ambiguous API/delivery error.
   bot.use(async (_ctx, next) => {
@@ -43,7 +45,7 @@ export function installCommands(bot: Bot, api: BotIdentityService) {
   scheduleCommands(bot, api);
   bot.on("message:text", (ctx) =>
     ctx.reply(
-      "Ketik /help untuk melihat perintah yang tersedia. Pelaporan belum tersedia."
+      "Ketik /help untuk melihat perintah. Mulai Visit: /salesvisit. Jawaban draf memakai awalan outlet, waktu, catatan, atau tindaklanjut sesuai petunjuk; /batal untuk membatalkan."
     )
   );
 }
