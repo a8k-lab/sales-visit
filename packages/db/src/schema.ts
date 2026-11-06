@@ -168,10 +168,13 @@ export const outlets = sqliteTable(
     id: id(),
     name: text("name").notNull(),
     createdAt: createdAt(),
+    businessId: text("business_id"),
+    noRs: text("no_rs"),
     // Null for legacy rows whose last modification time is unknown.
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
   },
   (table) => [
+    unique("outlets_business_id_unique").on(table.businessId),
     check("outlets_id_nonblank", sql`length(trim(${table.id})) > 0`),
     check("outlets_name_nonblank", sql`length(trim(${table.name})) > 0`),
   ]
