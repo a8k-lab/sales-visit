@@ -1,4 +1,10 @@
-# Telegram registration, Outlet & recurring schedules
+# Telegram registration, Outlet, schedules & Visit submission
+
+Active Sales Force can submit a minimal Visit through `/salesvisit`, review it,
+then `/konfirmasi` or `/batal`. See the [Visit wizard guide](../../docs/design/telegram-visit-wizard.md)
+for the exact Indonesian conversation, step labels, optional skipping, Jakarta
+input policy, API authorization, durable D1 state, retry guarantees, deployment
+order and manual acceptance checklist.
 
 grammY Worker with local development and a single Cloudflare test deployment
 configuration. See the [deployment runbook](../../docs/deployment.md) for current
@@ -18,6 +24,9 @@ replacement require the private-terminal confirmations in the runbook;
 - `/start`, `/help`: account-aware welcome/help, Admin guidance when active.
 - `/register`: pending account from the verified update's `message.from.id`.
 - `/me`: own role, status, Telegram display snapshot and Sales Force link.
+- `/salesvisit`: active Sales Force starts/resumes a durable minimal Visit draft.
+- `/konfirmasi`: submit the reviewed draft or recover its last result safely.
+- `/batal`: discard the current uncommitted draft, from any step.
 - `/pending [KURSOR]`: active Admin, ten profiles per page; copy the next command.
 - `/approve TELEGRAM_ID admin` or `/approve TELEGRAM_ID supervisor`.
 - `/approve TELEGRAM_ID sales SALES_FORCE_ID`: `sales` maps to `sales_force`.
@@ -41,8 +50,9 @@ never performed. An SF already linked to any account (even disabled) cannot be
 claimed. The schema's non-unique FK is unchanged to avoid inventing a global
 cardinality/migration policy; the conditional approval transaction enforces this
 restriction for all application approval writers. Operators must not bypass it.
-Admin/Supervisor have no SF link. Even approved Sales Force cannot submit reports
-yet: existing Visit/Stock Report HTTP writes still deny all requests.
+Admin/Supervisor have no SF link. Active Sales Force can submit minimal Visits
+through the private RPC wizard; public Visit/Stock Report HTTP writes still deny
+all requests.
 
 ## Outlet & Schedule command grammar
 
@@ -88,10 +98,11 @@ business-record IDs, **not Telegram IDs**. There is no Bot SF lookup/provisionin
 command yet: obtain verified synthetic SF IDs from the operator. Duplicate Outlet
 names are allowed; identify records by their returned ID. Deletion is blocked by
 any Schedule, Visit or Stock Report reference; Bot never bypasses that rule.
-Schedules are weekly plans, **not completed Visits**. No edit/delete, exceptions,
-effective dates, enforcement, `/salesvisit`, `/konfirmasi`, or `/batal` is added.
+Schedules are weekly plans, **not completed Visits**. No schedule edit/delete,
+exceptions, effective dates or enforcement is added. The separate Visit wizard
+accepts scheduled or unscheduled known Outlet tokens.
 
-### Exact opaque token format (planning commands only)
+### Exact opaque token format (planning commands and Visit Outlet entry)
 
 - Raw token: nonempty ASCII `[A-Za-z0-9_.-]+`, validated against API limits.
 - Otherwise: `~` followed by **canonical unpadded base64url of the exact UTF-8
@@ -163,7 +174,8 @@ Telegram replies/decision notifications are not transactional with D1. Failed
 notification does not undo approval; `/me` is authoritative. For registration/approval, a transport failure
 returns retryable HTTP 500; retrying registration/decisions cannot duplicate or
 change committed decisions. Exactly-once replies/notification redelivery are not
-promised. There is no conversation state in this milestone. Existing public
+promised. The Visit wizard separately uses API-owned durable conversation state
+and idempotent confirmation, not planning's acknowledge-on-failure policy. Existing public
 business reads remain unchanged: use only synthetic data until read authorization
 ships. Identity/audit tables are never joined into those responses.
 
@@ -268,6 +280,10 @@ It also verifies registration/approval regressions and acknowledged delivery
 failures. `bot-transport.test.mjs` uses a test-only faulting named RPC worker to
 verify ambiguous create failures are sanitized, acknowledged and called once.
 All planning result codes and exact 4096-unit packing boundaries have helper tests.
+`bot-visits.test.mjs` adds the real-Worker durable Visit flow, restart/persistence,
+exact IDs, authorization/link changes, duplicate/concurrent confirmation, cancel,
+TTL, failed Telegram reply and failed draft-finalization recovery. See the Visit
+guide for its test-only stale-authorization race injector.
 Only Telegram `getMe`/`sendMessage` are simulated, using synthetic credentials;
 no real Telegram/Cloudflare resource calls occur. Miniflare is pinned to the beta
 matching the repository's Wrangler/workerd compatibility date, and uses its
@@ -295,6 +311,6 @@ production redistribution. No license permission is inferred by this PR.
 Security differences: private-only handling, canonical string IDs, no rejected
 reapplication, explicit verified SF association, API-owned authorization, atomic
 auditing/claims, bounded lists/body, safe errors and no raw-update/token logs.
-Deferred: OIDC/Web sessions/read authorization, reporting wizard and durable
-state, schedule editing/deletion/exceptions/effective dates, other account lifecycle commands, history,
+Deferred: OIDC/Web sessions/read authorization, Stock Report/financial reporting
+wizards, schedule editing/deletion/exceptions/effective dates, other account lifecycle commands, history,
 exports, financial measures, imports and production cutover.

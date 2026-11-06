@@ -98,6 +98,8 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
       ...(role === "sales_force"
         ? [
             "/jadwal [HARI|semua] [after=KURSOR] — Rencana sendiri; tanpa HARI = hari ini WIB",
+            "/salesvisit — Mulai/lanjut draf Visit (24 jam). outlet TOKEN → waktu sekarang atau DD-MM-YYYY HH:mm WIB → catatan ISI → tindaklanjut ISI → pratinjau.",
+            "Opsional: catatan lewati dan tindaklanjut lewati. /konfirmasi — Kirim/cek hasil; /batal — Buang draf yang belum tersimpan.",
           ]
         : []),
       ...(role
@@ -117,7 +119,7 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
             "\n/reject TELEGRAM_ID — Tolak registrasi\n\n"
           : "Persetujuan akun hanya oleh administrator.\n\n") +
         (planning ? planning + "\n\n" : "") +
-        "Pelaporan Visit dan Stock Report belum tersedia. Jangan kirim data laporan melalui chat ini dulu."
+        "Visit minimal tersedia untuk Sales Force aktif melalui /salesvisit. Stock Report dan metrik keuangan belum tersedia. Pesan biasa tidak membuat Visit."
     );
   });
   bot.command("me", async (ctx) => {

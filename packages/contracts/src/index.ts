@@ -1,4 +1,5 @@
 export * from "./identity.ts";
+export * from "./visit-wizard.ts";
 export * from "./planning.ts";
 export { outletSchema, type Outlet } from "./outlet.ts";
 export { productSchema, type Product } from "./product.ts";

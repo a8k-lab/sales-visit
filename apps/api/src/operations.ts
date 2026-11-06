@@ -11,9 +11,17 @@ import {
   stockReportItems,
   stockReports,
   visits,
+  sql,
 } from "@sales-visit/db";
 
 import { toStockReport, toVisit } from "./records.ts";
+
+// Only the private draft boundary constructs this additional atomic guard.
+export type TelegramVisitGuard = {
+  telegramUserId: string;
+  userId: string;
+  draftKey: string;
+};
 
 // Only an authentication boundary may construct this context, never request JSON.
 export type TrustedIdentity = {
@@ -30,7 +38,7 @@ export class OperationError extends Error {
   }
 }
 
-async function submissionId(
+export async function submissionId(
   identity: TrustedIdentity,
   key: unknown,
   operation: "visit" | "stock-report"
@@ -145,11 +153,33 @@ export async function createVisit(
   db: Database,
   identity: TrustedIdentity,
   key: unknown,
-  input: unknown
+  input: unknown,
+  telegram?: TelegramVisitGuard
 ) {
   const parsed = createVisitSchema.safeParse(input);
   if (!parsed.success) throw new OperationError(400, "Invalid request");
   const data = parsed.data;
+  // Never let an RPC caller supply attribution. Authorization is checked before
+  // replay AND inside the INSERT's D1 batch, serializing against account changes.
+  const guard = telegram
+    ? sql`EXISTS (
+    SELECT 1 FROM users u
+    JOIN telegram_identities t ON t.user_id = u.id
+    JOIN sales_force sf ON sf.id = u.sales_force_id
+    JOIN telegram_visit_drafts d ON d.user_id = u.id
+    WHERE u.id = ${telegram.userId} AND t.telegram_user_id = ${telegram.telegramUserId}
+      AND u.status = 'active' AND u.role = 'sales_force'
+      AND sf.id = ${identity.salesForceId} AND d.sales_force_id = sf.id
+      AND d.submission_key = ${telegram.draftKey} AND d.submission_key = ${key}
+      AND d.step IN ('submitting', 'submitted')
+  )`
+    : undefined;
+  if (guard) {
+    if (identity.submissionChannel !== "telegram" || data.stockReport)
+      throw new OperationError(400, "Invalid Telegram submission");
+    if (!(await db.get(sql`SELECT 1 WHERE ${guard}`)))
+      throw new OperationError(401, "Unauthorized");
+  }
   const id = await submissionId(identity, key, "visit");
   const visit: Visit = {
     id,
@@ -187,9 +217,14 @@ export async function createVisit(
   try {
     // D1 batch is atomic; do not use unsupported interactive transactions.
     await db.batch([
-      db
-        .insert(visits)
-        .values({ ...visit, visitedAt: new Date(visit.visitedAt) }),
+      guard
+        ? db.insert(visits).select(sql`SELECT ${id}, ${visit.outletId},
+            ${visit.salesForceId}, ${Date.parse(visit.visitedAt)}, 'telegram',
+            ${visit.notes ?? null}, ${visit.followUp ?? null}, ${Date.now()}
+            WHERE ${guard}`)
+        : db
+            .insert(visits)
+            .values({ ...visit, visitedAt: new Date(visit.visitedAt) }),
       ...(report ? reportStatements(db, report) : []),
     ]);
   } catch (error) {
@@ -197,6 +232,7 @@ export async function createVisit(
     if (await retry()) return { data: result, replayed: true };
     throw error;
   }
+  if (guard && !(await retry())) throw new OperationError(401, "Unauthorized");
   return { data: result, replayed: false };
 }
 
