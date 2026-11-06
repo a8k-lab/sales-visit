@@ -18,8 +18,9 @@ pnpm db:seed:local
 pnpm dev:api
 ```
 
-Wrangler serves at `http://localhost:8787`. The `DB` binding uses a local-only
-placeholder ID; do not deploy this configuration or use `--remote`.
+Wrangler serves at `http://localhost:8787`. Use `--local` for development
+operations; the configured test `DB` binding is not permission to run remote
+migrations or deploy.
 Migrations reuse `packages/db/migrations`. Dev, root migration, and seed commands
 all use `apps/api/.wrangler/state`, independently of the database package sandbox.
 Stop the API before removing that directory if you need a fresh local database,
@@ -155,6 +156,16 @@ No D1 binding is exposed to the Bot. See the [Bot runbook](../bot/README.md) for
 command grammar, SF verification/claim policy, local bootstrap and integration
 tests. Identity/audit fields are never added to existing public read responses.
 
+### Internal Outlet & Schedule RPC
+
+The same named `BotIdentity` entrypoint now exposes `listOutlets`, `getOutlet`,
+`createOutlet`, `updateOutlet`, `deleteOutlet`, `ownSchedule`, `listSchedules`,
+and Admin-only `createSchedule`. No HTTP routes or Bot commands are added.
+See [the foundation guide](../../docs/design/outlet-schedule-foundation.md) for
+contracts, role permissions, ISO/Indonesian weekdays, safe error codes,
+50-row keyset pagination, additive migration prerequisites and optional local
+synthetic schedule fixtures. All public business reads remain synthetic-only.
+
 ### Idempotency
 
 Record IDs remain opaque strings, not sequential counters. The server derives
@@ -214,12 +225,13 @@ Cloudflare credentials, or changes to your dev database are required.
 ## Remaining scope
 
 Web authentication/read authorization, CORS/frontend integration, Telegram reporting,
-pagination/filtering and KPIs remain deferred. The auth
+public-read pagination/filtering and KPIs remain deferred. The auth
 milestone must establish verified Web/Bot identities and trusted channel
 provenance, session/webhook security, Sales Force mapping/revocation, and Outlet
 assignment/role permissions before enabling writes. Existing rules only validate
 that the trusted Sales Force and referenced records exist; no assignment policy
 has been invented. Add operational logging/rate limits and review request-size
-limits before production exposure. Lists remain unpaginated. Use synthetic
+limits before production exposure. Public HTTP lists remain unpaginated; new
+protected RPC lists are bounded. Use synthetic
 business data only, including in the remote test deployment; the Web still uses
 mocks/browser-local storage.

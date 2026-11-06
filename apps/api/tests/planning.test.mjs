@@ -120,6 +120,44 @@ async function setup(t, legacy = false) {
   return { db, rpc, api: await mf.getWorker("api") };
 }
 
+test("documented optional synthetic schedule seed is repeatable without report writes", async (t) => {
+  const { db, rpc } = await setup(t);
+  const apply = async (file) => {
+    const sql = readFileSync(new URL(file, import.meta.url), "utf8").replace(
+      /^\s*--.*$/gm,
+      ""
+    );
+    await db.batch(
+      sql
+        .split(";")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => db.prepare(s))
+    );
+  };
+  await apply("../seeds/local.sql");
+  const before = await db
+    .prepare(
+      "SELECT (SELECT count(*) FROM visits) AS visits, (SELECT count(*) FROM stock_reports) AS reports, (SELECT count(*) FROM users) AS users"
+    )
+    .first();
+  await apply("../seeds/schedules-local.sql");
+  await apply("../seeds/schedules-local.sql");
+  assert.equal((await rpc("listSchedules", 1, {})).data.items.length, 4);
+  assert.deepEqual(
+    await db
+      .prepare(
+        "SELECT (SELECT count(*) FROM visits) AS visits, (SELECT count(*) FROM stock_reports) AS reports, (SELECT count(*) FROM users) AS users"
+      )
+      .first(),
+    before
+  );
+  assert.deepEqual(
+    (await db.prepare("PRAGMA foreign_key_check").all()).results,
+    []
+  );
+});
+
 test("schedule migration upgrades populated D1 without resetting reporting history", async (t) => {
   const { db, rpc } = await setup(t, true);
   const outlet = await rpc("getOutlet", 1, { id: "legacy-o" });
