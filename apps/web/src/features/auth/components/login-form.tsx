@@ -47,16 +47,24 @@ function loadSdk() {
     }, 15000);
     script.src = "https://oauth.telegram.org/js/telegram-login.js?6";
     script.async = true;
-    script.onload = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    script.onerror = () => {
-      clearTimeout(timer);
-      script.remove();
-      sdk = undefined;
-      reject(new Error("Telegram tidak dapat dimuat."));
-    };
+    script.addEventListener(
+      "load",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true }
+    );
+    script.addEventListener(
+      "error",
+      () => {
+        clearTimeout(timer);
+        script.remove();
+        sdk = undefined;
+        reject(new Error("Telegram tidak dapat dimuat."));
+      },
+      { once: true }
+    );
     document.head.append(script);
   }));
 }
@@ -66,16 +74,19 @@ interface Ready {
   nonce: string;
   expiresAt: number;
 }
+const destination = () =>
+  safeReturn(new URLSearchParams(location.search).get("redirect"));
 export function LoginForm() {
+  const [preparing, setPreparing] = useState(true);
+  const [verifying, setVerifying] = useState(false);
   const [ready, setReady] = useState<Ready | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("Menyiapkan login…");
   const attempt = useRef(0);
   const timer = useRef<number | undefined>(undefined);
   const mounted = useRef(false);
-  const destination = () =>
-    safeReturn(new URLSearchParams(location.search).get("redirect"));
   async function prepare() {
+    setPreparing(true);
     setReady(null);
     setMessage("Menyiapkan login…");
     try {
@@ -90,6 +101,8 @@ export function LoginForm() {
     } catch {
       if (mounted.current)
         setMessage("Login tidak tersedia. Periksa koneksi atau hubungi Admin.");
+    } finally {
+      if (mounted.current) setPreparing(false);
     }
   }
   useEffect(() => {
@@ -112,6 +125,7 @@ export function LoginForm() {
     clearTimeout(timer.current);
     window.Telegram?.Login.close();
     setBusy(false);
+    setVerifying(false);
     setReady(null);
     setMessage(text);
   }
@@ -150,6 +164,7 @@ export function LoginForm() {
             cancel();
             return;
           }
+          setVerifying(true);
           setMessage("Memverifikasi akun…");
           void finishLogin(result.id_token, ready.challenge)
             .then(() => {
@@ -190,11 +205,19 @@ export function LoginForm() {
           {message}
         </p>
         {busy ? (
-          <Button variant="outline" onClick={() => cancel()}>
+          <Button
+            variant="outline"
+            disabled={verifying}
+            onClick={() => cancel()}
+          >
             Batal
           </Button>
         ) : (
-          <Button variant="outline" onClick={() => void prepare()}>
+          <Button
+            variant="outline"
+            disabled={preparing}
+            onClick={() => void prepare()}
+          >
             Siapkan ulang login
           </Button>
         )}

@@ -91,7 +91,7 @@ export function createApp(
 
   app.use("*", async (c, next) => {
     if (
-      c.req.method !== "GET" ||
+      !["GET", "HEAD"].includes(c.req.method) ||
       !/^\/(sales-force|outlets|products|visits|stock-reports)(\/|$)/.test(
         c.req.path
       )

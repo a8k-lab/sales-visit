@@ -444,8 +444,13 @@ test("read and write API against isolated local D1", async (t) => {
     await proxy.dispose();
     rmSync(directory, { recursive: true, force: true });
   });
+  const token = "b".repeat(64);
   const request = (path, method = "GET") =>
-    app.request(path, { method }, proxy.env);
+    app.request(
+      path,
+      { method, headers: { Authorization: `Bearer ${token}` } },
+      proxy.env
+    );
   const json = async (path) => {
     const response = await request(path);
     assert.equal(response.status, 200);
@@ -489,6 +494,17 @@ test("read and write API against isolated local D1", async (t) => {
       readFileSync(new URL(file, migrations), "utf8")
     );
   }
+  await executeSql(
+    proxy.env.DB,
+    `INSERT INTO users (id,status,role) VALUES ('read-test','active','admin');
+    INSERT INTO telegram_identities (user_id,telegram_user_id) VALUES ('read-test','9001');`
+  );
+  const { hashToken } = await import("../src/web-auth.ts");
+  await proxy.env.DB.prepare(
+    "INSERT INTO web_sessions (token_hash,user_id,created_at,expires_at) VALUES (?,'read-test',?,?)"
+  )
+    .bind(await hashToken(token), Date.now(), Date.now() + 3600000)
+    .run();
   for (const path of [
     "sales-force",
     "outlets",

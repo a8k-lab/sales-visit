@@ -183,6 +183,21 @@ export function authRoutes(keys: JWTVerifyGetKey = telegramKeys) {
       .run();
     return c.json({ token, expiresAt, account });
   });
+  // A disabled account may still destroy its own credential, never read data.
+  app.post("/logout", async (c) => {
+    const match = /^Bearer ([a-f0-9]{64})$/.exec(
+      c.req.header("Authorization") ?? ""
+    );
+    if (!match) return c.json({ error: "Unauthorized" }, 401);
+    const now = Date.now();
+    const revoked = await c.env.DB.prepare(
+      "UPDATE web_sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ? RETURNING token_hash"
+    )
+      .bind(now, await hashToken(match[1]!), now)
+      .first();
+    if (!revoked) return c.json({ error: "Unauthorized" }, 401);
+    return c.json({ ok: true });
+  });
   app.use("*", async (c, next) => {
     const account = await sessionAccount(c.req.raw, c.env.DB);
     if (!account) return c.json({ error: "Unauthorized" }, 401);
@@ -190,14 +205,5 @@ export function authRoutes(keys: JWTVerifyGetKey = telegramKeys) {
     await next();
   });
   app.get("/me", (c) => c.json({ account: c.get("account") }));
-  app.post("/logout", async (c) => {
-    const token = c.req.header("Authorization")!.slice(7);
-    await c.env.DB.prepare(
-      "UPDATE web_sessions SET revoked_at = ? WHERE token_hash = ?"
-    )
-      .bind(Date.now(), await hashToken(token))
-      .run();
-    return c.json({ ok: true });
-  });
   return app;
 }
