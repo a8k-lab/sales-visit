@@ -64,7 +64,9 @@ jobs:
           pnpm --filter @sales-visit/contracts
           --filter @sales-visit/db --filter @sales-visit/api typecheck
       - run: pnpm --filter @sales-visit/contracts --filter @sales-visit/db test
-      - run: node --test apps/api/tests/{api,identity,planning}.test.mjs
+      - run: >-
+          node --test
+          apps/api/tests/{api,identity,planning,web-auth,auth-abuse}.test.mjs
       - if: needs.changes.outputs.db == 'true'
         run: pnpm --filter @sales-visit/db db:check
   bot:

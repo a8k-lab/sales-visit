@@ -52,14 +52,21 @@ export async function verifyTelegram(
   if (
     typeof payload.iat !== "number" ||
     payload.iat > Date.now() / 1000 + 30 ||
-    typeof payload.id !== "number" ||
-    !Number.isSafeInteger(payload.id) ||
-    payload.id <= 0 ||
     typeof payload.nonce !== "string" ||
     !/^[a-f0-9]{64}$/.test(payload.nonce)
   )
     throw new Error("Invalid proof");
-  return { telegramId: String(payload.id), nonce: payload.nonce };
+  // Validate only signed claims, after JOSE and nonce validation. Keep string
+  // IDs as text: converting through Number could round a distinct identity.
+  const id = payload.id;
+  if (
+    !(
+      (typeof id === "string" && /^[1-9][0-9]*(?![\s\S])/.test(id)) ||
+      (typeof id === "number" && Number.isSafeInteger(id) && id > 0)
+    )
+  )
+    throw new Error("Invalid proof");
+  return { telegramId: String(id), nonce: payload.nonce };
 }
 
 export async function liveAccount(
