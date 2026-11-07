@@ -17,6 +17,37 @@ const keys = createLocalJWKSet({
     { ...(await exportJWK(publicKey)), kid: "test", alg: "RS256", use: "sig" },
   ],
 });
+const invalidIds = [
+  undefined,
+  null,
+  true,
+  false,
+  {},
+  [],
+  [1001],
+  "",
+  "0",
+  "00",
+  "01001",
+  " 1001",
+  "1001 ",
+  "1001\n",
+  "1001\r\n",
+  "-1001",
+  "+1001",
+  "1001.0",
+  "1.001e3",
+  "1e3",
+  "NaN",
+  "Infinity",
+  "１００１",
+  "1001x",
+  0,
+  -0,
+  -1,
+  1.5,
+  Number.MAX_SAFE_INTEGER + 1,
+];
 const nonce = "a".repeat(64);
 const now = () => Math.floor(Date.now() / 1000);
 function sign(claims = {}, key = privateKey, alg = "RS256") {
@@ -39,6 +70,22 @@ test("Telegram proof validates official claims using local JWKS, never sub", asy
     telegramId: "1001",
     nonce,
   });
+  for (const id of [
+    "1001",
+    1001,
+    "1",
+    1,
+    Number.MAX_SAFE_INTEGER,
+    String(Number.MAX_SAFE_INTEGER),
+    "9007199254740993",
+  ]) {
+    assert.deepEqual(await verifyTelegram(await sign({ id }), clientId, keys), {
+      telegramId: String(id),
+      nonce,
+    });
+  }
+  for (const id of invalidIds)
+    await assert.rejects(verifyTelegram(await sign({ id }), clientId, keys));
   for (const [name, claims] of [
     ["issuer", { iss: "https://attacker.invalid" }],
     ["audience", { aud: "other" }],
@@ -48,7 +95,11 @@ test("Telegram proof validates official claims using local JWKS, never sub", asy
     ["missing issued", { iat: undefined }],
     ["missing expiry", { exp: undefined }],
     ["missing ID", { id: undefined }],
-    ["string ID", { id: "1001" }],
+    ["string issued", { iat: String(now()) }],
+    ["string expiry", { exp: String(now() + 300) }],
+    ["null issued", { iat: null }],
+    ["null expiry", { exp: null }],
+    ["not yet valid", { nbf: now() + 61 }],
     ["negative ID", { id: -1 }],
     ["zero ID", { id: 0 }],
     ["fractional ID", { id: 1.5 }],
@@ -57,19 +108,48 @@ test("Telegram proof validates official claims using local JWKS, never sub", asy
     ["malformed nonce", { nonce: "x" }],
   ])
     await t.test(name, async () =>
-      assert.rejects(verifyTelegram(await sign(claims), clientId, keys))
+      assert.rejects(
+        verifyTelegram(await sign({ id: "1001", ...claims }), clientId, keys)
+      )
     );
   const other = await generateKeyPair("RS256");
   await assert.rejects(
-    verifyTelegram(await sign({}, other.privateKey), clientId, keys)
+    verifyTelegram(await sign({ id: "1001" }, other.privateKey), clientId, keys)
   );
   await assert.rejects(
     verifyTelegram(
-      await sign({}, new TextEncoder().encode("synthetic-test-key"), "HS256"),
+      await sign(
+        { id: "1001" },
+        new TextEncoder().encode("synthetic-test-key"),
+        "HS256"
+      ),
       clientId,
       keys
     )
   );
+});
+
+test("JWT timestamps retain 30s skew and 5m maximum age", async (t) => {
+  const fixed = new Date("2026-11-15T12:00:00Z");
+  const seconds = fixed.getTime() / 1000;
+  t.mock.timers.enable({ apis: ["Date"], now: fixed });
+  t.after(() => t.mock.timers.reset());
+  for (const claims of [
+    { iat: seconds, exp: seconds + 300 },
+    { iat: seconds + 30, exp: seconds + 300 },
+    { iat: seconds - 330, exp: seconds + 300 },
+    { iat: seconds - 60, exp: seconds - 29 },
+  ])
+    await verifyTelegram(await sign({ id: "1001", ...claims }), clientId, keys);
+  for (const claims of [
+    { exp: seconds - 30 },
+    { exp: seconds - 31 },
+    { iat: seconds + 31 },
+    { iat: seconds - 331, exp: seconds + 300 },
+  ])
+    await assert.rejects(
+      verifyTelegram(await sign({ id: "1001", ...claims }), clientId, keys)
+    );
 });
 
 test("Web sessions and authorized reads on disposable local D1", async (t) => {
@@ -220,6 +300,69 @@ test("Web sessions and authorized reads on disposable local D1", async (t) => {
     }
   );
   await t.test(
+    "fresh signed string ID authenticates the existing Admin",
+    async () => {
+      const response = await login("1001");
+      assert.equal(response.status, 200);
+      const session = await response.json();
+      assert.equal(session.account.id, "u1001");
+      assert.equal(session.account.role, "admin");
+      assert.equal(
+        (await request("/auth/me", { token: session.token })).status,
+        200
+      );
+    }
+  );
+  await t.test(
+    "signed invalid IDs fail without consuming a challenge or issuing sessions",
+    async () => {
+      const ch = await challenge();
+      const countSessions = () =>
+        db.prepare("SELECT count(*) AS count FROM web_sessions").first();
+      const before = await countSessions();
+      for (const id of invalidIds) {
+        const response = await post("/auth/telegram", {
+          challenge: ch.challenge,
+          idToken: await sign({ id, nonce: ch.nonce }),
+        });
+        assert.equal(response.status, 401);
+        assert.deepEqual(await response.json(), { error: "Login failed" });
+        assert.equal(response.headers.get("Cache-Control"), "no-store");
+      }
+      assert.deepEqual(await countSessions(), before);
+      assert.equal(
+        (
+          await db
+            .prepare(
+              "SELECT consumed_at FROM web_login_challenges WHERE id = ?"
+            )
+            .bind(ch.challenge)
+            .first()
+        ).consumed_at,
+        null
+      );
+      // Expired and over-age string-ID proofs also leave the challenge usable.
+      for (const claims of [{ exp: now() - 60 }, { iat: now() - 400 }]) {
+        const response = await post("/auth/telegram", {
+          challenge: ch.challenge,
+          idToken: await sign({ id: "1001", nonce: ch.nonce, ...claims }),
+        });
+        assert.equal(response.status, 401);
+        assert.deepEqual(await response.json(), { error: "Login failed" });
+      }
+      assert.deepEqual(await countSessions(), before);
+      assert.equal(
+        (
+          await post("/auth/telegram", {
+            challenge: ch.challenge,
+            idToken: await sign({ id: "1001", nonce: ch.nonce }),
+          })
+        ).status,
+        200
+      );
+    }
+  );
+  await t.test(
     "all business reads need a session, HTTP writes still denied",
     async () => {
       for (const path of [
@@ -247,7 +390,18 @@ test("Web sessions and authorized reads on disposable local D1", async (t) => {
   await t.test(
     "no nonexistent or unapproved account authenticates",
     async () => {
-      for (const id of [9999, 1004, 1005, 1006, 1007]) {
+      for (const id of [
+        9999,
+        1004,
+        1005,
+        1006,
+        1007,
+        "9999",
+        "1004",
+        "1005",
+        "1006",
+        "1007",
+      ]) {
         const res = await login(id);
         assert.equal(res.status, 401);
         assert.deepEqual(await res.json(), { error: "Login failed" });
@@ -262,7 +416,7 @@ test("Web sessions and authorized reads on disposable local D1", async (t) => {
         (
           await post("/auth/telegram", {
             challenge: ch.challenge,
-            idToken: await sign(),
+            idToken: await sign({ id: "1001" }),
           })
         ).status,
         401
@@ -297,7 +451,7 @@ test("Web sessions and authorized reads on disposable local D1", async (t) => {
       ch = await challenge();
       const payload = {
         challenge: ch.challenge,
-        idToken: await sign({ nonce: ch.nonce }),
+        idToken: await sign({ id: "1001", nonce: ch.nonce }),
       };
       const results = await Promise.all([
         post("/auth/telegram", payload),
