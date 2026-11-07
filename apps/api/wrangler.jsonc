@@ -5,8 +5,8 @@
   "compatibility_date": "2026-11-02",
   "workers_dev": true,
   "vars": {
-    "TELEGRAM_CLIENT_ID": "",
-    "WEB_ORIGINS": ""
+    "TELEGRAM_CLIENT_ID": "9213768100",
+    "WEB_ORIGINS": "https://sales-visit.up2dul.workers.dev"
   },
   "ratelimits": [
     {
