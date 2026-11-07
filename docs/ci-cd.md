@@ -17,6 +17,21 @@ Reuse only these existing resources in the verified account:
 | api    | `apps/api/wrangler.jsonc` | `sales-visit-api` | `pnpm deploy:api`                   |
 | bot    | `apps/bot/wrangler.jsonc` | `sales-visit-bot` | `pnpm deploy:bot`                   |
 
+For Telegram Web authentication, follow [the dedicated setup and staged release checklist](web-auth.md).
+Migration 0007 must be the only pending migration after verifying 0000–0006.
+The release orchestrator still orders `web → api → bot`: use separate manual
+`api`, then `web` targets, not `all`, for API-before-Web activation. The isolated
+Web build maps approved Environment `API_URL` to public `VITE_API_URL`; secrets
+and caller VITE/dotenv variables remain excluded. Strict API config validation
+now explicitly permits only `TELEGRAM_CLIENT_ID` and `WEB_ORIGINS` runtime vars,
+and exactly two reviewed native auth rate limiters (namespaces `15001`/`15002`,
+20/300 calls per 60 seconds). Namespace ownership/collision approval is an operator
+prerequisite, not automatic provisioning. A legacy API may lack both bindings only
+while login is absent/disabled; partial/mismatched bindings or an enabled unprotected
+login are denied. Post-upload API verification must attest both native bindings
+before health approval or proceeding to Bot. See the auth runbook for per-location,
+approximate-limit caveats, missing-binding fail-closed behavior and staged rollout.
+
 No staging environment, resource bootstrap or rollback automation is included.
 Old bootstrap instructions in `docs/deployment.md` are historical, not steps to
 repeat on these resources. No frontend tests or business behavior were added.

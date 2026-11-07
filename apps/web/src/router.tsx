@@ -6,6 +6,7 @@ import {
   notFound,
   Outlet,
   redirect,
+  useRouter,
   type SearchSchemaInput,
 } from "@tanstack/react-router";
 
@@ -19,6 +20,11 @@ import {
 } from "@/components/ui/empty";
 import { loadVisitData } from "@/data/visit-store";
 import { LoginPage } from "@/features/auth/pages/login-page";
+import {
+  currentAccount,
+  restoreSession,
+  safeReturn,
+} from "@/features/auth/session";
 import { DirectoryPage } from "@/features/directory/pages/directory-page";
 import {
   loadOutletDetail,
@@ -52,6 +58,21 @@ function NotFoundPage() {
   );
 }
 
+function SessionUnavailable() {
+  const router = useRouter();
+  return (
+    <Empty>
+      <EmptyHeader role="alert">
+        <EmptyTitle>Sesi belum dapat diperiksa</EmptyTitle>
+        <EmptyDescription>
+          Periksa koneksi lalu coba lagi. Sesi tersimpan tidak dihapus.
+        </EmptyDescription>
+      </EmptyHeader>
+      <Button onClick={() => void router.invalidate()}>Coba lagi</Button>
+    </Empty>
+  );
+}
+
 const visitSearch = (search: SearchSchemaInput & Partial<VisitFilters>) =>
   validateVisitSearch(search);
 
@@ -62,19 +83,33 @@ const rootRoute = createRootRoute({
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: "dashboard",
+  beforeLoad: async ({ location }) => {
+    const account = await restoreSession();
+    if (!account)
+      throw redirect({
+        to: "/login",
+        search: { redirect: safeReturn(location.href) },
+        replace: true,
+      });
+  },
+  pendingComponent: () => <p role="status">Memeriksa sesi…</p>,
+  errorComponent: SessionUnavailable,
   component: DashboardLayout,
   notFoundComponent: NotFoundPage,
 });
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: safeReturn(search.redirect),
+  }),
   component: LoginPage,
 });
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   beforeLoad: () => {
-    throw redirect({ to: "/login", replace: true });
+    throw redirect({ to: "/overview", replace: true });
   },
 });
 const overviewRoute = createRoute({
@@ -113,7 +148,15 @@ const directoryRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: "/directory",
   loader: loadVisitData,
-  component: DirectoryPage,
+  component: () =>
+    currentAccount()?.role === "sales_force" ? (
+      <p role="alert">
+        Akses tidak diizinkan. Halaman pemantauan hanya untuk Admin dan
+        Supervisor.
+      </p>
+    ) : (
+      <DirectoryPage />
+    ),
 });
 
 const outletsRoute = createRoute({

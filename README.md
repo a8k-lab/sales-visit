@@ -2,7 +2,7 @@
 
 **Sales Visit** is a university **Computing Project** focused on digitizing field-sales visits and outlet reporting for a Telkomsel product-distribution workflow associated with partner **Citra Indah**.
 
-> **Project status:** The Web Dashboard uses synthetic mock data and browser-local storage. Shared contracts, the Drizzle/D1 schema and migrations, local Hono reads, and atomic/idempotent Visit and Stock Report write operations are implemented. Writes are integration-tested with injected trusted identities; the default runtime rejects all writes until real authentication is implemented. Telegram registration and Admin approval now use a private Worker Service Binding and audited D1 operations. API/frontend integration and Web authentication remain unimplemented. The [CI/CD runbook](docs/ci-cd.md) records current release policy: remote migration 0004 is operator-confirmed as applied, while deployed API/Bot versions remain unverified.
+> **Project status:** The Web Dashboard uses synthetic mock data and browser-local storage. Shared contracts, the Drizzle/D1 schema and migrations, local Hono reads, and atomic/idempotent Visit and Stock Report write operations are implemented. Writes are integration-tested with injected trusted identities; the default HTTP runtime still rejects all business writes, including authenticated Web requests. Telegram registration and Admin approval now use a private Worker Service Binding and audited D1 operations. Telegram OIDC Web authentication, revocable sessions and role-scoped API reads are implemented; dashboard data remains synthetic. See the [Web auth setup/release procedure](docs/web-auth.md). The [CI/CD runbook](docs/ci-cd.md) records current release policy: remote migration 0004 is operator-confirmed as applied, while deployed API/Bot versions remain unverified.
 
 ## Background
 
@@ -55,7 +55,7 @@ runtime report writes are unauthorized. Telegram `/register`, `/me`, `/pending`,
 `/approve`, and `/reject` use API-owned identity operations. See
 [API documentation](apps/api/README.md) and the [Bot sandbox runbook](apps/bot/README.md).
 
-**Later integration:** API-backed Web operations, Telegram guided reporting, real authentication/authorization to enable writes, and operational reporting.
+**Later integration:** API-backed dashboard data, Web report-write authorization, and live operational reporting. Telegram guided reporting remains available through its existing private RPC/wizard.
 
 **Not part of the current MVP commitment:** Outlet login/self-reporting, advanced product recommendations, comprehensive sales-order and payment flows, or replacement of DigiPOS. These require business validation and an explicit scope decision.
 
@@ -161,6 +161,6 @@ The team's FigJam notes list a **static dashboard target of 3 November 2026** an
 
 The static Web workflow, API/D1 operations and Telegram reporting are implemented
 as independent units. Web still uses synthetic mocks; API-backed Web operations
-and Web authentication remain future milestones. Existing Workers must be reused.
+remain future milestones. Web authentication and protected API reads now have a separate [setup and staged rollout checklist](docs/web-auth.md). Existing Workers must be reused.
 The operator confirms remote D1 migration 0004 is applied; deployed API/Bot versions
 remain unverified until inspected. See the [release runbook](docs/ci-cd.md).

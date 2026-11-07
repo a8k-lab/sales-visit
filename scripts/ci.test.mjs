@@ -34,7 +34,13 @@ const token = "synthetic-offline-token";
 const configs = Object.fromEntries(workers.map((w) => [w, loadTarget(w)]));
 const bindings = (worker) =>
   worker === "api"
-    ? [{ name: "DB", type: "d1", id: configs.api.d1_databases[0].database_id }]
+    ? [
+        { name: "DB", type: "d1", id: configs.api.d1_databases[0].database_id },
+        ...configs.api.ratelimits.map((rate) => ({
+          ...rate,
+          type: "ratelimit",
+        })),
+      ]
     : worker === "bot"
       ? [
           {
@@ -300,6 +306,25 @@ for (const worker of workers)
       else assert.equal(options.method, "GET");
     }
   });
+test("legacy disabled API preflight records missing limiter attestation, never claims ready", async () => {
+  const { api } = fixture("api", {
+    [`/workers/scripts/${names.api}/versions/${oldVersion}`]: {
+      id: oldVersion,
+      resources: {
+        bindings: [
+          {
+            name: "DB",
+            type: "d1",
+            id: configs.api.d1_databases[0].database_id,
+          },
+        ],
+        script: { named_handlers: [{ name: "BotIdentity" }] },
+      },
+    },
+  });
+  const state = await inspect("api", { account, api, url: url("api") });
+  assert.equal(state.authRateLimitsReady, false);
+});
 test("successful deploy subprocess is verified using the active version's documented annotations", async () => {
   const before = fixture();
   const after = fixture(
@@ -629,6 +654,7 @@ const states = () =>
       w,
       {
         worker: w,
+        authRateLimitsReady: w === "api" ? true : undefined,
         tag: `immutable-${w}`,
         version: "old",
         deployment: "old",

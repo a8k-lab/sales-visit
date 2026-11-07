@@ -19,6 +19,7 @@ const states = () =>
       worker,
       {
         worker,
+        authRateLimitsReady: worker === "api" ? true : undefined,
         tag: worker,
         version: "uploaded",
         deployment: "uploaded",

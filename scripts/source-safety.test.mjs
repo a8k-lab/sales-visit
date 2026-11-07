@@ -86,6 +86,8 @@ const env = {
   CLOUDFLARE_API_TOKEN: "offline-only",
   VITE_UNREVIEWED: "do not inherit",
   WEB_URL: "https://synthetic.invalid",
+  API_URL: "https://synthetic-api.invalid",
+  VITE_API_URL: "https://unapproved.invalid",
 };
 test("manual Web deployment rebuilds isolated assets before applying the revision tag", async (t) => {
   const directory = snapshot(t);
@@ -111,6 +113,7 @@ test("manual Web deployment rebuilds isolated assets before applying the revisio
         assert.equal(options.env.VITE_UNREVIEWED, undefined);
       }
       if (args[0] === "build:web") {
+        assert.equal(options.env.VITE_API_URL, env.API_URL);
         assert.equal(
           existsSync(join(directory, "apps/web/dist/index.html")),
           false
@@ -122,6 +125,7 @@ test("manual Web deployment rebuilds isolated assets before applying the revisio
         );
       }
       if (args.includes("deploy")) {
+        assert.equal(options.env.VITE_API_URL, undefined);
         assert.equal(options.cwd, join(directory, "apps/web"));
         assert.equal(
           readFileSync(join(options.cwd, "dist/index.html"), "utf8"),

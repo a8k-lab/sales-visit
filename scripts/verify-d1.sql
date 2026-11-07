@@ -10,4 +10,12 @@ UNION ALL SELECT 'stock_reports', count(*) FROM stock_reports
 UNION ALL SELECT 'stock_report_items', count(*) FROM stock_report_items
 UNION ALL SELECT 'users', count(*) FROM users
 UNION ALL SELECT 'telegram_identities', count(*) FROM telegram_identities
-UNION ALL SELECT 'access_audit', count(*) FROM access_audit;
+UNION ALL SELECT 'access_audit', count(*) FROM access_audit
+UNION ALL SELECT 'visit_schedules', count(*) FROM visit_schedules
+UNION ALL SELECT 'telegram_visit_drafts', count(*) FROM telegram_visit_drafts
+UNION ALL SELECT 'web_login_challenges', count(*) FROM web_login_challenges
+UNION ALL SELECT 'web_sessions', count(*) FROM web_sessions;
+-- DDL only: never select nonce/hash/token values from credential tables.
+SELECT name, sql FROM sqlite_master
+WHERE tbl_name IN ('web_login_challenges', 'web_sessions')
+AND type IN ('table', 'index') ORDER BY name;

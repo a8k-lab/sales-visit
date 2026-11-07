@@ -246,10 +246,7 @@ test("business identifiers are opaque, unique, immutable and explicitly namespac
     ])
       assert.equal((await rpc(method, by, data)).code, "forbidden");
   }
-  const publicRows = await (await api.fetch("https://api/outlets")).json();
-  assert.ok(
-    publicRows.every((o) => Object.keys(o).toSorted().join() === "id,name")
-  );
+  assert.equal((await api.fetch("https://api/outlets")).status, 401);
   assert.equal(
     (await rpc("getOutlet", 1, { id: "000123" })).data.businessId,
     null
@@ -1086,10 +1083,7 @@ test("role-aware recurring schedule provisioning and queries over Worker RPC", a
     assert.equal(ids.length, expected);
     assert.deepEqual(ids, [...new Set(ids)].toSorted());
   }
-  const publicOutlets = await (await api.fetch("https://api/outlets")).json();
-  assert.ok(
-    publicOutlets.every((o) => Object.keys(o).toSorted().join() === "id,name")
-  );
+  assert.equal((await api.fetch("https://api/outlets")).status, 401);
   assert.deepEqual(
     (await db.prepare("PRAGMA foreign_key_check").all()).results,
     []
@@ -1255,10 +1249,7 @@ test("authorized Outlet CRUD over named RPC with migrated local D1", async (t) =
         404
       );
   }
-  const publicOutlets = await (await api.fetch("https://api/outlets")).json();
-  assert.ok(
-    publicOutlets.every((o) => Object.keys(o).toSorted().join() === "id,name")
-  );
+  assert.equal((await api.fetch("https://api/outlets")).status, 401);
   for (const path of ["/visits", "/stock-reports"])
     assert.equal(
       (

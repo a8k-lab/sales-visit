@@ -431,8 +431,7 @@ test("registration, authorization and verified webhook across real Worker RPC + 
             ).status,
             401
           );
-        const sf = await (await api.fetch("https://api/sales-force")).json();
-        assert.deepEqual(Object.keys(sf[0]).toSorted(), ["id", "name"]);
+        assert.equal((await api.fetch("https://api/sales-force")).status, 401);
       }
     );
 

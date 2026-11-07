@@ -4,6 +4,22 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-11-02",
   "workers_dev": true,
+  "vars": {
+    "TELEGRAM_CLIENT_ID": "9213768100",
+    "WEB_ORIGINS": "https://sales-visit.up2dul.workers.dev"
+  },
+  "ratelimits": [
+    {
+      "name": "AUTH_IP_LIMITER",
+      "namespace_id": "15001",
+      "simple": { "limit": 20, "period": 60 }
+    },
+    {
+      "name": "AUTH_GLOBAL_LIMITER",
+      "namespace_id": "15002",
+      "simple": { "limit": 300, "period": 60 }
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

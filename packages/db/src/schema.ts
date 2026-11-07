@@ -103,6 +103,47 @@ export const telegramIdentities = sqliteTable(
   ]
 );
 
+// Web credentials are opaque; only session token hashes are persisted.
+export const webLoginChallenges = sqliteTable(
+  "web_login_challenges",
+  {
+    id: id(),
+    nonce: text("nonce").notNull().unique(),
+    createdAt: integer("created_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    consumedAt: integer("consumed_at"),
+  },
+  (table) => [
+    check("web_challenge_expiry", sql`${table.expiresAt} > ${table.createdAt}`),
+    index("web_challenge_expiry_idx").on(table.expiresAt),
+  ]
+);
+
+export const webSessions = sqliteTable(
+  "web_sessions",
+  {
+    tokenHash: text("token_hash").primaryKey().notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    createdAt: integer("created_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    revokedAt: integer("revoked_at"),
+  },
+  (table) => [
+    check(
+      "web_session_hash",
+      sql`length(${table.tokenHash}) = 64 and ${table.tokenHash} not glob '*[^0-9a-f]*'`
+    ),
+    check("web_session_expiry", sql`${table.expiresAt} > ${table.createdAt}`),
+    index("web_session_user_idx").on(table.userId),
+    index("web_session_expiry_idx").on(table.expiresAt),
+  ]
+);
+
 // Restricted access-management history; never included in public business reads.
 export const accessAudit = sqliteTable(
   "access_audit",
