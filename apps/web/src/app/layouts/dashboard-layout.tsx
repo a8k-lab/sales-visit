@@ -88,17 +88,19 @@ export function DashboardLayout() {
                     </BreadcrumbLink>
                   ) : (
                     <BreadcrumbPage>
-                      {isAssignment
-                        ? "Penugasan Supervisor"
-                        : pathname === "/overview"
-                          ? "Ringkasan"
-                          : pathname === "/workspace"
-                            ? "Ruang kerja"
-                            : pathname === "/directory"
-                              ? "Data referensi"
-                              : isOutlet
-                                ? "Outlet"
-                                : "Kunjungan"}
+                      {pathname === "/users"
+                        ? "Pengguna & Akses"
+                        : isAssignment
+                          ? "Penugasan Supervisor"
+                          : pathname === "/overview"
+                            ? "Ringkasan"
+                            : pathname === "/workspace"
+                              ? "Ruang kerja"
+                              : pathname === "/directory"
+                                ? "Data referensi"
+                                : isOutlet
+                                  ? "Outlet"
+                                  : "Kunjungan"}
                     </BreadcrumbPage>
                   )}
                 </BreadcrumbItem>

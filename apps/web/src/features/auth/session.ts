@@ -114,7 +114,7 @@ export async function logout() {
 export function safeReturn(value: unknown) {
   if (
     typeof value !== "string" ||
-    !/^\/(overview|visits|outlets|directory|supervisor-assignments)(\/|\?|$)/.test(
+    !/^\/(overview|visits|outlets|directory|supervisor-assignments|users)(\/|\?|$)/.test(
       value
     ) ||
     value.includes("\\") ||

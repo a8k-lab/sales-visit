@@ -25,9 +25,20 @@ import { api, ApiError, roleLabel } from "@/features/auth/session";
 
 import { accountName, statusLabels, type SalesForceOptions } from "./data";
 
-type Action = "approve" | "reject";
-const labels: Record<Action, string> = { approve: "Setujui", reject: "Tolak" };
+type Action = "approve" | "reject" | "role" | "disable" | "enable";
+const labels: Record<Action, string> = {
+  approve: "Setujui",
+  reject: "Tolak",
+  role: "Ubah role",
+  disable: "Nonaktifkan",
+  enable: "Aktifkan kembali",
+};
 const consequences: Record<Action, string> = {
+  role: "Perubahan role langsung mengubah akses akun. Penugasan Supervisor tetap tersimpan, tetapi akses pemantauan hanya berlaku untuk Supervisor aktif. Promosi ke Admin memberikan hak pengelolaan penuh dan dilindungi dari penurunan role.",
+  disable:
+    "Akun akan langsung kehilangan akses Web dan Telegram Bot. Role, asosiasi Sales Force, serta penugasan Supervisor tetap tersimpan.",
+  enable:
+    "Akun akan memperoleh kembali akses sesuai role dan penugasan yang tersimpan. Pastikan akses tersebut masih sesuai.",
   approve:
     "Pilih satu role untuk memberikan akses akun. Identitas tetap berasal dari registrasi Telegram.",
   reject:
@@ -46,9 +57,12 @@ export function AccountAction({
 }) {
   const router = useRouter();
   const fieldId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const [role, setRole] = useState<NonNullable<Account["role"]>>("supervisor");
-  const [salesForceId, setSalesForceId] = useState("");
+  const [role, setRole] = useState<NonNullable<Account["role"]>>(
+    row.role ?? "supervisor"
+  );
+  const [salesForceId, setSalesForceId] = useState(row.salesForceId ?? "");
   const [options, setOptions] = useState<SalesForceOptions | null>(null);
   const [loading, setLoading] = useState(false);
   const [optionError, setOptionError] = useState(false);
@@ -57,9 +71,10 @@ export function AccountAction({
   const submitting = useRef(false);
   const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState("");
-  const needsRole = action === "approve";
+  const needsRole = action === "approve" || action === "role";
   useEffect(() => {
-    if (!open || !needsRole || role !== "sales_force") return;
+    if (!open || !needsRole || role !== "sales_force" || row.salesForceId)
+      return;
     let cancelled = false;
     setLoading(true);
     setOptionError(false);
@@ -76,7 +91,7 @@ export function AccountAction({
     return () => {
       cancelled = true;
     };
-  }, [open, needsRole, role, optionRevision]);
+  }, [open, needsRole, role, optionRevision, row.salesForceId]);
   const moreOptions = async () => {
     if (!options?.next) return;
     setLoading(true);
@@ -146,21 +161,37 @@ export function AccountAction({
       setBusy(false);
     }
   };
-  const sfOptions = options?.items ?? [];
+  const sfOptions = row.salesForceId
+    ? [{ id: row.salesForceId, name: "Asosiasi tersimpan" }]
+    : (options?.items ?? []);
   return (
     <Dialog
       open={open}
       onOpenChange={(value) => {
         if (!busy && !uncertain) {
+          if (value) {
+            setRole(row.role ?? "supervisor");
+            setSalesForceId(row.salesForceId ?? "");
+            setOptions(null);
+            setOptionError(false);
+          }
           setOpen(value);
           setError("");
         }
       }}
     >
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>
+      <DialogTrigger
+        ref={triggerRef}
+        render={<Button variant="outline" size="sm" />}
+      >
         {labels[action]}
       </DialogTrigger>
       <DialogContent
+        finalFocus={() =>
+          triggerRef.current?.isConnected
+            ? triggerRef.current
+            : document.getElementById("users-title")
+        }
         showCloseButton={!busy && !uncertain}
         className="max-h-[90dvh] overflow-y-auto"
       >
@@ -174,6 +205,12 @@ export function AccountAction({
           Telegram: {row.username ? "@" + row.username + " · " : ""}
           {row.telegramUserId}
         </p>
+        {row.salesForceId && (
+          <p className="text-muted-foreground text-sm">
+            Asosiasi Sales Force {row.salesForceId} dipertahankan dan tidak
+            dapat diganti.
+          </p>
+        )}
         {needsRole && (
           <FieldGroup>
             <Field>
@@ -188,7 +225,7 @@ export function AccountAction({
                 onValueChange={(value) => {
                   if (value) {
                     setRole(value);
-                    setSalesForceId("");
+                    setSalesForceId(row.salesForceId ?? "");
                   }
                 }}
               >
@@ -267,6 +304,7 @@ export function AccountAction({
             )}
           </FieldGroup>
         )}
+        {busy && <p role="status">Menyimpan atau memeriksa status akun…</p>}
         {error && <p role="alert">{error}</p>}
         <DialogFooter>
           <Button
@@ -292,7 +330,11 @@ export function AccountAction({
             </Button>
           ) : (
             <Button
-              variant={action === "reject" ? "destructive" : "default"}
+              variant={
+                action === "reject" || action === "disable"
+                  ? "destructive"
+                  : "default"
+              }
               disabled={
                 busy ||
                 (needsRole &&

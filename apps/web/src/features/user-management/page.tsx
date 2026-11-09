@@ -110,6 +110,25 @@ function UserRow({
       </TableCell>
       <TableCell>
         <div className="flex flex-wrap gap-2">
+          {row.status === "active" && row.role !== "admin" && (
+            <>
+              <AccountAction row={row} action="role" onMessage={onMessage} />
+              <AccountAction row={row} action="disable" onMessage={onMessage} />
+            </>
+          )}
+          {row.status === "active" && row.role === "admin" && (
+            <span className="text-muted-foreground text-xs">
+              Admin dilindungi
+            </span>
+          )}
+          {row.status === "disabled" && (
+            <AccountAction row={row} action="enable" onMessage={onMessage} />
+          )}
+          {row.status === "rejected" && (
+            <span className="text-muted-foreground text-xs">
+              Keputusan final
+            </span>
+          )}
           {row.status === "pending" && (
             <>
               <AccountAction row={row} action="approve" onMessage={onMessage} />
@@ -156,7 +175,7 @@ export function UserManagementPage() {
   return (
     <section className="flex flex-col gap-6" aria-labelledby="users-title">
       <div className="flex flex-col gap-2">
-        <h1 id="users-title" className="text-2xl font-semibold">
+        <h1 id="users-title" tabIndex={-1} className="text-2xl font-semibold">
           Pengguna &amp; Akses
         </h1>
         <p className="text-muted-foreground text-sm">
