@@ -54,7 +54,8 @@ export function DashboardLayout() {
     select: (state) => state.location.pathname,
   });
   const { theme, setTheme } = useTheme();
-  const isAssignment = pathname === "/supervisor-assignments";
+  const isAssignment =
+    pathname.replace(/\/+$/, "") === "/supervisor-assignments";
   const isOutlet = pathname === "/outlets" || pathname.startsWith("/outlets/");
   const isDetail =
     pathname.startsWith("/visits/") || pathname.startsWith("/outlets/");
