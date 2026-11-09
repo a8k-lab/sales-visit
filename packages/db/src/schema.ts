@@ -71,6 +71,110 @@ export const users = sqliteTable(
   ]
 );
 
+// Current monitoring responsibility, not a group or an identity association.
+export const salesForceSupervisors = sqliteTable(
+  "sales_force_supervisors",
+  {
+    salesForceId: text("sales_force_id")
+      .primaryKey()
+      .notNull()
+      .references(() => salesForce.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    supervisorUserId: text("supervisor_user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    createdAt: createdAt(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (table) => [
+    index("sales_force_supervisors_user_idx").on(table.supervisorUserId),
+  ]
+);
+
+export const supervisorAssignmentAudit = sqliteTable(
+  "supervisor_assignment_audit",
+  {
+    id: id(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    salesForceId: text("sales_force_id")
+      .notNull()
+      .references(() => salesForce.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    previousSupervisorUserId: text("previous_supervisor_user_id").references(
+      () => users.id,
+      { onDelete: "restrict", onUpdate: "restrict" }
+    ),
+    newSupervisorUserId: text("new_supervisor_user_id").references(
+      () => users.id,
+      { onDelete: "restrict", onUpdate: "restrict" }
+    ),
+    action: text("action", {
+      enum: ["assign", "reassign", "unassign"],
+    }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index("supervisor_assignment_audit_sf_idx").on(table.salesForceId),
+    check(
+      "supervisor_assignment_audit_transition",
+      sql`(${table.action} = 'assign' and ${table.previousSupervisorUserId} is null and ${table.newSupervisorUserId} is not null) or (${table.action} = 'reassign' and ${table.previousSupervisorUserId} is not null and ${table.newSupervisorUserId} is not null and ${table.previousSupervisorUserId} <> ${table.newSupervisorUserId}) or (${table.action} = 'unassign' and ${table.previousSupervisorUserId} is not null and ${table.newSupervisorUserId} is null)`
+    ),
+  ]
+);
+
+export const salesForceSupervisorsRelations = relations(
+  salesForceSupervisors,
+  ({ one }) => ({
+    salesForce: one(salesForce, {
+      fields: [salesForceSupervisors.salesForceId],
+      references: [salesForce.id],
+    }),
+    supervisor: one(users, {
+      fields: [salesForceSupervisors.supervisorUserId],
+      references: [users.id],
+    }),
+  })
+);
+
+export const supervisorAssignmentAuditRelations = relations(
+  supervisorAssignmentAudit,
+  ({ one }) => ({
+    actor: one(users, {
+      fields: [supervisorAssignmentAudit.actorUserId],
+      references: [users.id],
+      relationName: "assignmentActor",
+    }),
+    salesForce: one(salesForce, {
+      fields: [supervisorAssignmentAudit.salesForceId],
+      references: [salesForce.id],
+    }),
+    previousSupervisor: one(users, {
+      fields: [supervisorAssignmentAudit.previousSupervisorUserId],
+      references: [users.id],
+      relationName: "previousSupervisor",
+    }),
+    newSupervisor: one(users, {
+      fields: [supervisorAssignmentAudit.newSupervisorUserId],
+      references: [users.id],
+      relationName: "newSupervisor",
+    }),
+  })
+);
+
 export const telegramIdentities = sqliteTable(
   "telegram_identities",
   {
@@ -185,7 +289,17 @@ export const accessAudit = sqliteTable(
   ]
 );
 
-export const usersRelations = relations(users, ({ one }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
+  supervisedSalesForce: many(salesForceSupervisors),
+  assignmentActions: many(supervisorAssignmentAudit, {
+    relationName: "assignmentActor",
+  }),
+  previousAssignments: many(supervisorAssignmentAudit, {
+    relationName: "previousSupervisor",
+  }),
+  newAssignments: many(supervisorAssignmentAudit, {
+    relationName: "newSupervisor",
+  }),
   salesForce: one(salesForce, {
     fields: [users.salesForceId],
     references: [salesForce.id],
@@ -470,7 +584,9 @@ export const stockReportItems = sqliteTable(
   ]
 );
 
-export const salesForceRelations = relations(salesForce, ({ many }) => ({
+export const salesForceRelations = relations(salesForce, ({ one, many }) => ({
+  supervisorAssignment: one(salesForceSupervisors),
+  assignmentHistory: many(supervisorAssignmentAudit),
   users: many(users),
   visitSchedules: many(visitSchedules),
   visits: many(visits),

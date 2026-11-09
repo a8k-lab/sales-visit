@@ -33,9 +33,18 @@ See [Web authentication and release setup](../../docs/web-auth.md) for Telegram
 OIDC, challenge/session contracts, CORS, role scoping and migration 0007.
 Only `/health` is public among the business GETs below. All others require a
 valid Web Bearer session; public HTTP writes remain denied even with a session.
-Admin/Supervisor can monitor all operational data; Sales Force cannot list
-Sales Force and can read only their own Visits/Stock Reports plus limited
-Outlet/Product references. Authorization is applied server-side on every request.
+Admin can monitor all operational data; Supervisor sees only currently assigned
+Sales Force members' records (Stock Reports scoped independently by reporter).
+Sales Force cannot list Sales Force and can read only their own Visits/Stock Reports
+plus limited Outlet/Product references. Authorization is applied within SQL before
+pagination. See [Supervisor assignments](../../docs/supervisor-assignments.md) for
+migration 0008, lifecycle policy, assignment API, permission matrix and rollout order.
+
+Admin-only Web routes: `GET /supervisors`, `GET /supervisor-assignments`, and
+`PUT /supervisor-assignments` with `{ salesForceId: string, supervisorUserId: string | null }`.
+Sales Force IDs are sent exactly in JSON (not normalized URL path segments);
+legacy stored references and list cursors remain usable within bounded requests.
+They use the existing Bearer session; report POST endpoints remain denied.
 
 | GET path         | JSON response                                            |
 | ---------------- | -------------------------------------------------------- |
@@ -152,7 +161,7 @@ binding, header convention, environment flag, or dev-mode bypass.
 The default HTTP Worker calls `createApp()` **without a resolver** and always denies
 report writes before parsing a body or using D1. Authorization headers and spoofed
 identity headers cannot enable it. There is no fake login or test identity in
-the deployed entrypoint. Reads remain unauthenticated; remote deployment must use synthetic data only.
+the deployed entrypoint. Business reads require a valid Web session and live role/assignment scope.
 
 ### Internal Bot identity RPC
 
@@ -176,7 +185,8 @@ the Bot's existing Outlet/Schedule commands call this private surface.
 See [the foundation guide](../../docs/design/outlet-schedule-foundation.md) for
 contracts, role permissions, ISO/Indonesian weekdays, safe error codes,
 50-row keyset pagination, additive migration prerequisites and optional local
-synthetic schedule fixtures. All public business reads remain synthetic-only.
+synthetic schedule fixtures. Schedule monitoring now additionally intersects current
+Supervisor assignments; Admin remains global. Bot RPC contracts are unchanged.
 
 Outlet creation requires `{ businessId, noRs, name }`; both identifiers are opaque
 strings (1–256 UTF-16 units, nonblank, no control/format characters), preserving

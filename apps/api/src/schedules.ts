@@ -60,10 +60,21 @@ export class ScheduleOperations {
       "telegramUserId" in filter && typeof filter.telegramUserId === "string"
         ? filter.telegramUserId
         : null;
-    const target = `SELECT sales_force_id FROM (${verifiedLinks}) WHERE telegram_user_id = ?`;
+    // Association availability is sensitive too: out-of-team and unknown
+    // Telegram targets must yield the same result, even when no plan matches.
+    const target = `SELECT target_link.sales_force_id FROM (${verifiedLinks}) target_link
+      WHERE target_link.telegram_user_id = ? AND (
+        EXISTS (SELECT 1 FROM actor WHERE role = 'admin') OR EXISTS (
+          SELECT 1 FROM sales_force_supervisors target_assignment JOIN actor
+            ON actor.userId = target_assignment.supervisor_user_id
+          WHERE actor.role = 'supervisor'
+            AND target_assignment.sales_force_id = target_link.sales_force_id))`;
     const scope = own
       ? "s.sales_force_id = (SELECT salesForceId FROM actor)"
-      : `(? IS NULL OR s.sales_force_id = ?) AND (? IS NULL OR s.sales_force_id = (${target}))`;
+      : `(EXISTS (SELECT 1 FROM actor WHERE role = 'admin') OR EXISTS (
+          SELECT 1 FROM sales_force_supervisors assignment JOIN actor ON actor.userId = assignment.supervisor_user_id
+          WHERE actor.role = 'supervisor' AND assignment.sales_force_id = s.sales_force_id))
+        AND (? IS NULL OR s.sales_force_id = ?) AND (? IS NULL OR s.sales_force_id = (${target}))`;
     const result = await planningBatch(
       this.db,
       actor,

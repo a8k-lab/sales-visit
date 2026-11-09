@@ -13,7 +13,9 @@ import {
   OperationError,
   type TrustedIdentity,
 } from "./operations.ts";
+import { operationalScope } from "./read-scope.ts";
 import { toStockReport, toVisit } from "./records.ts";
+import { supervisorAssignmentRoutes } from "./supervisor-assignments.ts";
 import { authRoutes, sessionAccount, type WebEnv } from "./web-auth.ts";
 
 // No header, secret, environment switch, or development bypass supplies identity.
@@ -44,11 +46,11 @@ export function createApp(
           .filter(Boolean);
         if (
           !method ||
-          !["GET", "POST"].includes(method) ||
+          !["GET", "POST", "PUT"].includes(method) ||
           headers.some((h) => !["authorization", "content-type"].includes(h))
         )
           return c.json({ error: "Invalid preflight" }, 403);
-        c.header("Access-Control-Allow-Methods", "GET, POST");
+        c.header("Access-Control-Allow-Methods", "GET, POST, PUT");
         c.header("Access-Control-Allow-Headers", "Authorization, Content-Type");
         return c.body(null, 204);
       }
@@ -56,6 +58,8 @@ export function createApp(
     await next();
   });
   app.route("/auth", authRoutes(telegramKeys));
+  // Dedicated routes authenticate themselves, including PUT requests.
+  app.route("/", supervisorAssignmentRoutes());
 
   for (const [path, operation] of [
     ["/visits", createVisit],
@@ -127,6 +131,7 @@ export function createApp(
     const rows = await createDb(c.env.DB).query.salesForce.findMany({
       ...page(c),
       columns: { id: true, name: true },
+      where: (table) => operationalScope(c.get("account").id, table.id),
       orderBy: (table, { asc }) => [asc(table.id)],
     });
     return c.json(rows);
@@ -153,10 +158,13 @@ export function createApp(
   app.get("/visits", async (c) => {
     const rows = await createDb(c.env.DB).query.visits.findMany({
       ...page(c),
-      where: (table, { eq }) =>
-        c.get("account").role === "sales_force"
-          ? eq(table.salesForceId, c.get("account").salesForceId!)
-          : undefined,
+      where: (table, { and, eq }) =>
+        and(
+          operationalScope(c.get("account").id, table.salesForceId),
+          c.req.query("salesForceId")
+            ? eq(table.salesForceId, c.req.query("salesForceId")!)
+            : undefined
+        ),
       orderBy: (table, { desc, asc }) => [desc(table.visitedAt), asc(table.id)],
     });
     return c.json(rows.map(toVisit));
@@ -168,17 +176,13 @@ export function createApp(
       where: (table, { eq, and }) =>
         and(
           eq(table.id, id),
-          c.get("account").role === "sales_force"
-            ? eq(table.salesForceId, c.get("account").salesForceId!)
-            : undefined
+          operationalScope(c.get("account").id, table.salesForceId)
         ),
       with: {
         stockReports: {
           limit: 100,
-          where: (table, { eq }) =>
-            c.get("account").role === "sales_force"
-              ? eq(table.reporterSalesForceId, c.get("account").salesForceId!)
-              : undefined,
+          where: (table) =>
+            operationalScope(c.get("account").id, table.reporterSalesForceId),
           orderBy: (table, { desc, asc }) => [
             desc(table.reportedAt),
             asc(table.id),
@@ -199,10 +203,19 @@ export function createApp(
   app.get("/stock-reports", async (c) => {
     const rows = await createDb(c.env.DB).query.stockReports.findMany({
       ...page(c),
-      where: (table, { eq }) =>
-        c.get("account").role === "sales_force"
-          ? eq(table.reporterSalesForceId, c.get("account").salesForceId!)
-          : undefined,
+      where: (table, { and, eq }) =>
+        and(
+          operationalScope(c.get("account").id, table.reporterSalesForceId),
+          c.req.query("reporterSalesForceId")
+            ? eq(
+                table.reporterSalesForceId,
+                c.req.query("reporterSalesForceId")!
+              )
+            : undefined,
+          c.req.query("salesForceId")
+            ? eq(table.reporterSalesForceId, c.req.query("salesForceId")!)
+            : undefined
+        ),
       orderBy: (table, { desc, asc }) => [
         desc(table.reportedAt),
         asc(table.id),

@@ -202,6 +202,13 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
         .bind(`u${id}`, String(id)),
     ]);
   }
+  // Monitoring regression fixture has an explicit assignment, never inferred from its code.
+  await db
+    .prepare(
+      "INSERT INTO sales_force_supervisors (sales_force_id, supervisor_user_id) VALUES (?, 'u2')"
+    )
+    .bind(sf)
+    .run();
   const bot = await mf.getWorker("bot");
   let update = 0;
   async function command(id, text, options = {}) {
@@ -526,6 +533,12 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
         ),
         /berhasil dibuat/
       );
+      await db
+        .prepare(
+          "INSERT INTO sales_force_supervisors (sales_force_id, supervisor_user_id) VALUES (?, 'u2')"
+        )
+        .bind(longSf)
+        .run();
       const text = await command(2, `/jadwalsales sf=${enc(longSf)}`);
       assert.ok(text.includes(enc(longSf)) && text.includes(enc(longOutlet)));
       assert.ok(sent.length <= 2);

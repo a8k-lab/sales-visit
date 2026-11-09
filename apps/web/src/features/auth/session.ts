@@ -108,7 +108,9 @@ export async function logout() {
 export function safeReturn(value: unknown) {
   if (
     typeof value !== "string" ||
-    !/^\/(overview|visits|outlets|directory)(\/|\?|$)/.test(value) ||
+    !/^\/(overview|visits|outlets|directory|supervisor-assignments)(\/|\?|$)/.test(
+      value
+    ) ||
     value.includes("\\") ||
     [...value].some((char) => char.charCodeAt(0) < 32)
   )

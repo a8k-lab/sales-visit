@@ -27,10 +27,19 @@ type. Only the API should access persistence; Web and Bot use the shared API.
 
 ## Schema decisions
 
-- Ten tables: `sales_force`, `outlets`, `products`, `visits`, `stock_reports`,
-  `stock_report_items`, `users`, `telegram_identities`, `access_audit`, and `visit_schedules`. Sales Force staff
-  records and Outlet business records are not application accounts. See
-  [identity invariants, operator bootstrap, audit and deferred decisions](IDENTITY.md).
+- Fifteen application tables through migration 0008: `sales_force`, `outlets`,
+  `products`, `visits`, `stock_reports`, `stock_report_items`, `users`,
+  `telegram_identities`, `access_audit`, `visit_schedules`, `telegram_visit_drafts`,
+  `web_login_challenges`, `web_sessions`, `sales_force_supervisors`, and
+  `supervisor_assignment_audit`. Sales Force staff and Outlet business records
+  are not application accounts. See [identity invariants](IDENTITY.md) and the
+  [assignment model, migration prerequisites and rollout](../../docs/supervisor-assignments.md).
+- Additive migration `0008_demonic_princess_powerful.sql` adds current Supervisor
+  responsibility (one optional Supervisor per Sales Force) and restricted
+  assignment-change history. Existing records remain untouched and initially
+  unassigned. Restrictive FKs/PK enforce identity/cardinality; active role/status,
+  audit-gated D1 mutations and query scoping are API responsibilities. No group,
+  geographic inference, or SF identifier changes are introduced.
 - Internal record IDs are opaque primary/FK keys; API Outlet creation generates
   UUIDs. They are never replaced by business identifiers. Names are nonunique.
 - New `0006_windy_black_crow.sql` adds nullable TEXT `outlets.business_id` and

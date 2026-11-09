@@ -461,6 +461,12 @@ test("Web sessions and authorized reads on disposable local D1", async (t) => {
       assert.equal((await post("/auth/telegram", payload)).status, 401);
     }
   );
+  // The monitoring smoke test's Supervisor is explicitly assigned the fixture SFs.
+  await db
+    .prepare(
+      "INSERT INTO sales_force_supervisors (sales_force_id, supervisor_user_id) SELECT id, 'u1002' FROM sales_force"
+    )
+    .run();
   const admin = await (await login()).json();
   const supervisor = await (await login(1002)).json();
   const sf = await (await login(1003)).json();

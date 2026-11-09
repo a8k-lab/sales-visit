@@ -2,7 +2,7 @@
 
 ## Architecture and boundaries
 
-This milestone advances **authentication only** beyond ADR-0006's initial static prototype. Web remains a static-assets-only Worker (`sales-visit`), communicating over HTTPS with the existing `sales-visit-api`. There is no BFF, Web entrypoint, Service Binding, cookie dependency, or Web report-write authorization. The existing `sales-visit` D1, BotIdentity private RPC binding, Bot lifecycle/approval rules, durable wizard, and Telegram webhook are unchanged.
+The authentication milestone advanced login beyond ADR-0006's initial static prototype. The subsequent [Supervisor Assignment & API Scoping milestone](supervisor-assignments.md) adds live assignment administration and restricts operational monitoring; use its rollout checklist for migration 0008. Web remains a static-assets-only Worker (`sales-visit`), communicating over HTTPS with the existing `sales-visit-api`. There is no BFF, Web entrypoint, Service Binding, cookie dependency, or Web report-write authorization. The existing `sales-visit` D1, BotIdentity private RPC binding, Bot lifecycle/approval rules, durable wizard, and Telegram webhook are unchanged.
 
 The official [Telegram Login documentation](https://core.telegram.org/bots/telegram-login) defines `Telegram.Login.auth`, its signed `id_token` callback, `profile` scope, and nonce. We use `https://oauth.telegram.org/js/telegram-login.js?6`; **no authorization-code exchange, Client Secret, UserInfo endpoint, phone scope, or messaging permission** is needed.
 
@@ -35,19 +35,19 @@ Malformed input returns 400; invalid proof/challenge/account/session returns 401
 
 All of these GETs (and implicit HEADs) require a valid Web session:
 
-| Read                    | Admin / Supervisor        | Sales Force                                                       |
-| ----------------------- | ------------------------- | ----------------------------------------------------------------- |
-| `/sales-force`          | All ID/name references    | 403                                                               |
-| `/outlets`, `/products` | ID/name reference data    | Same limited ID/name references for reporting                     |
-| `/visits`               | All Visits                | Own Sales Force only                                              |
-| `/visits/:id`           | Visit plus linked reports | Own Visit only; nested reports also restricted to own reporter ID |
-| `/stock-reports`        | All reports               | Own reporter Sales Force only                                     |
+| Read                    | Admin                     | Supervisor                                         | Sales Force                       |
+| ----------------------- | ------------------------- | -------------------------------------------------- | --------------------------------- |
+| `/sales-force`          | All ID/name references    | Currently assigned members                         | 403                               |
+| `/outlets`, `/products` | ID/name catalog           | Same catalog                                       | Same catalog                      |
+| `/visits`               | All Visits                | Current assignment of owner                        | Own only                          |
+| `/visits/:id`           | Visit plus linked reports | Owner scope plus independent nested reporter scope | Own Visit and own nested reporter |
+| `/stock-reports`        | All reports               | Current assignment of reporter                     | Own reporter only                 |
 
-Supervisor receives no account-administration privilege. Non-owned and nonexistent Visit detail IDs both return 404. Sales Force query parameters selecting another `salesForceId`/`reporterSalesForceId` return 403; ownership predicates are applied in SQL regardless of browser filtering. Admin/Supervisor lists are unfiltered monitoring reads; those query parameters do not implement optional reporting filters.
+Supervisor receives no account-administration privilege. Inaccessible and nonexistent Visit detail IDs both return 404. Sales Force query parameters selecting another `salesForceId`/`reporterSalesForceId` return 403. SQL resolves live active role and current assignments; optional Visit owner and Stock Report reporter filters intersect scope before pagination. Historical visibility follows current assignment. Unassigned Supervisors see empty collections. See the [assignment policy and lifecycle cases](supervisor-assignments.md#authorization-and-lifecycle).
 
 Lists retain bare-array contracts with `limit` (1–100, default 100) and `offset` (0–100000, default 0). Continue with the next offset until an empty page; sorting remains deterministic. Visit detail embeds at most 100 reports; use paginated `/stock-reports` for additional reports. No identity tables, audit history, challenges, session hashes, or token material are projected in business responses.
 
-**Business `POST /visits` and `POST /stock-reports` remain denied (401), even with a Web session.** Existing private Bot RPC uses its established independent authorization and transactional write behavior. No identity-administration HTTP routes are added.
+**Business `POST /visits` and `POST /stock-reports` remain denied (401), even with a Web session.** Existing private Bot RPC uses its established independent authorization and transactional write behavior. User lifecycle remains private Bot RPC. The subsequent milestone adds only the authenticated [Admin assignment routes](supervisor-assignments.md#http-routes).
 
 ## Required configuration (operator only)
 
@@ -69,7 +69,7 @@ Do not modify production settings, webhook, deploy, or migrate merely to test th
 
 Prepare actual values as a reviewed configuration change before the approved release; do not expect untracked Dashboard vars to survive Wrangler deployment. No new API runtime secret is required. The Bot's existing secrets remain private and separate.
 
-CORS permits only exact allowlisted origins and GET/POST preflights with Authorization/Content-Type. Unknown origins are denied, including `null` and deceptive suffixes; no credentials cookies or wildcard CORS are used. Non-browser requests without Origin still require authentication. CORS is not authentication. Strict deployment config validation permits exactly these two API vars, not arbitrary bindings or overrides, with offline regression tests.
+CORS permits only exact allowlisted origins and GET/POST/PUT preflights with Authorization/Content-Type. Unknown origins are denied, including `null` and deceptive suffixes; no credentials cookies or wildcard CORS are used. Non-browser requests without Origin still require authentication. CORS is not authentication. Strict deployment config validation permits exactly these two API vars, not arbitrary bindings or overrides, with offline regression tests.
 
 ### Native auth abuse protection
 
@@ -110,6 +110,8 @@ This code-only hotfix needs **no new migration, frontend build/release, Bot rele
 
 ## Manual release checklist
 
+**Historical initial-auth rollout (0007):** for the current 0008 milestone use the [Supervisor assignment rollout](supervisor-assignments.md#operator-controlled-rollout-checklist), not this historical checklist.
+
 This is a **manual operator procedure, not work performed by this PR**. Use the existing [CI/CD](ci-cd.md) and [deployment/recovery](deployment.md) guards and approved GitHub Environment. No remote seed data is required.
 
 1. Keep `ENABLE_AUTO_DEPLOY=false`. Verify no overlapping Workers Builds/Git deployment owner can release early.
@@ -127,6 +129,6 @@ This is a **manual operator procedure, not work performed by this PR**. Use the 
 
 `pnpm -r --if-present test`, `pnpm test:deployment`, `pnpm typecheck`, `pnpm check`, `pnpm --filter @sales-visit/db db:check`, and `pnpm build:web` are local/offline checks. Auth tests use synthetic Users, disposable local D1, locally generated RSA keys and a local JWKS verifier. Abuse tests include native local Wrangler bindings plus deterministic limited/error/missing-binding decisions, shared hashed keys and safe 429s; deployment tests cover strict declarations, active metadata, disabled-only bootstrap and post-upload attestation. Existing Bot, registration, Outlet, Schedule, transport and Visit/RPC suites remain included. No remote Cloudflare/Telegram credential or frontend test framework is needed.
 
-Dashboard metrics/charts/Visits/Outlets and the browser-local Visit form are **synthetic-only demo content behind login**, not live D1 reporting. The shell labels this explicitly. The prototype form never calls the API; browser-local mock entries remain distinct from sessionStorage credentials. Sales Force navigation excludes the monitoring directory and direct entry shows an unauthorized state. Intended internal redirects are allowlisted; external/protocol-relative/backslash redirects are rejected.
+Dashboard metrics/charts/Visits/Outlets and the browser-local Visit form are **synthetic-only demo content behind login**, not live D1 reporting. The shell labels this explicitly. The Admin-only Penugasan Supervisor page is the exception: it manages live assignments and is labeled operational. The prototype form never calls the API; browser-local mock entries remain distinct from sessionStorage credentials. Sales Force navigation excludes the monitoring directory and direct entry shows an unauthorized state. Intended internal redirects are allowlisted; external/protocol-relative/backslash redirects are rejected.
 
 Remaining milestones: live dashboard reads/role-specific operational UI, Web Visit/Stock Report submission authorization, stronger same-origin cookie/BFF architecture if desired, reporting/pagination UX, and explicit session administration/retention automation. Real browser Telegram/popup checks and production configuration/migration/deployment are operator acceptance steps, not claimed by offline CI.

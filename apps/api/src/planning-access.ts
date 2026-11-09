@@ -5,7 +5,7 @@ import {
 } from "@sales-visit/contracts";
 
 const actorCte = `WITH actor AS (
-  SELECT u.role, sf.id AS salesForceId FROM users u
+  SELECT u.id AS userId, u.role, sf.id AS salesForceId FROM users u
   JOIN telegram_identities t ON t.user_id = u.id
   LEFT JOIN sales_force sf ON sf.id = u.sales_force_id
   WHERE t.telegram_user_id = ? AND u.status = 'active'

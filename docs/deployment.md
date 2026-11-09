@@ -1,5 +1,7 @@
 # First API + Telegram test deployment
 
+> **Current milestone:** [Supervisor Assignment & API Scoping](supervisor-assignments.md#operator-controlled-rollout-checklist) adds migration 0008 (15 application tables) and requires migration → API → Web order. No Bot source/contract deployment is required. Earlier bootstrap/auth checklists below are historical, not instructions to replay migrations.
+>
 > **Current release procedure:** use [GitHub Actions CI/CD](ci-cd.md).
 > The bootstrap sections below are historical instructions, not authorization to
 > create resources or replay migrations. Existing Workers must be reused. The
@@ -11,8 +13,9 @@
 
 **Development/testing only, not approved for operational use.** One Cloudflare
 configuration, no staging/production pair. Dashboard deployment is independent:
-none of these commands deploys Web. Business GETs are public; use synthetic data
-only. Identity/audit are internal and report HTTP writes remain deny-by-default.
+none of these commands deploys Web. Business GETs now require Web sessions and
+current role/assignment scope. Identity/audit are restricted and report HTTP writes
+remain deny-by-default. Use synthetic data for local/bootstrap rehearsals.
 
 ## Historical bootstrap handoff (PR #5)
 
