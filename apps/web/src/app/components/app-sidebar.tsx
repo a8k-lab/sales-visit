@@ -29,6 +29,7 @@ const navigation = [
   { title: "Kunjungan", to: "/visits", icon: ClipboardTextIcon },
   { title: "Outlet", to: "/outlets", icon: StorefrontIcon },
   { title: "Data referensi", to: "/directory", icon: DatabaseIcon },
+  { title: "Pengguna & Akses", to: "/users", icon: DatabaseIcon },
   {
     title: "Penugasan Supervisor",
     to: "/supervisor-assignments",
@@ -83,7 +84,7 @@ export function AppSidebar() {
                     (account?.role === "sales_force"
                       ? item.to === "/workspace"
                       : item.to !== "/workspace") &&
-                    (item.to !== "/supervisor-assignments" ||
+                    (!["/supervisor-assignments", "/users"].includes(item.to) ||
                       account?.role === "admin")
                 )
                 .map(({ title, to, icon: Icon }) => (

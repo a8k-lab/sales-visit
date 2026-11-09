@@ -24,7 +24,12 @@ import {
 } from "@/components/ui/empty";
 import { LoginPage } from "@/features/auth/pages/login-page";
 import { WorkspacePage } from "@/features/auth/pages/workspace-page";
-import { ApiError, restoreSession, safeReturn } from "@/features/auth/session";
+import {
+  ApiError,
+  currentAccount,
+  restoreSession,
+  safeReturn,
+} from "@/features/auth/session";
 import {
   loadDirectory,
   type DirectoryKind,
@@ -40,6 +45,8 @@ import { OutletsPage } from "@/features/outlets/pages/outlets-page";
 import { loadOverview } from "@/features/overview/lib/overview-data";
 import { OverviewPage } from "@/features/overview/pages/overview-page";
 import { AssignmentsPage } from "@/features/supervisor-assignments/pages/assignments-page";
+import { loadUsers, userSearch } from "@/features/user-management/data";
+import { UserManagementPage } from "@/features/user-management/page";
 import {
   validateVisitSearch,
   type VisitFilters,
@@ -195,6 +202,21 @@ const directoryRoute = createRoute({
   component: DirectoryPage,
 });
 
+const usersRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: "/users",
+  beforeLoad: () => {
+    if (currentAccount()?.role !== "admin")
+      throw redirect({ to: "/overview", replace: true });
+  },
+  validateSearch: userSearch,
+  loaderDeps: ({ search }) => search,
+  loader: ({ deps }) => loadUsers(deps),
+  pendingComponent: OperationalPending,
+  errorComponent: OperationalError,
+  component: UserManagementPage,
+});
+
 const assignmentsRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: "/supervisor-assignments",
@@ -244,6 +266,7 @@ export const router = createRouter({
       workspaceRoute,
       overviewRoute,
       assignmentsRoute,
+      usersRoute,
       visitsRoute,
       newVisitRoute,
       detailRoute,
