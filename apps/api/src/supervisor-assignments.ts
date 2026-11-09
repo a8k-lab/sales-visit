@@ -27,11 +27,7 @@ const assignmentFrom = `FROM sales_force sf
 
 export function supervisorAssignmentRoutes() {
   const app = new Hono<WebEnv>();
-  for (const path of [
-    "/supervisors",
-    "/supervisor-assignments",
-    "/sales-force/:id/supervisor",
-  ]) {
+  for (const path of ["/supervisors", "/supervisor-assignments"]) {
     app.use(path, async (c, next) => {
       const account = await sessionAccount(c.req.raw, c.env.DB);
       if (!account) return c.json({ error: "Unauthorized" }, 401);
@@ -42,7 +38,7 @@ export function supervisorAssignmentRoutes() {
     app.use(
       path,
       bodyLimit({
-        maxSize: 2048,
+        maxSize: 16384,
         onError: (c) => c.json({ error: "Invalid request" }, 400),
       })
     );
@@ -74,7 +70,7 @@ export function supervisorAssignmentRoutes() {
     const after = c.req.query("after") ?? "";
     const limit = c.req.query("limit") ?? "50";
     if (
-      (after && !validId(after)) ||
+      c.req.url.length > 16384 ||
       !/^\d{1,3}$/.test(limit) ||
       Number(limit) < 1 ||
       Number(limit) > 100
@@ -82,8 +78,13 @@ export function supervisorAssignmentRoutes() {
       return c.json({ error: "Invalid request" }, 400);
     const hash = await hashToken(c.req.header("Authorization")!.slice(7));
     const now = Date.now();
-    const [permission, rows] = await c.env.DB.batch([
+    const [permission, cursor, rows] = await c.env.DB.batch([
       c.env.DB.prepare(`SELECT 1 WHERE ${adminGuard}`).bind(hash, now),
+      // A cursor returned from storage must remain usable even when its ID
+      // predates modern ID rules. Require an exact stored match, not a new ID.
+      c.env.DB.prepare(
+        `SELECT 1 WHERE (? = '' OR EXISTS (SELECT 1 FROM sales_force WHERE id = ?)) AND ${adminGuard}`
+      ).bind(after, after, hash, now),
       c.env.DB.prepare(`SELECT ${assignmentFields} ${assignmentFrom}
         WHERE sf.id > ? AND ${adminGuard} ORDER BY sf.id LIMIT ?`).bind(
         after,
@@ -93,6 +94,8 @@ export function supervisorAssignmentRoutes() {
       ),
     ]);
     if (!permission!.results.length) return c.json({ error: "Forbidden" }, 403);
+    if (!cursor!.results.length)
+      return c.json({ error: "Invalid request" }, 400);
     // SQL aliases in assignmentFields define this response shape.
     const items = rows!.results.slice(0, Number(limit)) as {
       salesForceId: string;
@@ -111,8 +114,7 @@ export function supervisorAssignmentRoutes() {
     });
   });
 
-  app.put("/sales-force/:id/supervisor", async (c) => {
-    const id = c.req.param("id");
+  app.put("/supervisor-assignments", async (c) => {
     let input: unknown;
     try {
       input = await c.req.json();
@@ -120,15 +122,20 @@ export function supervisorAssignmentRoutes() {
       return c.json({ error: "Invalid request" }, 400);
     }
     if (
-      !validId(id) ||
       !input ||
       typeof input !== "object" ||
       Array.isArray(input) ||
-      Object.keys(input).length !== 1 ||
+      Object.keys(input).length !== 2 ||
+      !("salesForceId" in input) ||
+      typeof input.salesForceId !== "string" ||
+      input.salesForceId.length === 0 ||
       !("supervisorUserId" in input) ||
       (input.supervisorUserId !== null && !validId(input.supervisorUserId))
     )
       return c.json({ error: "Invalid request" }, 400);
+    // Keep legacy stored IDs verbatim, including dot segments and controls.
+    // The bounded body limits transport; the batch below requires existence.
+    const id = input.salesForceId;
     const target = input.supervisorUserId as string | null;
     const eventId = crypto.randomUUID();
     const hash = await hashToken(c.req.header("Authorization")!.slice(7));

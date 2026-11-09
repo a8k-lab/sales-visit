@@ -209,10 +209,13 @@ export function AssignmentsPage() {
     setError("");
     setMessage("");
     try {
-      const updated = await api<Assignment>(
-        `/sales-force/${encodeURIComponent(row.salesForceId)}/supervisor`,
-        { method: "PUT", body: JSON.stringify({ supervisorUserId }) }
-      );
+      const updated = await api<Assignment>("/supervisor-assignments", {
+        method: "PUT",
+        body: JSON.stringify({
+          salesForceId: row.salesForceId,
+          supervisorUserId,
+        }),
+      });
       setData(
         (current) =>
           current && {

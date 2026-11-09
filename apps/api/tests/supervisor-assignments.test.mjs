@@ -208,9 +208,12 @@ async function setup(t) {
   };
   const assign = (sf, supervisorUserId, id = "admin", database = db) =>
     request(
-      `/sales-force/${sf}/supervisor`,
+      "/supervisor-assignments",
       id,
-      { method: "PUT", body: JSON.stringify({ supervisorUserId }) },
+      {
+        method: "PUT",
+        body: JSON.stringify({ salesForceId: sf, supervisorUserId }),
+      },
       database
     );
   const rpc = async (method, ...args) =>
@@ -274,7 +277,13 @@ test("assignment API, current Web scope, nested reporter isolation and Bot RPC",
         "{",
         "{}",
         "null",
+        JSON.stringify({ supervisorUserId: "sup-a" }),
+        JSON.stringify({ salesForceId: "a" }),
+        JSON.stringify({ salesForceId: null, supervisorUserId: "sup-a" }),
+        JSON.stringify({ salesForceId: 1, supervisorUserId: "sup-a" }),
+        JSON.stringify({ salesForceId: "", supervisorUserId: "sup-a" }),
         JSON.stringify({
+          salesForceId: "a",
           supervisorUserId: "sup-a",
           role: "admin",
           actor: "admin",
@@ -282,7 +291,7 @@ test("assignment API, current Web scope, nested reporter isolation and Bot RPC",
       ]) {
         assert.equal(
           (
-            await request("/sales-force/a/supervisor", "admin", {
+            await request("/supervisor-assignments", "admin", {
               method: "PUT",
               body,
             })
@@ -292,9 +301,9 @@ test("assignment API, current Web scope, nested reporter isolation and Bot RPC",
       }
       assert.equal(
         (
-          await request("/sales-force/a/supervisor", "admin", {
+          await request("/supervisor-assignments", "admin", {
             method: "PUT",
-            body: "x".repeat(3000),
+            body: "x".repeat(16385),
           })
         ).status,
         400
@@ -327,7 +336,7 @@ test("assignment API, current Web scope, nested reporter isolation and Bot RPC",
         ).items.map((row) => row.salesForceId),
         ["b", "unassigned"]
       );
-      const preflight = await request("/sales-force/a/supervisor", null, {
+      const preflight = await request("/supervisor-assignments", null, {
         method: "OPTIONS",
         headers: {
           Origin: "https://dashboard.test",
@@ -607,6 +616,102 @@ test("assignment API, current Web scope, nested reporter isolation and Bot RPC",
   );
 });
 
+test("legacy Sales Force IDs round-trip through JSON mutation and exact stored cursors", async (t) => {
+  const { db, request, get, assign } = await setup(t);
+  const legacyIds = [
+    ".",
+    "..",
+    "SF/../name?x=1#fragment%2F\\backslash",
+    " SF 日本 + ",
+    "x".repeat(4096),
+    "SF\ncontrol\tmember\r",
+    "\t",
+    "SF\u0000tail",
+  ];
+  for (const id of legacyIds) {
+    await db
+      .prepare(
+        "INSERT INTO sales_force (id,name) VALUES (?, 'Legacy synthetic')"
+      )
+      .bind(id)
+      .run();
+    for (const target of ["sup-a", "sup-a", "sup-b", null, null]) {
+      const response = await assign(id, target);
+      assert.equal(response.status, 200, await response.clone().text());
+      const row = await response.json();
+      assert.equal(row.salesForceId, id);
+      assert.equal(row.supervisorUserId, target);
+    }
+    const events = (
+      await db
+        .prepare(
+          "SELECT * FROM supervisor_assignment_audit WHERE sales_force_id = ? ORDER BY rowid"
+        )
+        .bind(id)
+        .all()
+    ).results;
+    assert.deepEqual(
+      events.map((event) => [
+        event.actor_user_id,
+        event.sales_force_id,
+        event.previous_supervisor_user_id,
+        event.new_supervisor_user_id,
+        event.action,
+      ]),
+      [
+        ["admin", id, null, "sup-a", "assign"],
+        ["admin", id, "sup-a", "sup-b", "reassign"],
+        ["admin", id, "sup-b", null, "unassign"],
+      ]
+    );
+  }
+  const collected = [];
+  let after = "";
+  do {
+    const page = await get(
+      `/supervisor-assignments?limit=1&after=${encodeURIComponent(after)}`
+    );
+    collected.push(...page.items.map((row) => row.salesForceId));
+    after = page.next;
+  } while (after !== null);
+  const expected = (
+    await db.prepare("SELECT id FROM sales_force ORDER BY id").all()
+  ).results.map((row) => row.id);
+  assert.deepEqual(
+    collected,
+    expected,
+    "every emitted cursor resumes at the exact stored ID"
+  );
+  for (const id of ["unknown\nlegacy", "y".repeat(4096)]) {
+    assert.equal((await assign(id, "sup-a")).status, 404);
+    assert.equal(
+      (await request(`/supervisor-assignments?after=${encodeURIComponent(id)}`))
+        .status,
+      400
+    );
+  }
+  assert.equal(
+    (await request(`/supervisor-assignments?after=${"x".repeat(16385)}`))
+      .status,
+    400
+  );
+  assert.equal((await assign("x".repeat(16385), "sup-a")).status, 400);
+  assert.equal((await assign(".", "sup-a", null)).status, 401);
+  assert.equal((await assign("..", "sup-a", "sup-b")).status, 403);
+  assert.equal(
+    (
+      await db
+        .prepare("SELECT count(*) AS n FROM supervisor_assignment_audit")
+        .first()
+    ).n,
+    legacyIds.length * 3
+  );
+  assert.deepEqual(
+    (await db.prepare("PRAGMA foreign_key_check").all()).results,
+    []
+  );
+});
+
 test("D1 serialization, transaction-time authorization, rollback and Bot pagination", async (t) => {
   const { db, request, get, assign, rpc } = await setup(t);
   await t.test(
@@ -782,10 +887,7 @@ test("D1 serialization, transaction-time authorization, rollback and Bot paginat
         )
         .bind(legacyId)
         .run();
-      assert.equal(
-        (await assign(encodeURIComponent(legacyId), "sup-a")).status,
-        200
-      );
+      assert.equal((await assign(legacyId, "sup-a")).status, 200);
       const row = await db
         .prepare(
           "SELECT sales_force_id FROM sales_force_supervisors WHERE sales_force_id = ?"
