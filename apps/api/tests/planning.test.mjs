@@ -123,6 +123,12 @@ async function setup(t, legacy = false) {
         .bind(`u-${id}`, String(id)),
     ]);
   }
+  // These regression cases monitor both synthetic SFs: membership is explicit.
+  await db
+    .prepare(
+      "INSERT INTO sales_force_supervisors (sales_force_id, supervisor_user_id) VALUES ('sf-a', 'u-2'), ('sf-b', 'u-2')"
+    )
+    .run();
   const probe = await mf.getWorker("probe");
   const rpc = async (method, by, ...inputs) => {
     const response = await probe.fetch("https://test/", {

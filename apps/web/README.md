@@ -13,7 +13,7 @@ VITE_API_URL=http://localhost:8787 pnpm dev:web
 
 ## Deploy to Cloudflare Workers Static Assets
 
-The dashboard now requires **verified Telegram login** for an existing approved account. Its contents remain a **synthetic-only demo**, not live operational reporting. Do not enter sensitive or production data in the demo form. Local entries are specific to the browser and origin. See [Web auth setup and manual rollout](../../docs/web-auth.md) before activation; no authentication bypass or public demo shortcut is provided.
+The dashboard now requires **verified Telegram login** for an existing approved account. Its reporting contents remain a **synthetic-only demo**, not live operational reporting. The Admin-only **Penugasan Supervisor** page (`/supervisor-assignments`) manages live server assignments; see the [assignment policy and API-before-Web rollout](../../docs/supervisor-assignments.md). Do not enter sensitive or production data in the demo form. Local entries are specific to the browser and origin. See [Web auth setup and manual rollout](../../docs/web-auth.md) before activation; no authentication bypass or public demo shortcut is provided.
 
 This section covers only `apps/web`; API and Bot are independent deployment units, with deployed versions unverified until inspected. Web authentication uses the API's opaque, revocable Bearer sessions in sessionStorage. `wrangler.jsonc` serves the existing Vite `dist` output without a Worker entrypoint, SSR, or the Cloudflare Vite plugin. SPA fallback serves `index.html` for client-side routes such as `/login`, `/overview`, `/visits`, and `/visits/VST-0012`.
 
@@ -90,7 +90,7 @@ Useful sample records:
 - `VST-0011`: a Telegram visit with a stock report containing a zero quantity.
 - `SR-0001`: a standalone Sales Force stock report, not an outlet self-report or a visit.
 
-Dashboard data remains a local prototype for Sales Force, Admin, and Supervisor discussion. Only authentication/session lifecycle is API-backed; dashboard loaders and form submission do not use live D1 data. The directory is limited to Admin/Supervisor navigation. Quantities are reported synthetic snapshots, never live inventory or inferred sellout. sessionStorage credentials remain vulnerable to XSS; see the authentication security notes.
+Dashboard data remains a local prototype for Sales Force, Admin, and Supervisor discussion. Authentication/session lifecycle and Supervisor assignment management are API-backed; reporting dashboard loaders and Visit form submission do not use live D1 data. The directory is limited to Admin/Supervisor navigation. Quantities are reported synthetic snapshots, never live inventory or inferred sellout. sessionStorage credentials remain vulnerable to XSS; see the authentication security notes.
 
 ## Verification commands
 

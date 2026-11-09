@@ -63,7 +63,10 @@ export class ScheduleOperations {
     const target = `SELECT sales_force_id FROM (${verifiedLinks}) WHERE telegram_user_id = ?`;
     const scope = own
       ? "s.sales_force_id = (SELECT salesForceId FROM actor)"
-      : `(? IS NULL OR s.sales_force_id = ?) AND (? IS NULL OR s.sales_force_id = (${target}))`;
+      : `(EXISTS (SELECT 1 FROM actor WHERE role = 'admin') OR EXISTS (
+          SELECT 1 FROM sales_force_supervisors assignment JOIN actor ON actor.userId = assignment.supervisor_user_id
+          WHERE actor.role = 'supervisor' AND assignment.sales_force_id = s.sales_force_id))
+        AND (? IS NULL OR s.sales_force_id = ?) AND (? IS NULL OR s.sales_force_id = (${target}))`;
     const result = await planningBatch(
       this.db,
       actor,

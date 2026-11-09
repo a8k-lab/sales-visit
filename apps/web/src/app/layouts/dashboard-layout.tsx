@@ -54,6 +54,7 @@ export function DashboardLayout() {
     select: (state) => state.location.pathname,
   });
   const { theme, setTheme } = useTheme();
+  const isAssignment = pathname === "/supervisor-assignments";
   const isOutlet = pathname === "/outlets" || pathname.startsWith("/outlets/");
   const isDetail =
     pathname.startsWith("/visits/") || pathname.startsWith("/outlets/");
@@ -88,13 +89,15 @@ export function DashboardLayout() {
                     </BreadcrumbLink>
                   ) : (
                     <BreadcrumbPage>
-                      {pathname === "/overview"
-                        ? "Ringkasan"
-                        : pathname === "/directory"
-                          ? "Data referensi"
-                          : isOutlet
-                            ? "Outlet"
-                            : "Kunjungan"}
+                      {isAssignment
+                        ? "Penugasan Supervisor"
+                        : pathname === "/overview"
+                          ? "Ringkasan"
+                          : pathname === "/directory"
+                            ? "Data referensi"
+                            : isOutlet
+                              ? "Outlet"
+                              : "Kunjungan"}
                     </BreadcrumbPage>
                   )}
                 </BreadcrumbItem>
@@ -115,7 +118,9 @@ export function DashboardLayout() {
               </BreadcrumbList>
             </Breadcrumb>
             <div className="ml-auto flex items-center gap-2">
-              <Badge variant="outline">Demo · Data contoh</Badge>
+              <Badge variant="outline">
+                {isAssignment ? "Data operasional" : "Demo · Data contoh"}
+              </Badge>
               <span className="text-sm">
                 {account?.name} · {account && roleLabel(account.role)}
               </span>
@@ -154,15 +159,17 @@ export function DashboardLayout() {
             className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 outline-none md:p-6 lg:p-8"
           >
             {logoutError && <p role="alert">{logoutError}</p>}
-            <p className="text-muted-foreground text-sm">
-              Demo sintetis — bukan laporan operasional. Perubahan formulir
-              hanya disimpan di browser ini, tidak dikirim ke server.
-            </p>
+            {!isAssignment && (
+              <p className="text-muted-foreground text-sm">
+                Demo sintetis — bukan laporan operasional. Perubahan formulir
+                hanya disimpan di browser ini, tidak dikirim ke server.
+              </p>
+            )}
             <Outlet />
           </div>
           <footer className="text-muted-foreground px-4 py-4 text-xs md:px-8">
-            Sales Visit · Login terverifikasi. Isi Dashboard adalah data contoh
-            dan data lokal browser, bukan data operasional.
+            Sales Visit · Login terverifikasi. Laporan Dashboard memakai data
+            contoh. Penugasan Supervisor disimpan di server.
           </footer>
         </SidebarInset>
       </SidebarProvider>

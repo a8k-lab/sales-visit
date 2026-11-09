@@ -34,6 +34,7 @@ import { OutletDetailPage } from "@/features/outlets/pages/outlet-detail-page";
 import { OutletsPage } from "@/features/outlets/pages/outlets-page";
 import { loadOverview } from "@/features/overview/lib/overview-data";
 import { OverviewPage } from "@/features/overview/pages/overview-page";
+import { AssignmentsPage } from "@/features/supervisor-assignments/pages/assignments-page";
 import {
   validateVisitSearch,
   type VisitFilters,
@@ -159,6 +160,12 @@ const directoryRoute = createRoute({
     ),
 });
 
+const assignmentsRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: "/supervisor-assignments",
+  component: AssignmentsPage,
+});
+
 const outletsRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: "/outlets",
@@ -186,6 +193,7 @@ export const router = createRouter({
     loginRoute,
     dashboardRoute.addChildren([
       overviewRoute,
+      assignmentsRoute,
       visitsRoute,
       newVisitRoute,
       detailRoute,

@@ -28,6 +28,11 @@ const navigation = [
   { title: "Kunjungan", to: "/visits", icon: ClipboardTextIcon },
   { title: "Outlet", to: "/outlets", icon: StorefrontIcon },
   { title: "Data referensi", to: "/directory", icon: DatabaseIcon },
+  {
+    title: "Penugasan Supervisor",
+    to: "/supervisor-assignments",
+    icon: DatabaseIcon,
+  },
 ] as const;
 
 // Adapted from the official shadcn/ui sidebar-07 block (Base UI / nova).
@@ -68,7 +73,10 @@ export function AppSidebar() {
               {navigation
                 .filter(
                   (item) =>
-                    item.to !== "/directory" || account?.role !== "sales_force"
+                    (item.to !== "/directory" ||
+                      account?.role !== "sales_force") &&
+                    (item.to !== "/supervisor-assignments" ||
+                      account?.role === "admin")
                 )
                 .map(({ title, to, icon: Icon }) => (
                   <SidebarMenuItem key={to}>
@@ -95,7 +103,10 @@ export function AppSidebar() {
               Pelaporan operasional melalui Telegram Bot. Formulir Web hanya
               simulasi lokal.
             </p>
-            <p>Data yang ditampilkan adalah data contoh.</p>
+            <p>
+              Laporan memakai data contoh. Penugasan Supervisor memakai data
+              operasional.
+            </p>
           </div>
         </SidebarGroup>
       </SidebarContent>
