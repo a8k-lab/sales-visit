@@ -7,6 +7,7 @@ const page = (c: Context<WebEnv>) => ({
 });
 import type { JWTVerifyGetKey } from "jose";
 
+import { adminUserRoutes } from "./admin-users.ts";
 import { catalogPage, outletDetail } from "./catalog-reads.ts";
 import { dashboardOverview } from "./dashboard.ts";
 import {
@@ -61,6 +62,7 @@ export function createApp(
     await next();
   });
   app.route("/auth", authRoutes(telegramKeys));
+  app.route("/admin/users", adminUserRoutes());
   // Dedicated routes authenticate themselves, including PUT requests.
   app.route("/", supervisorAssignmentRoutes());
 

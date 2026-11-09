@@ -75,6 +75,28 @@ export const approvalSchema = z
   );
 // Same explicit association rule as approval, including the legacy sales alias.
 export const roleChangeSchema = approvalSchema;
+// Web targets stored User IDs, never Telegram identity or a supplied actor.
+export const webUserTargetSchema = z
+  .object({ userId: z.string().min(1).max(256) })
+  .strict();
+export const webUserRoleSchema = webUserTargetSchema
+  .extend({
+    role: z.enum(["admin", "supervisor", "sales_force"]),
+    salesForceId: z.string().min(1).max(256).optional(),
+  })
+  .refine((input) =>
+    input.role === "sales_force"
+      ? !!input.salesForceId
+      : input.salesForceId === undefined
+  );
+export interface ManagedAccount extends Account {
+  salesForceName: string | null;
+}
+export interface UserPage {
+  items: ManagedAccount[];
+  next: string | null;
+}
+
 export const rejectionSchema = z
   .object({ telegramUserId: telegramIdSchema })
   .strict();
