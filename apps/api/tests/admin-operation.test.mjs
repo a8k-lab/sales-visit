@@ -7,6 +7,13 @@ import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { createApp } from "../src/index.ts";
 import { hashToken } from "../src/web-auth.ts";
 
+const pastDeadline = async (id) => {
+  const deadline = Number(id.split(":")[1]);
+  await new Promise((resolve) =>
+    setTimeout(resolve, Math.max(0, deadline - Date.now() + 30))
+  );
+};
+
 async function setup(t) {
   const mf = new Miniflare(
     convertV4MiniflareOptions({
@@ -73,7 +80,12 @@ async function setup(t) {
       .first();
     return `web:${now + duration}:${crypto.randomUUID()}`;
   };
-  const post = (operationId, action = "disable", database = db) =>
+  const post = (
+    operationId,
+    action = "disable",
+    database = db,
+    role = "supervisor"
+  ) =>
     request(
       "/" + action,
       {
@@ -81,9 +93,7 @@ async function setup(t) {
         body: JSON.stringify({
           operationId,
           userId: "target",
-          ...(["role", "approve"].includes(action)
-            ? { role: "supervisor" }
-            : {}),
+          ...(["role", "approve"].includes(action) ? { role } : {}),
         }),
       },
       database
@@ -118,12 +128,6 @@ async function setup(t) {
         },
       },
     };
-  };
-  const pastDeadline = async (id) => {
-    const deadline = Number(id.split(":")[1]);
-    await new Promise((resolve) =>
-      setTimeout(resolve, Math.max(0, deadline - Date.now() + 30))
-    );
   };
   return {
     db,
@@ -283,7 +287,13 @@ test("Admin operation lookup fences late writes without new persistence", async 
           "UPDATE users SET status='active',role='supervisor' WHERE id='target'"
         )
         .run();
-      for (const action of ["role", "disable"]) await post(expired, action);
+      for (const action of ["role", "disable"])
+        assert.equal((await post(expired, action, db, "admin")).status, 409);
+      assert.equal(
+        (await db.prepare("SELECT role FROM users WHERE id = 'target'").first())
+          .role,
+        "supervisor"
+      );
       assert.equal(await status(), "active");
       assert.equal(await count(), before);
       await db
