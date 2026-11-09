@@ -432,12 +432,10 @@ test("assignment API, current Web scope, nested reporter isolation and Bot RPC",
         []
       );
       assert.deepEqual(
-        (
-          await rpc("listSchedules", actor("sup-b"), {
-            telegramUserId: telegram["sf-user"],
-          })
-        ).data.items,
-        []
+        await rpc("listSchedules", actor("sup-b"), {
+          telegramUserId: telegram["sf-user"],
+        }),
+        { ok: false, code: "association_unavailable" }
       );
       assert.equal(
         (await rpc("listSchedules", actor("admin"))).data.items.length,
@@ -456,6 +454,51 @@ test("assignment API, current Web scope, nested reporter isolation and Bot RPC",
         { telegramUserId: telegram["sf-user"], role: "admin" },
       ])
         assert.equal((await rpc("listSchedules", invalid)).ok, false);
+    }
+  );
+  await t.test(
+    "Supervisor Telegram target lookup cannot distinguish other teams from unknown identities",
+    async () => {
+      for (const supervisor of ["sup-b", "sup-empty"]) {
+        for (const filter of [{}, { weekday: 2 }, { after: "schedule-a" }]) {
+          const outOfTeam = await rpc("listSchedules", actor(supervisor), {
+            ...filter,
+            telegramUserId: telegram["sf-user"],
+          });
+          const unknown = await rpc("listSchedules", actor(supervisor), {
+            ...filter,
+            telegramUserId: "9999",
+          });
+          assert.deepEqual(outOfTeam, unknown);
+          assert.deepEqual(outOfTeam, {
+            ok: false,
+            code: "association_unavailable",
+          });
+        }
+      }
+      for (const who of ["admin", "sup-a"]) {
+        const available = await rpc("listSchedules", actor(who), {
+          telegramUserId: telegram["sf-user"],
+        });
+        assert.equal(available.ok, true);
+        assert.deepEqual(
+          available.data.items.map((s) => s.salesForceId),
+          ["a"]
+        );
+        assert.deepEqual(
+          await rpc("listSchedules", actor(who), { telegramUserId: "9999" }),
+          { ok: false, code: "association_unavailable" }
+        );
+        assert.deepEqual(
+          (
+            await rpc("listSchedules", actor(who), {
+              telegramUserId: telegram["sf-user"],
+              weekday: 2,
+            })
+          ).data,
+          { items: [], next: null }
+        );
+      }
     }
   );
   await t.test(
