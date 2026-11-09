@@ -11,6 +11,10 @@ import {
 } from "@tanstack/react-router";
 
 import { DashboardLayout } from "@/app/layouts/dashboard-layout";
+import {
+  OperationalError,
+  OperationalPending,
+} from "@/components/operational-state";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -116,6 +120,8 @@ const indexRoute = createRoute({
 const overviewRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: "/overview",
+  pendingComponent: OperationalPending,
+  errorComponent: OperationalError,
   loader: loadOverview,
   component: OverviewPage,
 });

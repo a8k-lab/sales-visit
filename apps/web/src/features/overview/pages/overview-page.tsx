@@ -1,13 +1,13 @@
 import {
   ClipboardTextIcon,
   NotebookIcon,
-  PlusIcon,
   StorefrontIcon,
   UsersIcon,
 } from "@phosphor-icons/react";
 import { Link, useLoaderData } from "@tanstack/react-router";
 
 import { ChannelBadge } from "@/components/channel-badge";
+import { OperationalRefresh } from "@/components/operational-state";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,7 +16,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { FieldError } from "@/components/ui/field";
 import { RecentVisits } from "@/features/overview/components/recent-visits";
 import { VisitActivity } from "@/features/overview/components/visit-activity";
 
@@ -32,7 +31,7 @@ export function OverviewPage() {
       title: "Total Kunjungan",
       count: data.metrics.visits,
       icon: ClipboardTextIcon,
-      description: "Seluruh kunjungan tercatat",
+      description: "Kunjungan dalam periode pelaporan",
     },
     {
       title: "Outlet Dikunjungi",
@@ -63,17 +62,12 @@ export function OverviewPage() {
           Ringkasan
         </h1>
         <p className="text-muted-foreground max-w-2xl text-sm">
-          Seluruh aktivitas tercatat dari data contoh dan data lokal browser.
+          Aktivitas operasional sesuai akses Anda · 14 hari kalender hingga hari
+          ini (WIB).
         </p>
       </div>
       <nav aria-label="Aksi cepat" className="flex flex-wrap gap-2">
-        <Button
-          nativeButton={false}
-          render={<Link to="/visits/new" search={{}} />}
-        >
-          <PlusIcon data-icon="inline-start" />
-          Catat Kunjungan
-        </Button>
+        <OperationalRefresh />
         <Button
           nativeButton={false}
           variant="outline"
@@ -89,9 +83,8 @@ export function OverviewPage() {
           Lihat Outlet
         </Button>
       </nav>
-      {data.storageError && <FieldError>{data.storageError}</FieldError>}
       <section
-        aria-label="Ringkasan seluruh data"
+        aria-label="Ringkasan periode pelaporan"
         className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
       >
         {metrics.map(({ title, count, icon: Icon, description }) => (

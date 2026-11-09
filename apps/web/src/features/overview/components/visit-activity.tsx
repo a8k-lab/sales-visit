@@ -17,7 +17,7 @@ export function VisitActivity({ days }: { days: OverviewData["dailyVisits"] }) {
           <h2>Kunjungan tercatat per tanggal</h2>
         </CardTitle>
         <CardDescription>
-          14 hari hingga kunjungan terbaru · Waktu dalam WIB
+          14 hari kalender hingga hari ini · Waktu dalam WIB
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
