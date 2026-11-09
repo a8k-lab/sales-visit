@@ -41,7 +41,9 @@ pagination. See [Supervisor assignments](../../docs/supervisor-assignments.md) f
 migration 0008, lifecycle policy, assignment API, permission matrix and rollout order.
 
 Admin-only Web routes: `GET /supervisors`, `GET /supervisor-assignments`, and
-`PUT /sales-force/:id/supervisor` with `{ supervisorUserId: string | null }`.
+`PUT /supervisor-assignments` with `{ salesForceId: string, supervisorUserId: string | null }`.
+Sales Force IDs are sent exactly in JSON (not normalized URL path segments);
+legacy stored references and list cursors remain usable within bounded requests.
 They use the existing Bearer session; report POST endpoints remain denied.
 
 | GET path         | JSON response                                            |

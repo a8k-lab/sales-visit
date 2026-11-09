@@ -156,10 +156,21 @@ async function setup(t) {
       "INSERT INTO access_audit (id,actor_user_id,target_user_id,action,before_state,after_state) VALUES ('legacy-audit','admin','admin','register','null','{}')"
     )
     .run();
+  await db
+    .prepare(`INSERT INTO telegram_visit_drafts
+    (user_id, submission_key, sales_force_id, step, payload, revision, last_message, expires_at)
+    VALUES ('sf-user', 'preservation-draft', 'a', 'review', '{"outletId":"outlet"}', 3, 7, 12345)`)
+    .run();
+  await db
+    .prepare(`INSERT INTO web_login_challenges (id, nonce, created_at, expires_at, consumed_at)
+    VALUES ('preservation-challenge', 'preservation-nonce', 1, 3, 2)`)
+    .run();
   const tables = [
     "users",
     "telegram_identities",
     "web_sessions",
+    "web_login_challenges",
+    "telegram_visit_drafts",
     "access_audit",
     "sales_force",
     "visits",

@@ -14,8 +14,15 @@ UNION ALL SELECT 'access_audit', count(*) FROM access_audit
 UNION ALL SELECT 'visit_schedules', count(*) FROM visit_schedules
 UNION ALL SELECT 'telegram_visit_drafts', count(*) FROM telegram_visit_drafts
 UNION ALL SELECT 'web_login_challenges', count(*) FROM web_login_challenges
-UNION ALL SELECT 'web_sessions', count(*) FROM web_sessions;
+UNION ALL SELECT 'web_sessions', count(*) FROM web_sessions
+UNION ALL SELECT 'sales_force_supervisors', count(*) FROM sales_force_supervisors
+UNION ALL SELECT 'supervisor_assignment_audit', count(*) FROM supervisor_assignment_audit;
 -- DDL only: never select nonce/hash/token values from credential tables.
 SELECT name, sql FROM sqlite_master
-WHERE tbl_name IN ('web_login_challenges', 'web_sessions')
+WHERE tbl_name IN ('web_login_challenges', 'web_sessions', 'sales_force_supervisors', 'supervisor_assignment_audit')
 AND type IN ('table', 'index') ORDER BY name;
+-- Metadata only: PK indexes, lookup indexes and all six restrictive assignment FKs.
+PRAGMA index_list('sales_force_supervisors');
+PRAGMA index_list('supervisor_assignment_audit');
+PRAGMA foreign_key_list('sales_force_supervisors');
+PRAGMA foreign_key_list('supervisor_assignment_audit');
