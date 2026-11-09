@@ -44,7 +44,10 @@ const state = `json_object('status', u.status, 'role', u.role, 'salesForceId', u
 // preflight read: the audit INSERT checks actor, target and claim in the transaction.
 // The following UPDATE is gated by this invocation's unique audit ID.
 export class IdentityOperations {
-  constructor(private db: D1Database) {}
+  private db: D1Database;
+  constructor(db: D1Database) {
+    this.db = db;
+  }
 
   private account(telegramId: string) {
     return this.db
