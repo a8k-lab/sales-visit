@@ -143,6 +143,8 @@ export class IdentityOperations {
   }
 
   approve(actor: BotActor, input: unknown): Promise<IdentityResult<Account>> {
+    if (!botActorSchema.safeParse(actor).success)
+      return Promise.resolve({ ok: false, code: "invalid" });
     const parsed = approvalSchema.safeParse(input);
     if (!parsed.success) return Promise.resolve({ ok: false, code: "invalid" });
     return this.decide(
@@ -155,12 +157,16 @@ export class IdentityOperations {
   }
 
   reject(actor: BotActor, input: unknown): Promise<IdentityResult<Account>> {
+    if (!botActorSchema.safeParse(actor).success)
+      return Promise.resolve({ ok: false, code: "invalid" });
     const parsed = rejectionSchema.safeParse(input);
     if (!parsed.success) return Promise.resolve({ ok: false, code: "invalid" });
     return this.decide(actor, parsed.data.telegramUserId, "reject", null, null);
   }
 
   setRole(actor: BotActor, input: unknown): Promise<IdentityResult<Account>> {
+    if (!botActorSchema.safeParse(actor).success)
+      return Promise.resolve({ ok: false, code: "invalid" });
     const parsed = roleChangeSchema.safeParse(input);
     if (!parsed.success) return Promise.resolve({ ok: false, code: "invalid" });
     return this.manage(
@@ -173,12 +179,16 @@ export class IdentityOperations {
   }
 
   disable(actor: BotActor, input: unknown): Promise<IdentityResult<Account>> {
+    if (!botActorSchema.safeParse(actor).success)
+      return Promise.resolve({ ok: false, code: "invalid" });
     const parsed = rejectionSchema.safeParse(input);
     if (!parsed.success) return Promise.resolve({ ok: false, code: "invalid" });
     return this.manage(actor, parsed.data.telegramUserId, "disable");
   }
 
   enable(actor: BotActor, input: unknown): Promise<IdentityResult<Account>> {
+    if (!botActorSchema.safeParse(actor).success)
+      return Promise.resolve({ ok: false, code: "invalid" });
     const parsed = rejectionSchema.safeParse(input);
     if (!parsed.success) return Promise.resolve({ ok: false, code: "invalid" });
     return this.manage(actor, parsed.data.telegramUserId, "enable");

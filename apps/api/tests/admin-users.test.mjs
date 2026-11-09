@@ -379,39 +379,49 @@ test("Web Admin account lifecycle on disposable migrated D1", async (t) => {
         "UPDATE users SET status = 'disabled' WHERE id = 'admin'",
         "UPDATE users SET role = 'supervisor' WHERE id = 'admin'",
       ]) {
-        const id = crypto.randomUUID();
-        await user(id);
-        const before = await count();
-        const racingDB = {
-          prepare: db.prepare.bind(db),
-          batch: async (statements) => {
-            await db.prepare(change).run();
-            return db.batch(statements);
-          },
-        };
-        const response = await mutate(
-          "approve",
-          { userId: id, role: "supervisor" },
-          "admin",
-          racingDB
-        );
-        assert.equal(
-          response.status,
-          change.includes("role = 'supervisor'") ? 403 : 401
-        );
-        assert.equal((await state(id)).status, "pending");
-        assert.equal(await count(), before);
-        await db
-          .prepare(
-            "UPDATE users SET status = 'active',role = 'admin' WHERE id = 'admin'"
-          )
-          .run();
-        await db
-          .prepare(
-            "UPDATE web_sessions SET revoked_at = NULL, expires_at = ? WHERE user_id = 'admin'"
-          )
-          .bind(Date.now() + 3600000)
-          .run();
+        for (const action of ["approve", "disable"]) {
+          const id = crypto.randomUUID();
+          const initialStatus = action === "approve" ? "pending" : "active";
+          await user(
+            id,
+            initialStatus,
+            action === "approve" ? null : "supervisor"
+          );
+          const before = await count();
+          const racingDB = {
+            prepare: db.prepare.bind(db),
+            batch: async (statements) => {
+              await db.prepare(change).run();
+              return db.batch(statements);
+            },
+          };
+          const response = await mutate(
+            action,
+            {
+              userId: id,
+              ...(action === "approve" ? { role: "supervisor" } : {}),
+            },
+            "admin",
+            racingDB
+          );
+          assert.equal(
+            response.status,
+            change.includes("role = 'supervisor'") ? 403 : 401
+          );
+          assert.equal((await state(id)).status, initialStatus);
+          assert.equal(await count(), before);
+          await db
+            .prepare(
+              "UPDATE users SET status = 'active',role = 'admin' WHERE id = 'admin'"
+            )
+            .run();
+          await db
+            .prepare(
+              "UPDATE web_sessions SET revoked_at = NULL, expires_at = ? WHERE user_id = 'admin'"
+            )
+            .bind(Date.now() + 3600000)
+            .run();
+        }
       }
     }
   );
@@ -430,14 +440,14 @@ test("Web Admin account lifecycle on disposable migrated D1", async (t) => {
           })
         )
       );
-      assert.deepEqual(responses.map((r) => r.status).sort(), [200, 409]);
+      assert.deepEqual(responses.map((r) => r.status).toSorted(), [200, 409]);
       assert.equal(await count(), before + 1);
       await user("race-decision");
       const decisions = await Promise.all([
         mutate("approve", { userId: "race-decision", role: "supervisor" }),
         mutate("reject", { userId: "race-decision" }),
       ]);
-      assert.deepEqual(decisions.map((r) => r.status).sort(), [200, 409]);
+      assert.deepEqual(decisions.map((r) => r.status).toSorted(), [200, 409]);
       const pre = await count();
       await Promise.all([
         mutate("disable", { userId: "sales" }),
@@ -517,6 +527,27 @@ test("Web Admin account lifecycle on disposable migrated D1", async (t) => {
     async () => {
       const bot = new IdentityOperations(db);
       const target = await user("cross-channel");
+      for (const method of [
+        "approve",
+        "reject",
+        "setRole",
+        "disable",
+        "enable",
+      ]) {
+        for (const invalidActor of [
+          null,
+          { sessionHash: await hashToken(tokens.admin) },
+          { ...admin, sessionHash: await hashToken(tokens.admin) },
+        ]) {
+          const result = await bot[method](invalidActor, {
+            ...target,
+            ...(["approve", "setRole"].includes(method)
+              ? { role: "supervisor" }
+              : {}),
+          });
+          assert.deepEqual(result, { ok: false, code: "invalid" });
+        }
+      }
       assert.equal(
         (await bot.approve(admin, { ...target, role: "supervisor" })).ok,
         true
