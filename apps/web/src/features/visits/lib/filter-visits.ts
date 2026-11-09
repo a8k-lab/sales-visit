@@ -12,9 +12,9 @@ export function validateVisitSearch(
   search: Partial<VisitFilters>
 ): VisitFilters {
   const text = (key: keyof VisitFilters) =>
-    typeof search[key] === "string" ? search[key].slice(0, 200) : "";
+    typeof search[key] === "string" ? search[key] : "";
   return {
-    q: text("q"),
+    q: text("q").slice(0, 200),
     member: text("member"),
     outlet: text("outlet"),
     channel: ["web", "telegram"].includes(text("channel"))

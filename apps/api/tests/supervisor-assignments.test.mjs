@@ -886,6 +886,19 @@ test("legacy Sales Force IDs round-trip through JSON mutation and exact stored c
       )
       .bind(id)
       .run();
+    const visitId = `legacy-${legacyIds.indexOf(id)}`;
+    await db
+      .prepare(
+        "INSERT INTO visits (id,outlet_id,sales_force_id,visited_at,submission_channel) VALUES (?, 'outlet', ?, 1, 'telegram')"
+      )
+      .bind(visitId, id)
+      .run();
+    const filter = new URLSearchParams({ view: "page", salesForceId: id });
+    assert.deepEqual(
+      (await get(`/visits?${filter}`)).items.map((v) => v.id),
+      [visitId]
+    );
+    assert.equal((await get(`/visits?${filter}`, "sup-empty")).total, 0);
     for (const target of ["sup-a", "sup-a", "sup-b", null, null]) {
       const response = await assign(id, target);
       assert.equal(response.status, 200, await response.clone().text());

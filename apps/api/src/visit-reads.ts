@@ -6,6 +6,7 @@ import { toStockReport, toVisit } from "./records.ts";
 import type { WebEnv } from "./web-auth.ts";
 
 export function validReadQuery(c: Context<WebEnv>) {
+  if (c.req.url.length > 16384) return false;
   const query = c.req.query();
   const path = c.req.path;
   const paging = ["view", "limit", "offset"];
@@ -28,9 +29,11 @@ export function validReadQuery(c: Context<WebEnv>) {
     const value = query[key];
     if (
       value !== undefined &&
-      (!value.trim() ||
-        value.length > 200 ||
-        [...value].some((char) => char.charCodeAt(0) < 32))
+      (!value.length ||
+        (key === "q" &&
+          (!value.trim() ||
+            value.length > 200 ||
+            [...value].some((char) => char.charCodeAt(0) < 32))))
     )
       return false;
   }
