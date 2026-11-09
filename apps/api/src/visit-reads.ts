@@ -7,6 +7,21 @@ import type { WebEnv } from "./web-auth.ts";
 
 export function validReadQuery(c: Context<WebEnv>) {
   const query = c.req.query();
+  const path = c.req.path;
+  const paging = ["view", "limit", "offset"];
+  const allowed =
+    path === "/visits"
+      ? [...paging, "salesForceId", "outletId", "channel", "stock", "date", "q"]
+      : path === "/stock-reports"
+        ? [...paging, "salesForceId", "reporterSalesForceId", "outletId"]
+        : ["/sales-force", "/outlets", "/products"].includes(path)
+          ? [...paging, ...(query.view === "page" ? ["q"] : [])]
+          : path.startsWith("/visits/")
+            ? ["include"]
+            : [];
+  if (query.include !== undefined && query.include !== "references")
+    return false;
+  if (Object.keys(query).some((key) => !allowed.includes(key))) return false;
   if (Object.keys(query).some((key) => (c.req.queries(key)?.length ?? 0) > 1))
     return false;
   for (const key of ["salesForceId", "reporterSalesForceId", "outletId", "q"]) {
@@ -128,6 +143,11 @@ export async function visitDetail(c: Context<WebEnv>) {
     },
   });
   if (!row) return c.json({ error: "Visit not found" }, 404);
+  if (c.req.query("include") !== "references")
+    return c.json({
+      ...toVisit(row),
+      stockReports: row.stockReports.map(toStockReport),
+    });
   return c.json({
     ...toVisit(row),
     outlet: row.outlet,

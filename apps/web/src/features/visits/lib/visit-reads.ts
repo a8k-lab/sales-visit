@@ -32,4 +32,4 @@ export async function loadVisits(filters: VisitFilters) {
   return { ...page, members, outlets };
 }
 export const loadVisit = (id: string) =>
-  api<VisitDetail>(`/visits/${encodeURIComponent(id)}`);
+  api<VisitDetail>(`/visits/${encodeURIComponent(id)}?include=references`);
