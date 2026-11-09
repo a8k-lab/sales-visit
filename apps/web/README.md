@@ -31,6 +31,8 @@ permission matrix, KPI definitions, reporting boundaries, limitations and smoke 
   business identifiers plus independently paginated authorized Visit/report history.
 - `/directory`: paginated Sales Force, Products and Stock Reports. Supervisors
   see only assigned Sales Force references and reporter-scoped Stock Reports.
+- `/users`: Admin-only **Pengguna & Akses**, Telegram registration approval/rejection,
+  role/status actions and audited lifecycle. See [A1 contracts, limitations and rollout](../../docs/admin-user-management.md).
 - `/supervisor-assignments`: existing Admin-only audited assignment management.
 - `/visits/new`: unavailable notice, **no local save or operational POST**.
 - Sales Force login routes to `/workspace`, an explicit not-yet-available notice.
@@ -78,6 +80,7 @@ Workers Builds/Git release writers. No Bot deployment or webhook change is requi
 - `src/router.tsx`: code-based routes, role boundary, URL validation and loaders.
 - `src/app/`: shell, navigation, layout and visible-page refresh.
 - `src/features/auth/`: API client, Telegram OIDC login and workspace notice.
+- `src/features/user-management/`: Admin account lists, confirmation dialogs and outcome reconciliation.
 - `src/features/overview/`: aggregate read adapter and existing chart/cards.
 - `src/features/visits/`: list/detail reads, search validation and reusable entry controls.
 - `src/features/outlets/`, `src/features/directory/`: live catalogs and scoped history.

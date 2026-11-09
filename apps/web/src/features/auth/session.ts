@@ -29,7 +29,7 @@ export function clearSession() {
   account = null;
   notify();
 }
-class SessionExpiredError extends Error {
+export class SessionExpiredError extends Error {
   constructor() {
     super("Sesi berakhir atau login ditolak. Silakan masuk kembali.");
   }
@@ -114,7 +114,7 @@ export async function logout() {
 export function safeReturn(value: unknown) {
   if (
     typeof value !== "string" ||
-    !/^\/(overview|visits|outlets|directory|supervisor-assignments)(\/|\?|$)/.test(
+    !/^\/(overview|visits|outlets|directory|supervisor-assignments|users)(\/|\?|$)/.test(
       value
     ) ||
     value.includes("\\") ||

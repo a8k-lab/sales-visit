@@ -75,6 +75,44 @@ export const approvalSchema = z
   );
 // Same explicit association rule as approval, including the legacy sales alias.
 export const roleChangeSchema = approvalSchema;
+// Deadlines travel in the identifier: lookup and mutation cannot disagree about
+// the cutoff. The server issues these from its database clock, not browser time.
+export const webOperationIdSchema = z
+  .string()
+  .regex(
+    /^web:[0-9]{13}:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![\s\S])/
+  );
+export const webOperationDeadline = (operationId: string) =>
+  Number(operationId.split(":")[1]);
+export type WebOperationOutcome = {
+  status: "pending" | "committed" | "not_committed";
+};
+
+// Web targets stored User IDs, never Telegram identity or a supplied actor.
+export const webUserTargetSchema = z
+  .object({
+    userId: z.string().min(1).max(256),
+    operationId: webOperationIdSchema,
+  })
+  .strict();
+export const webUserRoleSchema = webUserTargetSchema
+  .extend({
+    role: z.enum(["admin", "supervisor", "sales_force"]),
+    salesForceId: z.string().min(1).max(256).optional(),
+  })
+  .refine((input) =>
+    input.role === "sales_force"
+      ? !!input.salesForceId
+      : input.salesForceId === undefined
+  );
+export interface ManagedAccount extends Account {
+  salesForceName: string | null;
+}
+export interface UserPage {
+  items: ManagedAccount[];
+  next: string | null;
+}
+
 export const rejectionSchema = z
   .object({ telegramUserId: telegramIdSchema })
   .strict();
