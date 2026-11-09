@@ -170,8 +170,7 @@ export function AccountAction({
       } else if (
         failure instanceof SessionExpiredError ||
         (failure instanceof ApiError &&
-          failure.status >= 400 &&
-          failure.status < 500)
+          [400, 403, 404, 409].includes(failure.status))
       ) {
         // A definitive application rejection completes this request. Do not
         // claim the account is unchanged; refresh it and let the Admin review.
@@ -188,7 +187,7 @@ export function AccountAction({
           );
         }
       } else {
-        // Transport/JSON errors and 5xx (including proxy errors) may hide a
+        // Unknown HTTP errors (e.g. proxy 408), transport/JSON errors and 5xx may hide a
         // committed or still-running write. No account GET can unlock this.
         setError(
           "Hasil perubahan belum pasti. Jangan kirim ulang; periksa hasil operasi."
