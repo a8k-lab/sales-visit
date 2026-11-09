@@ -34,6 +34,17 @@ class SessionExpiredError extends Error {
     super("Sesi berakhir atau login ditolak. Silakan masuk kembali.");
   }
 }
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super(
+      status === 403
+        ? "Akses tidak diizinkan."
+        : "Layanan tidak tersedia. Silakan coba lagi."
+    );
+    this.status = status;
+  }
+}
 const base = import.meta.env.VITE_API_URL as string | undefined;
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (
@@ -61,12 +72,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
     throw new SessionExpiredError();
   }
-  if (!response.ok)
-    throw new Error(
-      response.status === 403
-        ? "Akses tidak diizinkan."
-        : "Layanan tidak tersedia. Silakan coba lagi."
-    );
+  if (!response.ok) throw new ApiError(response.status);
   return response.json() as Promise<T>;
 }
 export async function restoreSession() {

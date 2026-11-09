@@ -1,5 +1,10 @@
 import { MoonIcon, SunIcon } from "@phosphor-icons/react";
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import {
+  Link,
+  Outlet,
+  useRouter,
+  useRouterState,
+} from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { AppSidebar } from "@/app/components/app-sidebar";
@@ -21,15 +26,11 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import {
-  logout,
-  restoreSession,
-  useAccount,
-  roleLabel,
-} from "@/features/auth/session";
+import { logout, useAccount, roleLabel } from "@/features/auth/session";
 
 export function DashboardLayout() {
   const account = useAccount();
+  const router = useRouter();
   useEffect(() => {
     if (!account) location.replace("/login");
   }, [account]);
@@ -37,11 +38,8 @@ export function DashboardLayout() {
   const [loggingOut, setLoggingOut] = useState(false);
   useEffect(() => {
     const check = () => {
-      void restoreSession()
-        .then((user) => {
-          if (!user) location.replace("/login");
-        })
-        .catch(() => {});
+      if (document.visibilityState !== "visible") return;
+      void router.invalidate();
     };
     const timer = window.setInterval(check, 60000);
     window.addEventListener("focus", check);
@@ -49,7 +47,7 @@ export function DashboardLayout() {
       clearInterval(timer);
       window.removeEventListener("focus", check);
     };
-  }, []);
+  }, [router]);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -94,11 +92,13 @@ export function DashboardLayout() {
                         ? "Penugasan Supervisor"
                         : pathname === "/overview"
                           ? "Ringkasan"
-                          : pathname === "/directory"
-                            ? "Data referensi"
-                            : isOutlet
-                              ? "Outlet"
-                              : "Kunjungan"}
+                          : pathname === "/workspace"
+                            ? "Ruang kerja"
+                            : pathname === "/directory"
+                              ? "Data referensi"
+                              : isOutlet
+                                ? "Outlet"
+                                : "Kunjungan"}
                     </BreadcrumbPage>
                   )}
                 </BreadcrumbItem>
@@ -108,7 +108,7 @@ export function DashboardLayout() {
                     <BreadcrumbItem>
                       <BreadcrumbPage>
                         {isNewVisit
-                          ? "Catat Kunjungan"
+                          ? "Pelaporan Web belum tersedia"
                           : isOutlet
                             ? "Detail Outlet"
                             : "Detail kunjungan"}
@@ -120,7 +120,9 @@ export function DashboardLayout() {
             </Breadcrumb>
             <div className="ml-auto flex items-center gap-2">
               <Badge variant="outline">
-                {isAssignment ? "Data operasional" : "Demo · Data contoh"}
+                {account?.role === "sales_force"
+                  ? "Web segera hadir"
+                  : "Data operasional"}
               </Badge>
               <span className="text-sm">
                 {account?.name} · {account && roleLabel(account.role)}
@@ -160,17 +162,12 @@ export function DashboardLayout() {
             className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 outline-none md:p-6 lg:p-8"
           >
             {logoutError && <p role="alert">{logoutError}</p>}
-            {!isAssignment && (
-              <p className="text-muted-foreground text-sm">
-                Demo sintetis — bukan laporan operasional. Perubahan formulir
-                hanya disimpan di browser ini, tidak dikirim ke server.
-              </p>
-            )}
             <Outlet />
           </div>
           <footer className="text-muted-foreground px-4 py-4 text-xs md:px-8">
-            Sales Visit · Login terverifikasi. Laporan Dashboard memakai data
-            contoh. Penugasan Supervisor disimpan di server.
+            Sales Visit · Data sesuai hak akses · Waktu dalam WIB. Diperbarui
+            setiap 60 detik saat halaman aktif, saat kembali ke jendela, atau
+            melalui Perbarui data.
           </footer>
         </SidebarInset>
       </SidebarProvider>

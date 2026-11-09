@@ -1,4 +1,4 @@
-import type { StockReport } from "@sales-visit/contracts";
+import type { NamedStockReport } from "@sales-visit/contracts";
 
 import { ChannelBadge } from "@/components/channel-badge";
 import {
@@ -16,13 +16,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { products, salesForce } from "@/data/mock-data";
 import { formatTime } from "@/lib/formatters";
 
-export function StockReportCard({ report }: { report: StockReport }) {
-  const reporter = salesForce.find(
-    (member) => member.id === report.reporterSalesForceId
-  )!;
+export function StockReportCard({ report }: { report: NamedStockReport }) {
   return (
     <Card>
       <CardHeader>
@@ -31,7 +27,8 @@ export function StockReportCard({ report }: { report: StockReport }) {
           <ChannelBadge channel={report.submissionChannel} />
         </div>
         <CardDescription>
-          {formatTime(report.reportedAt)} WIB · Dilaporkan oleh {reporter.name}
+          {formatTime(report.reportedAt)} WIB · Dilaporkan oleh{" "}
+          {report.reporter?.name ?? report.reporterSalesForceId}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -44,22 +41,19 @@ export function StockReportCard({ report }: { report: StockReport }) {
           </TableHeader>
           <TableBody>
             {report.items.map((item) => {
-              const product = products.find(
-                (entry) => entry.id === item.productId
-              )!;
+              const product = item.product;
               return (
                 <TableRow key={item.productId}>
                   <TableCell className="whitespace-normal">
-                    <span className="font-medium">{product.name}</span>
+                    <span className="font-medium">
+                      {product?.name ?? item.productId}
+                    </span>
                     <span className="text-muted-foreground block text-xs">
-                      {product.category}
+                      {item.productId}
                     </span>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {item.quantity}{" "}
-                    <span className="text-muted-foreground">
-                      {product.unit}
-                    </span>
+                    {item.quantity.toLocaleString("id-ID")}
                   </TableCell>
                 </TableRow>
               );

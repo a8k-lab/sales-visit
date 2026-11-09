@@ -1,3 +1,4 @@
+export * from "./dashboard.ts";
 export * from "./identity.ts";
 export * from "./visit-wizard.ts";
 export * from "./planning.ts";

@@ -13,6 +13,7 @@ export function operationalScope(
     | typeof salesForce.id
     | typeof visits.salesForceId
     | typeof stockReports.reporterSalesForceId
+    | ReturnType<typeof sql>
 ) {
   return sql`exists (select 1 from users scope_user
     where scope_user.id = ${userId} and scope_user.status = 'active' and (

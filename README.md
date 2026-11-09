@@ -2,7 +2,7 @@
 
 **Sales Visit** is a university **Computing Project** focused on digitizing field-sales visits and outlet reporting for a Telkomsel product-distribution workflow associated with partner **Citra Indah**.
 
-> **Project status:** The Web Dashboard uses synthetic mock data and browser-local storage. Shared contracts, the Drizzle/D1 schema and migrations, local Hono reads, and atomic/idempotent Visit and Stock Report write operations are implemented. Writes are integration-tested with injected trusted identities; the default HTTP runtime still rejects all business writes, including authenticated Web requests. Telegram registration and Admin approval now use a private Worker Service Binding and audited D1 operations. Telegram OIDC Web authentication, revocable sessions and role-scoped API reads are implemented; dashboard data remains synthetic. See the [Web auth setup/release procedure](docs/web-auth.md). The [CI/CD runbook](docs/ci-cd.md) records current release policy: remote migration 0004 is operator-confirmed as applied, while deployed API/Bot versions remain unverified.
+> **Project status:** Admin/Supervisor Web monitoring now reads actual API/D1 Visits, Stock Reports and master catalogs using Telegram OIDC sessions and current Supervisor assignment scope. Telegram guided Visit reporting persists through the API. Web submission is **not enabled**; the local-only form/store have been disabled/removed. A dedicated Sales Force Web workspace and D1-backed submission remain the next milestone. See [live dashboard contracts, permissions, KPI definitions and API-first rollout](docs/live-dashboard.md). Local checks do not establish deployed versions or real Telegram/browser verification; releases remain operator-controlled.
 
 ## Background
 
@@ -39,13 +39,13 @@ See [CONTEXT.md](CONTEXT.md) for precise terminology and [ADR-0003](docs/adr/000
 
 ## Planned functionality
 
-**Initial prototype (static/mock data):**
+**Operational Web monitoring:**
 
-- Responsive dashboard shell and role-appropriate navigation.
-- Visits list and detail screens.
-- Sales Force visit-report input on the Web.
-- Outlet list/detail and visit history.
-- Overview metrics derived from coherent sample data.
+- Existing responsive shadcn/ui shell and role-appropriate navigation.
+- D1-backed 14-day WIB overview, scoped aggregates and recent Visits.
+- Server-filtered/paginated Visit list and authenticated Visit detail.
+- Actual Outlet/reference catalogs and independently scoped Stock Report history.
+- Explicit unavailable Web submission route; Sales Force workspace notice.
 
 **Implemented local backend:** D1-backed reads for Sales Force, Outlets, Products,
 Visits (including linked Stock Reports), and Stock Reports; atomic Visit/Stock
@@ -55,7 +55,7 @@ runtime report writes are unauthorized. Telegram `/register`, `/me`, `/pending`,
 `/approve`, and `/reject` use API-owned identity operations. See
 [API documentation](apps/api/README.md) and the [Bot sandbox runbook](apps/bot/README.md).
 
-**Later integration:** API-backed dashboard data, Web report-write authorization, and live operational reporting. Telegram guided reporting remains available through its existing private RPC/wizard.
+**Next milestone:** dedicated Sales Force workspace and Web report-write authorization backed by D1, using the same domain rules as Telegram. Telegram guided reporting remains available through its existing private RPC/wizard.
 
 **Not part of the current MVP commitment:** Outlet login/self-reporting, advanced product recommendations, comprehensive sales-order and payment flows, or replacement of DigiPOS. These require business validation and an explicit scope decision.
 
@@ -107,7 +107,7 @@ pnpm install
 ```
 
 ```sh
-pnpm dev:web             # Mock-backed dashboard
+pnpm dev:web             # API-backed dashboard; configure VITE_API_URL and OIDC
 pnpm db:migrate:local    # API-local D1 only
 pnpm db:seed:local       # Idempotent synthetic seed
 pnpm dev:api             # http://localhost:8787
@@ -126,6 +126,7 @@ contacting Telegram or Cloudflare. The private-terminal test-bot helper is
 
 ## Documentation and design references
 
+- **[Live Operational Dashboard](docs/live-dashboard.md):** contracts, permissions, KPI window, verification and manual API-first rollout.
 - **[CONTEXT.md](CONTEXT.md):** shared domain glossary and naming conventions.
 - **[Architecture Decision Records](docs/adr/):** decisions and alternatives behind the proposed system.
 - **[GitHub Actions CI/CD](docs/ci-cd.md):** change-aware CI, existing-Worker release guards, operator setup and manual migration policy. Automatic CD is OFF; deployed API/Bot versions are unverified.
@@ -159,8 +160,9 @@ Until confirmed, avoid presenting invented business calculations as actual opera
 
 The team's FigJam notes list a **static dashboard target of 3 November 2026** and a **planned partner discussion on 4 November 2026**. These dates reflect the working plan, not completed deliverables.
 
-The static Web workflow, API/D1 operations and Telegram reporting are implemented
-as independent units. Web still uses synthetic mocks; API-backed Web operations
-remain future milestones. Web authentication and protected API reads now have a separate [setup and staged rollout checklist](docs/web-auth.md). Existing Workers must be reused.
+The Web operational reads, API/D1 operations and Telegram reporting are implemented
+as independent units. Web submission remains deferred; monitoring never mixes mock
+or browser-local Visits with D1 data. Follow the [live dashboard rollout](docs/live-dashboard.md)
+and [Web authentication setup](docs/web-auth.md). Existing Workers must be reused.
 The operator confirms remote D1 migration 0004 is applied; deployed API/Bot versions
 remain unverified until inspected. See the [release runbook](docs/ci-cd.md).

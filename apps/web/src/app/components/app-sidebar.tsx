@@ -24,6 +24,7 @@ import {
 import { useAccount, roleLabel } from "@/features/auth/session";
 
 const navigation = [
+  { title: "Ruang kerja", to: "/workspace", icon: ChartBarIcon },
   { title: "Ringkasan", to: "/overview", icon: ChartBarIcon },
   { title: "Kunjungan", to: "/visits", icon: ClipboardTextIcon },
   { title: "Outlet", to: "/outlets", icon: StorefrontIcon },
@@ -49,7 +50,13 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
-              render={<Link to="/overview" />}
+              render={
+                <Link
+                  to={
+                    account?.role === "sales_force" ? "/workspace" : "/overview"
+                  }
+                />
+              }
               onClick={() => setOpenMobile(false)}
             >
               <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
@@ -73,8 +80,9 @@ export function AppSidebar() {
               {navigation
                 .filter(
                   (item) =>
-                    (item.to !== "/directory" ||
-                      account?.role !== "sales_force") &&
+                    (account?.role === "sales_force"
+                      ? item.to === "/workspace"
+                      : item.to !== "/workspace") &&
                     (item.to !== "/supervisor-assignments" ||
                       account?.role === "admin")
                 )
@@ -100,13 +108,10 @@ export function AppSidebar() {
               Satu alur pelaporan, dua pilihan.
             </span>
             <p>
-              Pelaporan operasional melalui Telegram Bot. Formulir Web hanya
-              simulasi lokal.
+              Pelaporan melalui Telegram Bot. Pelaporan Web tersedia pada tahap
+              berikutnya.
             </p>
-            <p>
-              Laporan memakai data contoh. Penugasan Supervisor memakai data
-              operasional.
-            </p>
+            <p>Pemantauan memakai data operasional sesuai hak akses Anda.</p>
           </div>
         </SidebarGroup>
       </SidebarContent>

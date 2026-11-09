@@ -238,6 +238,246 @@ async function setup(t) {
 }
 const ids = (rows) => rows.map((row) => row.id);
 
+test("operational overview aggregates all records in a zero-filled WIB window with current reporter scope", async (t) => {
+  const { db, get, request, assign } = await setup(t);
+  const initial = await get("/dashboard/overview");
+  assert.deepEqual(initial.metrics, {
+    visits: 0,
+    outlets: 0,
+    salesForce: 0,
+    stockReports: 0,
+  });
+  assert.equal(initial.dailyVisits.length, 14);
+  assert.ok(initial.dailyVisits.every((d) => d.count === 0));
+  const start = Date.parse(initial.period.start);
+  const end = Date.parse(initial.period.end);
+  assert.equal(new Date(start).getUTCHours(), 17);
+  await assign("a", "sup-a");
+  await assign("b", "sup-b");
+  await db.batch(
+    Array.from({ length: 125 }, (_, i) =>
+      db
+        .prepare(
+          "INSERT INTO visits (id,outlet_id,sales_force_id,visited_at,submission_channel) VALUES (?, 'outlet', ?, ?, 'telegram')"
+        )
+        .bind(`live-${String(i).padStart(3, "0")}`, i < 120 ? "a" : "b", start)
+    )
+  );
+  // Exact start inclusive; end exclusive; a later WIB day and a pre-window record.
+  for (const [id, timestamp] of [
+    ["later", start + 86400000],
+    ["before", start - 1],
+    ["after", end],
+  ])
+    await db
+      .prepare(
+        "INSERT INTO visits (id,outlet_id,sales_force_id,visited_at,submission_channel) VALUES (?, 'outlet', 'a', ?, 'web')"
+      )
+      .bind(id, timestamp)
+      .run();
+  for (const [id, reporter, visit] of [
+    ["independent", "a", null],
+    ["linked", "a", "live-124"],
+    ["other-reporter", "b", "live-000"],
+  ])
+    await db
+      .prepare(
+        "INSERT INTO stock_reports (id,outlet_id,reporter_sales_force_id,visit_id,reported_at,submission_channel) VALUES (?, 'outlet', ?, ?, ?, 'telegram')"
+      )
+      .bind(id, reporter, visit, start)
+      .run();
+  const first = await get(
+    "/visits?view=page&limit=100&channel=telegram",
+    "sup-a"
+  );
+  assert.equal(first.total, 121);
+  assert.equal(first.items.length, 100);
+  assert.equal(
+    first.items[0].stockReportCount,
+    0,
+    "other-team reporter is not counted"
+  );
+  const second = await get(
+    "/visits?view=page&limit=100&offset=100&channel=telegram",
+    "sup-a"
+  );
+  assert.equal(second.total, 121);
+  assert.equal(second.items.length, 21);
+  assert.equal(
+    new Set([...first.items, ...second.items].map((v) => v.id)).size,
+    121
+  );
+  assert.equal(
+    (await get("/visits?view=page&salesForceId=b", "sup-a")).total,
+    0
+  );
+  assert.equal(
+    (await get("/visits?view=page&q=Synthetic%20b", "sup-a")).total,
+    0
+  );
+  assert.equal(
+    (await get("/visits?view=page&stock=with&channel=telegram", "sup-a")).total,
+    1
+  );
+  assert.equal(
+    (await get("/visits?view=page&stock=with&channel=telegram")).total,
+    3
+  );
+  assert.equal(
+    (await get("/visits?view=page&date=" + initial.dailyVisits[0].date)).total,
+    125
+  );
+  assert.equal((await get("/visits?view=page&outletId=missing")).total, 0);
+  assert.equal((await get("/visits?view=page&q=%25")).total, 0);
+  assert.deepEqual((await get("/sales-force?view=page", "sup-a")).items, [
+    { id: "a", name: "Synthetic a" },
+  ]);
+  assert.equal((await get("/sales-force?view=page", "sup-empty")).total, 0);
+  assert.equal((await get("/outlets?view=page&q=Synthetic")).total, 1);
+  assert.equal((await get("/products?view=page&q=missing")).total, 0);
+  assert.equal((await get("/outlets/outlet")).businessId, null);
+  assert.equal(
+    (await get("/stock-reports?view=page&outletId=outlet", "sup-a")).total,
+    3
+  );
+  assert.equal(
+    (await get("/stock-reports?view=page&outletId=missing", "sup-a")).total,
+    0
+  );
+  assert.equal((await request("/visits/live-124", "sup-a")).status, 404);
+  assert.equal((await request("/visits/missing", "sup-a")).status, 404);
+  assert.equal((await get("/visits/live-000", "sup-a")).stockReports.length, 0);
+  const expanded = await get("/visits/live-000?include=references", "sup-a");
+  assert.equal(expanded.member.name, "Synthetic a");
+  assert.equal(expanded.stockReports.length, 0);
+  const expandedAdmin = await get("/visits/live-000?include=references");
+  assert.equal(expandedAdmin.stockReports[0].reporter.id, "b");
+  assert.equal(
+    (await request("/visits/live-124?include=references", "sup-a")).status,
+    404
+  );
+  for (const query of [
+    "date=2026-02-30",
+    "date=bad",
+    "channel=bot",
+    "stock=yes",
+    "view=all",
+    "q=",
+    "q=a&q=b",
+    "limit=101",
+    "offset=100001",
+    "outletId=",
+  ])
+    assert.equal((await request("/visits?" + query)).status, 400, query);
+  assert.equal(
+    (await request("/sales-force?view=page", "sf-user")).status,
+    403
+  );
+  const admin = await get("/dashboard/overview");
+  assert.deepEqual(admin.metrics, {
+    visits: 126,
+    outlets: 1,
+    salesForce: 2,
+    stockReports: 3,
+  });
+  assert.deepEqual(
+    admin.dailyVisits.map((d) => d.count),
+    [125, 1, ...Array(12).fill(0)]
+  );
+  assert.deepEqual(admin.channels, [
+    { channel: "web", count: 1 },
+    { channel: "telegram", count: 125 },
+  ]);
+  assert.equal(admin.recentVisits.length, 5);
+  assert.equal(admin.recentVisits[0].id, "later");
+  assert.equal(admin.recentVisits[1].id, "live-000");
+  assert.equal(admin.recentVisits[0].outlet.name, "Synthetic Outlet");
+  assert.deepEqual((await get("/dashboard/overview", "sup-a")).metrics, {
+    visits: 121,
+    outlets: 1,
+    salesForce: 1,
+    stockReports: 2,
+  });
+  assert.equal((await get("/dashboard/overview", "sup-b")).metrics.visits, 5);
+  assert.equal(
+    (await get("/dashboard/overview", "sup-empty")).metrics.visits,
+    0
+  );
+  await assign("a", "sup-b");
+  assert.equal(
+    (await get("/dashboard/overview", "sup-a")).metrics.stockReports,
+    0
+  );
+  assert.equal((await get("/dashboard/overview", "sup-b")).metrics.visits, 126);
+  await assign("a", null);
+  assert.equal((await get("/dashboard/overview", "sup-b")).metrics.visits, 5);
+  assert.equal((await request("/dashboard/overview", null)).status, 401);
+  assert.equal((await request("/dashboard/overview", "sf-user")).status, 403);
+  assert.equal((await request("/dashboard/overview?period=bad")).status, 400);
+  assert.equal(
+    (await request("/dashboard/overview")).headers.get("cache-control"),
+    "no-store"
+  );
+});
+
+test("empty operational data and independent Stock Report timestamp boundaries", async (t) => {
+  const { db, get, request, assign } = await setup(t);
+  for (const table of ["stock_report_items", "stock_reports", "visits"])
+    await db.prepare(`DELETE FROM ${table}`).run();
+  const empty = await get("/dashboard/overview");
+  assert.deepEqual(empty.metrics, {
+    visits: 0,
+    outlets: 0,
+    salesForce: 0,
+    stockReports: 0,
+  });
+  assert.deepEqual(empty.recentVisits, []);
+  assert.equal(empty.dailyVisits.length, 14);
+  assert.deepEqual(await get("/visits?view=page"), { items: [], total: 0 });
+  assert.deepEqual(await get("/stock-reports?view=page"), {
+    items: [],
+    total: 0,
+  });
+  const start = Date.parse(empty.period.start);
+  const end = Date.parse(empty.period.end);
+  for (const [id, timestamp] of [
+    ["before", start - 1],
+    ["first", start],
+    ["last", end - 1],
+    ["after", end],
+  ]) {
+    await db
+      .prepare(
+        "INSERT INTO stock_reports (id,outlet_id,reporter_sales_force_id,reported_at,submission_channel) VALUES (?, 'outlet', 'a', ?, 'telegram')"
+      )
+      .bind(id, timestamp)
+      .run();
+  }
+  await assign("a", "sup-a");
+  assert.equal((await get("/dashboard/overview")).metrics.stockReports, 2);
+  assert.equal(
+    (await get("/dashboard/overview", "sup-a")).metrics.stockReports,
+    2
+  );
+  assert.equal(
+    (await get("/dashboard/overview", "sup-b")).metrics.stockReports,
+    0
+  );
+  assert.equal((await get("/dashboard/overview")).metrics.visits, 0);
+  await assign("a", "sup-b");
+  assert.equal((await get("/stock-reports?view=page", "sup-a")).total, 0);
+  assert.equal((await get("/stock-reports?view=page", "sup-b")).total, 4);
+  await assign("a", null);
+  assert.equal((await get("/stock-reports?view=page", "sup-b")).total, 0);
+  for (const path of [
+    "/stock-reports?channel=web",
+    "/outlets?view=page&unknown=1",
+    "/visits?unexpected=1",
+    "/visits/id?include=all",
+  ])
+    assert.equal((await request(path)).status, 400);
+});
+
 test("assignment API, current Web scope, nested reporter isolation and Bot RPC", async (t) => {
   const { db, request, get, assign, rpc } = await setup(t);
   const audit = async () =>
@@ -646,6 +886,19 @@ test("legacy Sales Force IDs round-trip through JSON mutation and exact stored c
       )
       .bind(id)
       .run();
+    const visitId = `legacy-${legacyIds.indexOf(id)}`;
+    await db
+      .prepare(
+        "INSERT INTO visits (id,outlet_id,sales_force_id,visited_at,submission_channel) VALUES (?, 'outlet', ?, 1, 'telegram')"
+      )
+      .bind(visitId, id)
+      .run();
+    const filter = new URLSearchParams({ view: "page", salesForceId: id });
+    assert.deepEqual(
+      (await get(`/visits?${filter}`)).items.map((v) => v.id),
+      [visitId]
+    );
+    assert.equal((await get(`/visits?${filter}`, "sup-empty")).total, 0);
     for (const target of ["sup-a", "sup-a", "sup-b", null, null]) {
       const response = await assign(id, target);
       assert.equal(response.status, 200, await response.clone().text());

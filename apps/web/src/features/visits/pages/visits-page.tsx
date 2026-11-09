@@ -3,6 +3,7 @@ import {
   ClipboardTextIcon,
   MagnifyingGlassIcon,
 } from "@phosphor-icons/react";
+import type { VisitListItem } from "@sales-visit/contracts";
 import {
   Link,
   useLoaderData,
@@ -11,6 +12,8 @@ import {
 } from "@tanstack/react-router";
 
 import { ChannelBadge } from "@/components/channel-badge";
+import { OperationalRefresh } from "@/components/operational-state";
+import { ReadPagination } from "@/components/read-pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,12 +30,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   InputGroup,
@@ -47,24 +45,33 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { outlets, salesForce } from "@/data/mock-data";
-import { visitContext } from "@/data/visit-store";
 import { FilterSelect } from "@/features/visits/components/filter-select";
-import {
-  filterVisits,
-  type VisitFilters,
-} from "@/features/visits/lib/filter-visits";
+import type { VisitFilters } from "@/features/visits/lib/filter-visits";
+
+function visitContext(visit: VisitListItem) {
+  return {
+    outlet: visit.outlet ?? { id: visit.outletId, name: visit.outletId },
+    member: visit.member ?? {
+      id: visit.salesForceId,
+      name: visit.salesForceId,
+    },
+    reports: { length: visit.stockReportCount },
+  };
+}
 import { formatTime } from "@/lib/formatters";
 
 export function VisitsPage() {
   const filters = useSearch({ from: "/dashboard/visits" });
   const navigate = useNavigate({ from: "/visits" });
   const data = useLoaderData({ from: "/dashboard/visits" });
-  const { visits, stockReports } = data;
-  const results = filterVisits(filters, data);
+  const results = data.items;
   const update = (key: keyof VisitFilters, value: string) =>
     void navigate({
-      search: (previous: VisitFilters) => ({ ...previous, [key]: value }),
+      search: (previous: VisitFilters) => ({
+        ...previous,
+        offset: "",
+        [key]: value,
+      }),
       replace: true,
       resetScroll: false,
     });
@@ -85,23 +92,18 @@ export function VisitsPage() {
           Web dan Telegram Bot.
         </p>
       </div>
-      <Button
-        nativeButton={false}
-        className="self-start"
-        render={<Link to="/visits/new" search={filters} />}
-      >
-        Catat Kunjungan
-      </Button>
-      {data.storageError && <FieldError>{data.storageError}</FieldError>}
+      <div>
+        <OperationalRefresh />
+      </div>
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle>Aktivitas kunjungan</CardTitle>
-            <Badge variant="secondary">{visits.length} kunjungan</Badge>
+            <Badge variant="secondary">
+              {data.total.toLocaleString("id-ID")} kunjungan
+            </Badge>
           </div>
-          <CardDescription>
-            Data contoh dan kunjungan lokal · Waktu dalam WIB
-          </CardDescription>
+          <CardDescription>Data operasional · Waktu dalam WIB</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <FieldGroup className="gap-4">
@@ -122,26 +124,38 @@ export function VisitsPage() {
               </InputGroup>
             </Field>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              <FilterSelect
-                id="member"
-                label="Sales Force"
-                value={filters.member}
-                onChange={(value) => update("member", value)}
-                options={salesForce.map((member) => ({
-                  value: member.id,
-                  label: member.name,
-                }))}
-              />
-              <FilterSelect
-                id="outlet"
-                label="Outlet"
-                value={filters.outlet}
-                onChange={(value) => update("outlet", value)}
-                options={outlets.map((outlet) => ({
-                  value: outlet.id,
-                  label: outlet.name,
-                }))}
-              />
+              {(
+                [
+                  {
+                    key: "member",
+                    title: "ID Sales Force",
+                    page: data.members,
+                  },
+                  { key: "outlet", title: "ID Outlet", page: data.outlets },
+                ] as const
+              ).map(({ key, title, page }) => (
+                <Field key={key}>
+                  <FieldLabel htmlFor={key}>{title}</FieldLabel>
+                  <Input
+                    id={key}
+                    list={`${key}-options`}
+                    value={filters[key]}
+                    onChange={(event) => update(key, event.target.value)}
+                    placeholder="Semua"
+                  />
+                  <datalist id={`${key}-options`}>
+                    {page.items.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </datalist>
+                  <p className="text-muted-foreground text-xs">
+                    Saran {page.items.length} dari {page.total}. ID lain dapat
+                    diketik dari direktori.
+                  </p>
+                </Field>
+              ))}
               <FilterSelect
                 id="channel"
                 label="Kanal pelaporan"
@@ -175,8 +189,8 @@ export function VisitsPage() {
           </FieldGroup>
           <div className="flex min-h-8 items-center justify-between gap-2">
             <p role="status" className="text-muted-foreground text-xs">
-              Menampilkan {results.length} dari {visits.length} kunjungan ·
-              Terbaru dahulu
+              Menampilkan {results.length} dari {data.total} kunjungan · Terbaru
+              dahulu
             </p>
             {filtered && (
               <Button variant="ghost" size="sm" onClick={reset}>
@@ -218,10 +232,7 @@ export function VisitsPage() {
                   </TableHeader>
                   <TableBody>
                     {results.map((visit) => {
-                      const { outlet, member, reports } = visitContext(
-                        visit,
-                        stockReports
-                      );
+                      const { outlet, member, reports } = visitContext(visit);
                       return (
                         <TableRow key={visit.id}>
                           <TableCell>
@@ -278,10 +289,7 @@ export function VisitsPage() {
               </div>
               <div className="flex flex-col gap-3 md:hidden">
                 {results.map((visit) => {
-                  const { outlet, member, reports } = visitContext(
-                    visit,
-                    stockReports
-                  );
+                  const { outlet, member, reports } = visitContext(visit);
                   return (
                     <Link
                       key={visit.id}
@@ -310,6 +318,12 @@ export function VisitsPage() {
               </div>
             </>
           )}
+          <ReadPagination
+            offset={Number(filters.offset || 0)}
+            count={results.length}
+            total={data.total}
+            onChange={(offset) => update("offset", String(offset))}
+          />
           <p className="text-muted-foreground flex items-start gap-2 text-xs">
             <ClipboardTextIcon className="size-4 shrink-0" />
             Laporan stok bersifat opsional dan mencatat jumlah pada waktu

@@ -44,22 +44,17 @@ export function RecentVisits({
                     search={{}}
                     className="font-medium underline-offset-4 hover:underline"
                   >
-                    {visit.outlet.name}
+                    {visit.outlet?.name ?? visit.outletId}
                     <span className="sr-only"> · Kunjungan {visit.id}</span>
                   </Link>
                   <span className="text-muted-foreground text-xs">
-                    Sales Force · {visit.member.name}
+                    Sales Force · {visit.member?.name ?? visit.salesForceId}
                   </span>
                 </div>
                 <div className="flex flex-col gap-1 text-xs">
                   <time dateTime={visit.visitedAt}>
                     {formatTime(visit.visitedAt)} WIB
                   </time>
-                  {visit.submittedAt && (
-                    <span className="text-muted-foreground">
-                      Tersimpan di browser ini
-                    </span>
-                  )}
                 </div>
                 <div>
                   <ChannelBadge channel={visit.submissionChannel} />

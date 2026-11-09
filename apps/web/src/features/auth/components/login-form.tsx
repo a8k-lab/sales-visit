@@ -235,7 +235,8 @@ export function LoginForm() {
           </Button>
         )}
         <p className="text-muted-foreground text-center text-xs">
-          Dashboard masih menampilkan data contoh. Pelaporan Web belum tersedia.
+          Pemantauan operasional untuk Admin dan Supervisor. Pelaporan Web belum
+          tersedia.
         </p>
       </CardContent>
     </Card>

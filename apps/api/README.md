@@ -27,6 +27,17 @@ Stop the API before removing that directory if you need a fresh local database,
 then rerun migrations and seed. Generated `worker-configuration.d.ts` is ignored;
 `pnpm --filter @sales-visit/api typecheck` regenerates it before checking types.
 
+## Operational dashboard reads
+
+See [Live Operational Dashboard](../../docs/live-dashboard.md) for the new
+`GET /dashboard/overview` contract, 14-day WIB window, permissions and API-first
+activation. Existing arrays and Visit detail remain compatible by default.
+Opt-in `view=page` lists add `{ items, total }` with server-side filtering and
+named references; Visit detail uses `include=references`. `GET /outlets/:id`
+projects stored master identifiers only. No new migration or HTTP report-write
+authorization is introduced. Unknown/duplicate/unsupported query parameters are
+rejected; bounded exact reference filters preserve legacy IDs.
+
 ## Endpoints
 
 See [Web authentication and release setup](../../docs/web-auth.md) for Telegram
@@ -289,16 +300,13 @@ trimming; independent Stock Report/Product normalization is unchanged.
 
 ## Remaining scope
 
-Web authentication/read authorization, CORS/frontend integration, Telegram Stock
-Reports, public-read pagination/filtering and KPIs remain deferred. The future Web auth
-milestone must establish verified Web identities, trusted channel provenance,
-sessions and read permissions before enabling public writes. Telegram Visit
-submission now checks registered identity, current role/status and SF association
-at the private boundary and again atomically at insertion; assignment enforcement
-is not an established submission rule. Existing rules only validate
-that the trusted Sales Force and referenced records exist; no assignment policy
-has been invented. Add operational logging/rate limits and review request-size
-limits before production exposure. Public HTTP lists remain unpaginated; new
-protected RPC lists are bounded. Use synthetic
-business data only, including in the remote test deployment; the Web still uses
-mocks/browser-local storage.
+Web authentication, assignment-scoped reads, operational overview aggregates and
+bounded server-filtered Web lists are implemented. Web Visit/Stock Report
+submission and a dedicated Sales Force workspace remain deferred; public HTTP
+report writes stay denied. Telegram Visit submission checks registered identity,
+current role/status and SF association at the private boundary and atomically at
+insertion. Monitoring assignment is not a submission eligibility rule. Telegram
+Stock Report UX and additional operational logging/rate-limit policy remain future
+work. Use disposable synthetic fixtures locally, never seed production to satisfy
+dashboard acceptance. Deployment and real Telegram/browser smoke verification are
+separate operator-controlled steps in the live dashboard runbook.

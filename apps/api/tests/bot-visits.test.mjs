@@ -8,6 +8,8 @@ import { test } from "node:test";
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 
+import { hashToken } from "../src/web-auth.ts";
+
 async function bundle(path, banner = "") {
   return (
     await build({
@@ -336,6 +338,46 @@ test("Visit wizard through real Workers, private RPC and persistent disposable D
       assert.equal(saved.submission_channel, "telegram");
       assert.equal(saved.notes, null);
       assert.equal(saved.follow_up, null);
+      // A real webhook -> Bot RPC -> D1 Visit is visible through the deployed
+      // HTTP read handler, not through fixtures or a browser-local adapter.
+      const api = await mf.getWorker("api");
+      for (const [id, credential] of [
+        ["u1", "a".repeat(64)],
+        ["u2", "b".repeat(64)],
+      ]) {
+        await db
+          .prepare(
+            "INSERT INTO web_sessions (token_hash,user_id,created_at,expires_at) VALUES (?,?,?,?)"
+          )
+          .bind(
+            await hashToken(credential),
+            id,
+            Date.parse("2026-06-07T17:00:00Z"),
+            Date.parse("2026-06-08T17:00:00Z")
+          )
+          .run();
+      }
+      const overview = async (credential) => {
+        const response = await api.fetch("https://api/dashboard/overview", {
+          headers: { Authorization: `Bearer ${credential}` },
+        });
+        assert.equal(response.status, 200);
+        return response.json();
+      };
+      assert.equal((await overview("b".repeat(64))).metrics.visits, 0);
+      await db
+        .prepare(
+          "INSERT INTO sales_force_supervisors (sales_force_id,supervisor_user_id) VALUES ('sf','u2')"
+        )
+        .run();
+      for (const credential of ["a".repeat(64), "b".repeat(64)]) {
+        const data = await overview(credential);
+        assert.equal(data.metrics.visits, 1);
+        assert.equal(data.metrics.stockReports, 0);
+        assert.equal(data.recentVisits[0].id, saved.id);
+        assert.equal(data.recentVisits[0].submissionChannel, "telegram");
+        assert.equal(data.dailyVisits.at(-1).count, 1);
+      }
       assert.match(await command(3, "/konfirmasi"), /berhasil tersimpan/);
       assert.match(await command(3, "/batal"), /berhasil tersimpan/);
       assert.equal(await count(), 1);
