@@ -426,6 +426,45 @@ test("Web Admin account lifecycle on disposable migrated D1", async (t) => {
     }
   );
   await t.test(
+    "session expiry is evaluated at write time, not at preflight time",
+    async () => {
+      await user("clock-race");
+      const before = await count();
+      const delayedDB = {
+        prepare: db.prepare.bind(db),
+        batch: async (statements) => {
+          await db
+            .prepare(
+              "UPDATE web_sessions SET expires_at = ? WHERE user_id = 'admin'"
+            )
+            .bind(Date.now() + 50)
+            .run();
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          return db.batch(statements);
+        },
+      };
+      assert.equal(
+        (
+          await mutate(
+            "approve",
+            { userId: "clock-race", role: "supervisor" },
+            "admin",
+            delayedDB
+          )
+        ).status,
+        401
+      );
+      assert.equal((await state("clock-race")).status, "pending");
+      assert.equal(await count(), before);
+      await db
+        .prepare(
+          "UPDATE web_sessions SET expires_at = ? WHERE user_id = 'admin'"
+        )
+        .bind(Date.now() + 3600000)
+        .run();
+    }
+  );
+  await t.test(
     "concurrent claims/decisions and management are serialized with no duplicate audit",
     async () => {
       await user("race-a");
@@ -454,6 +493,19 @@ test("Web Admin account lifecycle on disposable migrated D1", async (t) => {
         mutate("disable", { userId: "sales" }),
       ]);
       assert.equal(await count(), pre + 1);
+      await user("race-promotion", "active", "supervisor");
+      const initialCount = await count();
+      const race = await Promise.all([
+        mutate("role", { userId: "race-promotion", role: "admin" }),
+        mutate("disable", { userId: "race-promotion" }),
+      ]);
+      assert.deepEqual(race.map((r) => r.status).toSorted(), [200, 409]);
+      const final = await state("race-promotion");
+      assert.ok(
+        (final.status === "active" && final.role === "admin") ||
+          (final.status === "disabled" && final.role === "supervisor")
+      );
+      assert.equal(await count(), initialCount + 1);
     }
   );
   await t.test(
@@ -488,6 +540,29 @@ test("Web Admin account lifecycle on disposable migrated D1", async (t) => {
       assert.equal((await state("rollback")).status, "pending");
       assert.equal(await count(), before);
       await db.prepare("DROP TRIGGER fail_audit").run();
+      await user("rollback-management", "active", "supervisor");
+      const failingDB = {
+        prepare: db.prepare.bind(db),
+        batch: (statements) =>
+          db.batch([
+            ...statements,
+            db.prepare("SELECT * FROM nonexistent_secret_table"),
+          ]),
+      };
+      const failed = await mutate(
+        "disable",
+        { userId: "rollback-management" },
+        "admin",
+        failingDB
+      );
+      assert.equal(failed.status, 503);
+      assert.doesNotMatch(await failed.text(), /nonexistent|secret|SQL/);
+      assert.deepEqual(await state("rollback-management"), {
+        status: "active",
+        role: "supervisor",
+        salesForceId: null,
+      });
+      assert.equal(await count(), before);
     }
   );
   await t.test("bounded keyset pagination and exact filters", async () => {

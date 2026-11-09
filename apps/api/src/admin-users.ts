@@ -9,6 +9,11 @@ import { bodyLimit } from "hono/body-limit";
 import { accountQuery, IdentityOperations, webAdminGuard } from "./identity.ts";
 import { hashToken, sessionAccount, type WebEnv } from "./web-auth.ts";
 
+// A failed in-transaction guard may mean logout, expiry, disabling, or demotion
+// since middleware. Reclassify without disclosing target records.
+const denied = async (request: Request, db: D1Database) =>
+  (await sessionAccount(request, db)) ? (403 as const) : (401 as const);
+
 export function adminUserRoutes() {
   const app = new Hono<WebEnv>();
   app.use("*", async (c, next) => {
@@ -25,11 +30,6 @@ export function adminUserRoutes() {
       onError: (c) => c.json({ error: "Invalid request" }, 400),
     })
   );
-
-  // A failed in-transaction guard may mean logout, expiry, disabling, or demotion
-  // since middleware. Reclassify without disclosing target records.
-  const denied = async (request: Request, db: D1Database) =>
-    (await sessionAccount(request, db)) ? (403 as const) : (401 as const);
 
   app.get("/sales-force-options", async (c) => {
     const after = c.req.query("after") ?? "";
