@@ -36,6 +36,7 @@ import { roleLabel, useAccount } from "@/features/auth/session";
 
 import { AccountAction } from "./action-dialog";
 import { accountName, statusLabels } from "./data";
+import { OperationOutcome } from "./operation-outcome";
 
 function UserTable({
   page,
@@ -189,6 +190,7 @@ export function UserManagementPage() {
       <p role="status" aria-live="polite">
         {message}
       </p>
+      <OperationOutcome onMessage={setMessage} />
       <section className="flex flex-col gap-4" aria-labelledby="pending-title">
         <h2 id="pending-title" className="text-lg font-semibold">
           Permintaan registrasi

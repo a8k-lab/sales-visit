@@ -21,9 +21,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { api, ApiError, roleLabel } from "@/features/auth/session";
+import {
+  api,
+  ApiError,
+  SessionExpiredError,
+  roleLabel,
+} from "@/features/auth/session";
 
-import { accountName, statusLabels, type SalesForceOptions } from "./data";
+import { accountName, type SalesForceOptions } from "./data";
+import { OperationOutcome } from "./operation-outcome";
+import {
+  beginOperation,
+  finishOperation,
+  usePendingOperation,
+} from "./operation-state";
 
 type Action = "approve" | "reject" | "role" | "disable" | "enable";
 const labels: Record<Action, string> = {
@@ -75,7 +86,7 @@ export function AccountAction({
     optionGeneration.current += 1;
     setLoading(false);
   };
-  const [uncertain, setUncertain] = useState(false);
+  const pendingOperation = usePendingOperation();
   const [error, setError] = useState("");
   const needsRole = action === "approve" || action === "role";
   useEffect(() => {
@@ -125,57 +136,79 @@ export function AccountAction({
       if (current()) setLoading(false);
     }
   };
-  const reconcile = async () => {
-    // No automatic mutation retries. Require an authoritative target read before
-    // allowing another attempt, even if a timeout happened after D1 committed.
-    const current = await api<Account>(
-      "/admin/users/" + encodeURIComponent(row.id)
-    );
-    await router.invalidate();
-    onMessage(
-      `Status terbaru ${accountName(current)}: ${statusLabels[current.status]}, role ${current.role ? roleLabel(current.role) : "belum ditentukan"}. Periksa hasil sebelum melakukan tindakan lagi.`
-    );
-    setUncertain(false);
-    setOpen(false);
-  };
   const save = async () => {
-    if (submitting.current) return;
+    if (submitting.current || pendingOperation) return;
     submitting.current = true;
     setBusy(true);
     setError("");
+    let operationId: string | null = null;
+    let message = "";
     try {
+      const ticket = await api<{ operationId: string }>(
+        "/admin/users/operations/new"
+      );
+      beginOperation(ticket.operationId); // durable tab lock BEFORE sending POST
+      operationId = ticket.operationId;
       await api("/admin/users/" + action, {
         method: "POST",
         body: JSON.stringify({
+          operationId,
           userId: row.id,
           ...(needsRole
             ? { role, ...(role === "sales_force" ? { salesForceId } : {}) }
             : {}),
         }),
       });
-      // Mark uncertain until both lists have refreshed successfully.
-      setUncertain(true);
-      await router.invalidate();
-      onMessage(`${labels[action]} akun ${accountName(row)} berhasil.`);
-      setUncertain(false);
+      finishOperation(operationId);
+      message = `${labels[action]} akun ${accountName(row)} berhasil.`;
       setOpen(false);
     } catch (failure) {
-      setUncertain(true);
-      setError(
-        failure instanceof ApiError && failure.status === 409
-          ? "Perubahan ditolak. Status, role, atau asosiasi akun mungkin sudah berubah."
-          : "Hasil belum dapat dipastikan. Memeriksa status terbaru…"
-      );
-      try {
-        await reconcile();
-      } catch {
+      if (!operationId) {
         setError(
-          "Status belum dapat diperiksa. Periksa koneksi lalu verifikasi status sebelum mencoba lagi."
+          "Perubahan belum dikirim. Periksa koneksi dan hasil operasi sebelumnya."
+        );
+      } else if (
+        failure instanceof SessionExpiredError ||
+        (failure instanceof ApiError &&
+          failure.status >= 400 &&
+          failure.status < 500)
+      ) {
+        // A definitive application rejection completes this request. Do not
+        // claim the account is unchanged; refresh it and let the Admin review.
+        try {
+          finishOperation(operationId);
+          message =
+            failure instanceof SessionExpiredError
+              ? failure.message
+              : `Permintaan berakhir dengan HTTP ${failure.status}, tanpa respons sukses. Periksa data akun sebelum melakukan tindakan lagi.`;
+          setError(message);
+        } catch {
+          setError(
+            "Respons diterima, tetapi penanda operasi belum dapat dibersihkan. Periksa hasil operasi."
+          );
+        }
+      } else {
+        // Transport/JSON errors and 5xx (including proxy errors) may hide a
+        // committed or still-running write. No account GET can unlock this.
+        setError(
+          "Hasil perubahan belum pasti. Jangan kirim ulang; periksa hasil operasi."
         );
       }
     } finally {
       submitting.current = false;
       setBusy(false);
+    }
+    if (message) {
+      onMessage(message);
+      // This read failure is NOT a failed/uncertain POST.
+      try {
+        await router.invalidate();
+      } catch {
+        onMessage(
+          message +
+            " Daftar belum dapat diperbarui. Muat ulang data sebelum melanjutkan."
+        );
+      }
     }
   };
   const sfOptions = row.salesForceId
@@ -185,7 +218,7 @@ export function AccountAction({
     <Dialog
       open={open}
       onOpenChange={(value) => {
-        if (!busy && !uncertain) {
+        if (!busy) {
           invalidateOptions();
           if (value) {
             setRole(row.role ?? "supervisor");
@@ -210,7 +243,7 @@ export function AccountAction({
             ? triggerRef.current
             : document.getElementById("users-title")
         }
-        showCloseButton={!busy && !uncertain}
+        showCloseButton={!busy}
         className="max-h-[90dvh] overflow-y-auto"
       >
         <DialogHeader>
@@ -239,7 +272,7 @@ export function AccountAction({
                   label: roleLabel(value),
                 }))}
                 value={role}
-                disabled={busy || uncertain}
+                disabled={busy || Boolean(pendingOperation)}
                 onValueChange={(value) => {
                   if (value) {
                     invalidateOptions();
@@ -275,7 +308,9 @@ export function AccountAction({
                     label: `${sf.name} (${sf.id})`,
                   }))}
                   value={salesForceId}
-                  disabled={busy || uncertain || loading || optionError}
+                  disabled={
+                    busy || Boolean(pendingOperation) || loading || optionError
+                  }
                   onValueChange={(value) => setSalesForceId(value ?? "")}
                 >
                   <SelectTrigger id={fieldId + "-sf"}>
@@ -318,7 +353,7 @@ export function AccountAction({
                 {options?.next && (
                   <Button
                     variant="outline"
-                    disabled={loading || busy || uncertain}
+                    disabled={loading || busy || Boolean(pendingOperation)}
                     onClick={() => void moreOptions()}
                   >
                     Muat Sales Force berikutnya
@@ -330,32 +365,23 @@ export function AccountAction({
         )}
         {busy && <p role="status">Menyimpan atau memeriksa status akun…</p>}
         {error && <p role="alert">{error}</p>}
+        <OperationOutcome
+          onMessage={onMessage}
+          onResolved={() => setOpen(false)}
+          disabled={busy}
+        />
         <DialogFooter>
           <Button
             variant="outline"
-            disabled={busy || uncertain}
+            disabled={busy}
             onClick={() => {
               invalidateOptions();
               setOpen(false);
             }}
           >
-            Batal
+            {pendingOperation ? "Tutup — hasil belum pasti" : "Batal"}
           </Button>
-          {uncertain ? (
-            <Button
-              disabled={busy}
-              onClick={() => {
-                setBusy(true);
-                void reconcile()
-                  .catch(() =>
-                    setError("Status belum dapat diperiksa. Coba lagi.")
-                  )
-                  .finally(() => setBusy(false));
-              }}
-            >
-              Verifikasi status terbaru
-            </Button>
-          ) : (
+          {!pendingOperation && (
             <Button
               variant={
                 action === "reject" || action === "disable"
