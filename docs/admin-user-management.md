@@ -48,16 +48,18 @@ No actor fields are accepted. Mutation targets are **internal User IDs**, resolv
 against stored identities in SQL, never client-supplied Telegram identities.
 JSON mutation bodies are strict and bounded to 16 KiB.
 
-| Method / path                          | Query or JSON body                                                            | Success                                             |
-| -------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------- |
-| `GET /admin/users`                     | `after` (default empty), `limit` (1–100, default 50), optional exact `status` | `{ items: ManagedAccount[], next: string \| null }` |
-| `GET /admin/users/sales-force-options` | `after` (default empty)                                                       | `{ items: { id, name }[], next }`, at most 50       |
-| `GET /admin/users/:id`                 | URL-encoded internal User ID                                                  | `Account` (current state for reconciliation)        |
-| `POST /admin/users/approve`            | `{ userId, role, salesForceId? }`                                             | `Account`                                           |
-| `POST /admin/users/reject`             | `{ userId }`                                                                  | `Account`                                           |
-| `POST /admin/users/role`               | `{ userId, role, salesForceId? }`                                             | `Account`                                           |
-| `POST /admin/users/disable`            | `{ userId }`                                                                  | `Account`                                           |
-| `POST /admin/users/enable`             | `{ userId }`                                                                  | `Account`                                           |
+| Method / path                              | Query or JSON body                                                            | Success                                                           |
+| ------------------------------------------ | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `GET /admin/users`                         | `after` (default empty), `limit` (1–100, default 50), optional exact `status` | `{ items: ManagedAccount[], next: string \| null }`               |
+| `GET /admin/users/sales-force-options`     | `after` (default empty)                                                       | `{ items: { id, name }[], next }`, at most 50                     |
+| `GET /admin/users/:id`                     | URL-encoded internal User ID                                                  | `Account` (informational current state, not operation completion) |
+| `GET /admin/users/operations/new`          | None                                                                          | `{ operationId }`, database-clock cutoff in 30 seconds            |
+| `GET /admin/users/operations/:operationId` | Issued operation ID                                                           | `{ status: "pending" \| "committed" \| "not_committed" }`         |
+| `POST /admin/users/approve`                | `{ operationId, userId, role, salesForceId? }`                                | `Account`                                                         |
+| `POST /admin/users/reject`                 | `{ operationId, userId }`                                                     | `Account`                                                         |
+| `POST /admin/users/role`                   | `{ operationId, userId, role, salesForceId? }`                                | `Account`                                                         |
+| `POST /admin/users/disable`                | `{ operationId, userId }`                                                     | `Account`                                                         |
+| `POST /admin/users/enable`                 | `{ operationId, userId }`                                                     | `Account`                                                         |
 
 `status`: `pending`, `active`, `disabled`, `rejected`; omit for all users.
 Pending registrations use `GET /admin/users?status=pending`, not a separate route.
@@ -112,6 +114,62 @@ CORS, no-store headers, OIDC, one-hour session lifetime, and 60-second visible-p
 refresh policy are unchanged. No migration, Cloudflare binding/resource, CI/CD
 activation, webhook, or production data changes are required by A1.
 
+## Operation outcomes: bounded writes, no new receipt table
+
+A browser timeout does not cancel a Worker or its D1 batch. **One account GET,
+an expected status, or elapsed browser time cannot prove completion.** A1 now
+uses a small operation protocol instead of that unsafe inference:
+
+1. An authenticated Admin obtains `operationId = web:<deadline-ms>:<UUID-v4>`
+   using the primary D1 clock. The deadline is encoded once, so POST and lookup
+   cannot use different cutoffs. The allocation is stateless, not an authority
+   grant; every write still needs the live session/Admin guard.
+2. Web persists that credential-free handle in tab-scoped `sessionStorage`
+   **before** submitting one POST. All account writes in that tab are blocked
+   while it is unresolved, including after row removal, navigation, reload, or
+   reauthentication. Storage failure before POST prevents submission.
+3. Inside the atomic audit INSERT, SQL also requires database time **before**
+   that deadline and a window no larger than 30 seconds. An already-recorded
+   operation cannot record another change. Each invocation still has a fresh
+   audit ID (`operationId:invocation-UUID`); a replay cannot reapply an earlier
+   audit's state. Bot audit IDs/contracts are unchanged.
+4. An Admin-only lookup reads the indexed audit-ID prefix and database clock in
+   **one primary statement**, using `withSession("first-primary")`:
+   - `committed`: this operation's atomic audit/change exists. This proves that
+     change, not that the account still has its historical resulting state.
+   - `pending`: no receipt yet, but the cutoff has not passed. It does **not**
+     mean the server has received or accepted the POST. Do not retry it.
+   - `not_committed`: no audit/change exists and the primary clock has reached
+     the cutoff. A delayed batch cannot subsequently pass its SQL write guard.
+     This may mean rejection, rollback, no-op, or a request that never arrived;
+     it is not a claim about the account's current role/status.
+5. A completed 2xx response confirms the request. A known application rejection
+   (400/401/403/404/409) completes it without a success confirmation; Web refreshes actual data and
+   makes no claim that the account was unchanged. Unknown HTTP failures (such as
+   a proxy 408), transport/JSON failures, and 5xx (which may be proxy errors or
+   post-commit failures) retain the recovery
+   handle. Only an explicit terminal operation outcome clears that uncertainty.
+   Lookup failures never unlock writes. No privileged POST is automatically
+   retried. List refresh failures are handled separately from mutation results.
+
+**Tradeoff:** this avoids a migration by reusing the existing change audit and
+adding an enforced execution window. No-op/rejected requests remain unaudited,
+so a lost response may require waiting until the cutoff, rather than immediately
+recovering a full per-request result. The ID is a correlation/fence handle, **not**
+a general retry/idempotency contract: never resubmit it. A durable exact result
+for every no-op/rejection, indefinite execution, or server-enforced cross-tab
+request coordination would require a separate receipt table and retention policy;
+that broader persistence/API change is deliberately not introduced here.
+
+The fence relies on D1's serialized transactional execution and authoritative
+primary clock; do not replace it with a replica read, browser clock, or unguarded
+write path. See [D1 batch transactions](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch)
+and [primary sessions](https://developers.cloudflare.com/d1/best-practices/read-replication/#start-a-session-with-all-latest-data).
+This is tab-scoped UX protection, not a global lock: other Admins/tabs can make
+independent authorized changes. Unavailable API/auth/storage intentionally keeps
+writes blocked until verification can succeed. Audit history must not be deleted
+or rewritten as part of ordinary account management or recovery.
+
 ## Web behavior and limitations
 
 - Indonesian copy; registration dates always `id-ID` / `Asia/Jakarta` (WIB).
@@ -120,9 +178,12 @@ activation, webhook, or production data changes are required by A1.
   focus falls back to the page heading if the refreshed row/trigger disappears.
 - Role/SF selections, destructive consequences, saving states, and submission lock.
 - Both lists refresh immediately after success. No automatic mutation retry.
-  Ambiguous errors trigger an exact target GET; another attempt stays blocked
-  until the current state is fetched. If verification fails, only verification
-  can be retried in that dialog.
+  Ambiguous failures keep an operation recovery panel in the dialog and page;
+  closing it does not clear uncertainty or unlock writes. Only a proven terminal
+  operation outcome allows a new, separately confirmed action.
+- Every Sales Force request captures an options generation. Close/reopen, role
+  changes, retry, and unmount invalidate older first-page/pagination callbacks,
+  including their error/loading cleanup. Opening always resets loading.
 - No synthetic fallback. Empty/loading/error/retry states use existing conventions.
 - If no unclaimed SF exists: **“Belum ada Sales Force yang tersedia. Tambahkan
   master Sales Force terlebih dahulu.”** Creation belongs to PR A2.
@@ -142,10 +203,18 @@ audit, account update, and post-update statements. The Supervisor-option accepta
 path is exercised without Telegram Admin commands. Existing real Worker RPC,
 registration, webhook, and Bot authorization tests remain intact.
 
-Local validation passed: contracts **16/16**, DB **16/16**, API/Bot integration
-**154/154**, deployment safeguards **154/154**. Typecheck, lint/format, Drizzle
+`apps/api/tests/admin-operation.test.mjs` additionally holds POSTs before their
+D1 batch, reads pre-commit account state, and verifies both late-commit and
+post-cutoff rejection paths. It covers missing/lost responses, no-op/rejection
+termination without audit, post-commit failure, replay fencing, all lifecycle
+cutoffs, authorization and atomic rollback. Shared contract tests reject malformed
+operation handles and caller-supplied deadline/identity overrides. Frontend tests
+remain prohibited; the browser regression checklist below is still manual.
+
+Local validation passed: contracts **18/18**, DB **16/16**, API/Bot integration
+**162/162**, deployment safeguards **154/154**. Typecheck, lint/format, Drizzle
 migration check, and Web production build passed. Hono CLI unauthenticated smoke
-batch: **4/4**. The build reports a non-blocking bundle-size warning (>500 kB).
+batch: **6/6**. The build reports a non-blocking bundle-size warning (>500 kB).
 These are local results, not real OIDC/browser or deployed smoke-test evidence.
 
 Required local validation:
@@ -175,7 +244,9 @@ not authorize deployment, remote migrations, production account changes, or merg
    orchestrator's Web-first ordering cannot activate dependent features safely).
 4. Verify API access before dispatching **`web`** at the intended revision:
    Admin list works, Supervisor/Sales Force get 403, missing session gets 401,
-   errors are sanitized, old operational reads and Bot RPC remain usable.
+   operation allocation/lookup and cutoff guards are available, errors are
+   sanitized, old operational reads and Bot RPC remain usable. The updated Web
+   requires the new operation API; there is no legacy unsafe-POST fallback.
 5. After Web release, using explicitly authorized test identities/data:
    - [ ] Register a user through Telegram; confirm it appears pending in Web.
    - [ ] Approve as Supervisor; confirm active role in all users and `/me`.
@@ -186,8 +257,24 @@ not authorize deployment, remote migrations, production account changes, or merg
    - [ ] Check unclaimed SF choices and the exact unavailable-SF empty message.
    - [ ] Check keyboard Tab/Shift-Tab, Escape/cancel, focus restoration, mobile
          table scrolling, WIB dates, and light/dark dialog readability.
-   - [ ] Interrupt a mutation response; confirm status verification occurs before
-         any retry. Check concurrent Admin changes surface current state/conflict.
+   - [ ] Throttle a Sales Force next-page request, close/reopen the dialog, load a
+         fresh first page, then release the old success/error response. Confirm
+         no old options, loading reset, or errors overwrite the new opening.
+         Repeat with a role change and a first-page retry.
+   - [ ] Interrupt POST before the server batch. A current account GET must not
+         unlock writes. Verify `pending` keeps the dialog honest; release before
+         cutoff and verify `committed`, or after cutoff and verify `not_committed`
+         with no late account change. Do not resend the POST.
+   - [ ] Lose a no-op/rejected response: verify checking after cutoff terminates
+         without waiting indefinitely for an expected account state.
+   - [ ] Reload/navigate or let a row disappear while an outcome is unknown;
+         confirm the page recovery panel and account-write lock persist.
+   - [ ] Check definitive 400/404/409 failures allow review without pretending
+         success; proxy 408/unknown HTTP/5xx/network/JSON failures retain recovery. Fail a list refresh
+         after a successful POST: the mutation must not be labeled uncertain.
+   - [ ] Verify lookup errors/offline/auth expiry keep writes blocked; restore
+         Admin access and resolve using only GET. Check concurrent Admin changes
+         do not turn an audit receipt into a claim about the latest account state.
    - [ ] Review expected audit records without logging tokens or identity data.
 6. Stop on failure. Use the existing reviewed rollback procedure (Web first when
    removing the dependent UI, then API if necessary). Rollback is code-only and

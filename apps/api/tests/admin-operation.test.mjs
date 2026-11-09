@@ -138,22 +138,12 @@ async function setup(t) {
     status,
     count,
     pauseBatch,
-    pastDeadline,
   };
 }
 
 test("Admin operation lookup fences late writes without new persistence", async (t) => {
-  const {
-    db,
-    request,
-    ticket,
-    post,
-    outcome,
-    status,
-    count,
-    pauseBatch,
-    pastDeadline,
-  } = await setup(t);
+  const { db, request, ticket, post, outcome, status, count, pauseBatch } =
+    await setup(t);
   await t.test(
     "server issues bounded database-clock IDs; strict Admin-only lookup",
     async () => {
