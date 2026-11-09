@@ -20,7 +20,7 @@ export type NamedStockReport = import("./stock-report.ts").StockReport & {
   })[];
 };
 export type VisitDetail = NamedVisit & { stockReports: NamedStockReport[] };
-export type OutletDetail = Reference & {
+export type OutletReadDetail = Reference & {
   businessId: string | null;
   noRs: string | null;
 };
