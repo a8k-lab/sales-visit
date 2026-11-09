@@ -4,10 +4,16 @@ import {
   rejectionSchema,
   roleChangeSchema,
   telegramIdSchema,
+  webOperationIdSchema,
   type Account,
   type BotActor,
   type IdentityResult,
 } from "@sales-visit/contracts";
+
+import {
+  operationWriteGuard,
+  operationWriteBindings,
+} from "./admin-operation.ts";
 
 export const accountQuery = `SELECT u.id, t.telegram_user_id AS telegramUserId, u.status, u.role,
   u.sales_force_id AS salesForceId, t.username, t.first_name AS firstName,
@@ -18,13 +24,19 @@ const adminGuard = `EXISTS (SELECT 1 FROM users a JOIN telegram_identities ai ON
 export const webAdminGuard = `EXISTS (SELECT 1 FROM web_sessions session JOIN users a ON a.id = session.user_id
   WHERE session.token_hash = ? AND session.revoked_at IS NULL
     AND session.expires_at > unixepoch('subsec') * 1000 AND a.status = 'active' AND a.role = 'admin')`;
-type Authority = BotActor | { sessionHash: string };
+type Authority = BotActor | { sessionHash: string; operationId: string };
 function authority(actor: Authority) {
   if ("sessionHash" in actor) {
     if (!/^[a-f0-9]{64}$/.test(actor.sessionHash)) return null;
     return {
       key: actor.sessionHash,
       guard: webAdminGuard,
+      writeGuard: `${webAdminGuard} AND ${operationWriteGuard}`,
+      writeBindings: [
+        actor.sessionHash,
+        ...operationWriteBindings(actor.operationId),
+      ],
+      eventId: actor.operationId + ":" + crypto.randomUUID(),
       target: "u.id",
       actorId: "(SELECT user_id FROM web_sessions WHERE token_hash = ?)",
     };
@@ -33,6 +45,9 @@ function authority(actor: Authority) {
   return {
     key: actor.telegramUserId,
     guard: adminGuard,
+    writeGuard: adminGuard,
+    writeBindings: [actor.telegramUserId],
+    eventId: crypto.randomUUID(),
     target: "t.telegram_user_id",
     actorId:
       "(SELECT user_id FROM telegram_identities WHERE telegram_user_id = ?)",
@@ -201,9 +216,12 @@ export class IdentityOperations {
     target: string,
     action: "approve" | "reject" | "setrole" | "disable" | "enable",
     role: Account["role"] = null,
-    salesForceId: string | null = null
+    salesForceId: string | null,
+    operationId: string
   ) {
-    const actor = { sessionHash };
+    if (!webOperationIdSchema.safeParse(operationId).success)
+      return Promise.resolve({ ok: false, code: "invalid" } as const);
+    const actor = { sessionHash, operationId };
     return action === "approve" || action === "reject"
       ? this.decide(actor, target, action, role, salesForceId)
       : this.manage(actor, target, action, role, salesForceId);
@@ -223,7 +241,7 @@ export class IdentityOperations {
     const expectedStatus = action === "enable" ? "disabled" : "active";
     const reducesAdmin =
       action === "disable" || (action === "setrole" && role !== "admin");
-    const eventId = crypto.randomUUID();
+    const eventId = auth.eventId;
     const [permission, audit, , rows, admins] = await this.db.batch([
       this.db.prepare("SELECT 1 WHERE " + auth.guard).bind(auth.key),
       this.db
@@ -235,7 +253,7 @@ export class IdentityOperations {
             CASE WHEN d.action = 'setrole' AND d.role = 'sales_force' THEN d.sf ELSE u.sales_force_id END AS next_sf
           FROM users u JOIN telegram_identities t ON t.user_id = u.id CROSS JOIN desired d
           WHERE ${auth.target} = ?
-            AND ${auth.guard}
+            AND ${auth.writeGuard}
             AND u.status = ?
             AND (? = 0 OR u.role <> 'admin')
             AND (? = 0 OR u.role <> 'admin' OR
@@ -254,7 +272,7 @@ export class IdentityOperations {
           role,
           salesForceId,
           target,
-          auth.key,
+          ...auth.writeBindings,
           expectedStatus,
           reducesAdmin ? 1 : 0,
           reducesAdmin ? 1 : 0,
@@ -329,7 +347,7 @@ export class IdentityOperations {
       (!("sessionHash" in actor) && !telegramIdSchema.safeParse(target).success)
     )
       return { ok: false, code: "invalid" };
-    const eventId = crypto.randomUUID(); // also the correlation ID; never a raw update
+    const eventId = auth.eventId; // unique invocation, including for repeated operation IDs
     const status = action === "approve" ? "active" : "rejected";
     const [audit] = await this.db.batch([
       this.db
@@ -340,7 +358,7 @@ export class IdentityOperations {
         FROM users u JOIN telegram_identities t ON t.user_id = u.id
         WHERE ${auth.target} = ? AND u.status = 'pending'
           AND u.role IS NULL AND u.sales_force_id IS NULL
-          AND ${auth.guard}
+          AND ${auth.writeGuard}
           AND (? IS NULL OR (EXISTS (SELECT 1 FROM sales_force WHERE id = ?)
             AND NOT EXISTS (SELECT 1 FROM users WHERE sales_force_id = ?)))`)
         .bind(
@@ -351,7 +369,7 @@ export class IdentityOperations {
           role,
           salesForceId,
           target,
-          auth.key,
+          ...auth.writeBindings,
           salesForceId,
           salesForceId,
           salesForceId

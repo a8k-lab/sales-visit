@@ -87,7 +87,13 @@ async function setup(t) {
     request(
       "/" + action,
       id,
-      { method: "POST", body: JSON.stringify(input) },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          operationId: `web:${Date.now() + 20000}:${crypto.randomUUID()}`,
+          ...input,
+        }),
+      },
       database
     );
   const count = async () =>

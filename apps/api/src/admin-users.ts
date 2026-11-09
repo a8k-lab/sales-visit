@@ -1,11 +1,15 @@
 import {
   webUserRoleSchema,
+  webOperationIdSchema,
+  webOperationDeadline,
+  type WebOperationOutcome,
   webUserTargetSchema,
   type ManagedAccount,
 } from "@sales-visit/contracts";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 
+import { operationRange, operationWindowMs } from "./admin-operation.ts";
 import { accountQuery, IdentityOperations, webAdminGuard } from "./identity.ts";
 import { hashToken, sessionAccount, type WebEnv } from "./web-auth.ts";
 
@@ -30,6 +34,50 @@ export function adminUserRoutes() {
       onError: (c) => c.json({ error: "Invalid request" }, 400),
     })
   );
+
+  // A primary read after the cutoff fences out a delayed POST: either its
+  // serialized batch already committed an audit, or its write guard must fail.
+  app.get("/operations/new", async (c) => {
+    const hash = await hashToken(c.req.header("Authorization")!.slice(7));
+    const row = await c.env.DB.withSession("first-primary")
+      .prepare(
+        `SELECT CAST(unixepoch('subsec') * 1000 AS INTEGER) AS now WHERE ${webAdminGuard}`
+      )
+      .bind(hash)
+      .first<{ now: number }>();
+    if (!row)
+      return c.json(
+        { error: "Access denied" },
+        await denied(c.req.raw, c.env.DB)
+      );
+    return c.json({
+      operationId: `web:${row.now + operationWindowMs}:${crypto.randomUUID()}`,
+    });
+  });
+  app.get("/operations/:operationId", async (c) => {
+    const parsed = webOperationIdSchema.safeParse(c.req.param("operationId"));
+    if (!parsed.success) return c.json({ error: "Invalid request" }, 400);
+    const hash = await hashToken(c.req.header("Authorization")!.slice(7));
+    // One primary statement observes both the audit and database clock. Never
+    // infer non-commit from a possibly stale replica or a pre-request timestamp.
+    const outcome = await c.env.DB.withSession("first-primary")
+      .prepare(`SELECT CASE
+      WHEN EXISTS (SELECT 1 FROM access_audit WHERE id > ? AND id < ?) THEN 'committed'
+      WHEN unixepoch('subsec') * 1000 >= ? THEN 'not_committed'
+      ELSE 'pending' END AS status WHERE ${webAdminGuard}`)
+      .bind(
+        ...operationRange(parsed.data),
+        webOperationDeadline(parsed.data),
+        hash
+      )
+      .first<WebOperationOutcome>();
+    if (!outcome)
+      return c.json(
+        { error: "Access denied" },
+        await denied(c.req.raw, c.env.DB)
+      );
+    return c.json(outcome);
+  });
 
   app.get("/sales-force-options", async (c) => {
     const after = c.req.query("after") ?? "";
@@ -95,7 +143,7 @@ export function adminUserRoutes() {
     });
   });
 
-  // Exact current target state is used to reconcile ambiguous network outcomes.
+  // Current account state is informational, not proof of a mutation's outcome.
   app.get("/:id", async (c) => {
     const id = c.req.param("id");
     if (!id || id.length > 256)
@@ -143,7 +191,8 @@ export function adminUserRoutes() {
         data.userId,
         action === "role" ? "setrole" : action,
         roleInput?.role ?? null,
-        roleInput?.salesForceId ?? null
+        roleInput?.salesForceId ?? null,
+        data.operationId
       );
       if (result.ok) return c.json(result.data);
       if (result.code === "forbidden")
