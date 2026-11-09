@@ -69,31 +69,41 @@ export function AccountAction({
   const [optionRevision, setOptionRevision] = useState(0);
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
+  // Invalidate every request from an earlier opening, role, retry, or unmount.
+  const optionGeneration = useRef(0);
+  const invalidateOptions = () => {
+    optionGeneration.current += 1;
+    setLoading(false);
+  };
   const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState("");
   const needsRole = action === "approve" || action === "role";
   useEffect(() => {
+    setLoading(false);
     if (!open || !needsRole || role !== "sales_force" || row.salesForceId)
       return;
-    let cancelled = false;
+    const generation = ++optionGeneration.current;
+    const current = () => generation === optionGeneration.current;
     setLoading(true);
     setOptionError(false);
     void api<SalesForceOptions>("/admin/users/sales-force-options")
       .then((page) => {
-        if (!cancelled) setOptions(page);
+        if (current()) setOptions(page);
       })
       .catch(() => {
-        if (!cancelled) setOptionError(true);
+        if (current()) setOptionError(true);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (current()) setLoading(false);
       });
     return () => {
-      cancelled = true;
+      optionGeneration.current += 1;
     };
   }, [open, needsRole, role, optionRevision, row.salesForceId]);
   const moreOptions = async () => {
-    if (!options?.next) return;
+    if (!options?.next || loading) return;
+    const generation = optionGeneration.current;
+    const current = () => generation === optionGeneration.current;
     setLoading(true);
     setOptionError(false);
     try {
@@ -101,11 +111,18 @@ export function AccountAction({
         "/admin/users/sales-force-options?after=" +
           encodeURIComponent(options.next)
       );
-      setOptions({ items: [...options.items, ...page.items], next: page.next });
+      if (current())
+        setOptions(
+          (previous) =>
+            previous && {
+              items: [...previous.items, ...page.items],
+              next: page.next,
+            }
+        );
     } catch {
-      setOptionError(true);
+      if (current()) setOptionError(true);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   };
   const reconcile = async () => {
@@ -169,6 +186,7 @@ export function AccountAction({
       open={open}
       onOpenChange={(value) => {
         if (!busy && !uncertain) {
+          invalidateOptions();
           if (value) {
             setRole(row.role ?? "supervisor");
             setSalesForceId(row.salesForceId ?? "");
@@ -224,6 +242,9 @@ export function AccountAction({
                 disabled={busy || uncertain}
                 onValueChange={(value) => {
                   if (value) {
+                    invalidateOptions();
+                    setOptions(null);
+                    setOptionError(false);
                     setRole(value);
                     setSalesForceId(row.salesForceId ?? "");
                   }
@@ -276,7 +297,10 @@ export function AccountAction({
                     <p role="alert">Gagal memuat Sales Force.</p>
                     <Button
                       variant="outline"
-                      onClick={() => setOptionRevision((v) => v + 1)}
+                      onClick={() => {
+                        invalidateOptions();
+                        setOptionRevision((v) => v + 1);
+                      }}
                     >
                       Coba lagi
                     </Button>
@@ -310,7 +334,10 @@ export function AccountAction({
           <Button
             variant="outline"
             disabled={busy || uncertain}
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              invalidateOptions();
+              setOpen(false);
+            }}
           >
             Batal
           </Button>
