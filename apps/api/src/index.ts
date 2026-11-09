@@ -1,4 +1,4 @@
-import { createDb } from "@sales-visit/db";
+import { createDb, sql, stockReports } from "@sales-visit/db";
 import { Hono, type Context } from "hono";
 
 const page = (c: Context<WebEnv>) => ({
@@ -7,6 +7,7 @@ const page = (c: Context<WebEnv>) => ({
 });
 import type { JWTVerifyGetKey } from "jose";
 
+import { catalogPage, outletDetail } from "./catalog-reads.ts";
 import { dashboardOverview } from "./dashboard.ts";
 import {
   createVisit,
@@ -15,8 +16,9 @@ import {
   type TrustedIdentity,
 } from "./operations.ts";
 import { operationalScope } from "./read-scope.ts";
-import { toStockReport, toVisit } from "./records.ts";
+import { toStockReport } from "./records.ts";
 import { supervisorAssignmentRoutes } from "./supervisor-assignments.ts";
+import { listVisits, validReadQuery, visitDetail } from "./visit-reads.ts";
 import { authRoutes, sessionAccount, type WebEnv } from "./web-auth.ts";
 
 // No header, secret, environment switch, or development bypass supplies identity.
@@ -126,10 +128,12 @@ export function createApp(
       )
         return c.json({ error: "Invalid request" }, 400);
     }
+    if (!validReadQuery(c)) return c.json({ error: "Invalid request" }, 400);
     await next();
   });
   app.get("/dashboard/overview", dashboardOverview);
   app.get("/sales-force", async (c) => {
+    if (c.req.query("view") === "page") return catalogPage(c, "salesForce");
     const rows = await createDb(c.env.DB).query.salesForce.findMany({
       ...page(c),
       columns: { id: true, name: true },
@@ -140,6 +144,7 @@ export function createApp(
   });
 
   app.get("/outlets", async (c) => {
+    if (c.req.query("view") === "page") return catalogPage(c, "outlets");
     const rows = await createDb(c.env.DB).query.outlets.findMany({
       ...page(c),
       columns: { id: true, name: true },
@@ -148,7 +153,9 @@ export function createApp(
     return c.json(rows);
   });
 
+  app.get("/outlets/:id", outletDetail);
   app.get("/products", async (c) => {
+    if (c.req.query("view") === "page") return catalogPage(c, "products");
     const rows = await createDb(c.env.DB).query.products.findMany({
       ...page(c),
       columns: { id: true, name: true },
@@ -157,53 +164,11 @@ export function createApp(
     return c.json(rows);
   });
 
-  app.get("/visits", async (c) => {
-    const rows = await createDb(c.env.DB).query.visits.findMany({
-      ...page(c),
-      where: (table, { and, eq }) =>
-        and(
-          operationalScope(c.get("account").id, table.salesForceId),
-          c.req.query("salesForceId")
-            ? eq(table.salesForceId, c.req.query("salesForceId")!)
-            : undefined
-        ),
-      orderBy: (table, { desc, asc }) => [desc(table.visitedAt), asc(table.id)],
-    });
-    return c.json(rows.map(toVisit));
-  });
-
-  app.get("/visits/:id", async (c) => {
-    const id = c.req.param("id");
-    const row = await createDb(c.env.DB).query.visits.findFirst({
-      where: (table, { eq, and }) =>
-        and(
-          eq(table.id, id),
-          operationalScope(c.get("account").id, table.salesForceId)
-        ),
-      with: {
-        stockReports: {
-          limit: 100,
-          where: (table) =>
-            operationalScope(c.get("account").id, table.reporterSalesForceId),
-          orderBy: (table, { desc, asc }) => [
-            desc(table.reportedAt),
-            asc(table.id),
-          ],
-          with: {
-            items: { orderBy: (table, { asc }) => [asc(table.productId)] },
-          },
-        },
-      },
-    });
-    if (!row) return c.json({ error: "Visit not found" }, 404);
-    return c.json({
-      ...toVisit(row),
-      stockReports: row.stockReports.map(toStockReport),
-    });
-  });
+  app.get("/visits", listVisits);
+  app.get("/visits/:id", visitDetail);
 
   app.get("/stock-reports", async (c) => {
-    const rows = await createDb(c.env.DB).query.stockReports.findMany({
+    const query = createDb(c.env.DB).query.stockReports.findMany({
       ...page(c),
       where: (table, { and, eq }) =>
         and(
@@ -216,15 +181,54 @@ export function createApp(
             : undefined,
           c.req.query("salesForceId")
             ? eq(table.reporterSalesForceId, c.req.query("salesForceId")!)
+            : undefined,
+          c.req.query("outletId")
+            ? eq(table.outletId, c.req.query("outletId")!)
             : undefined
         ),
       orderBy: (table, { desc, asc }) => [
         desc(table.reportedAt),
         asc(table.id),
       ],
-      with: { items: { orderBy: (table, { asc }) => [asc(table.productId)] } },
+      with: {
+        reporterSalesForce: { columns: { id: true, name: true } },
+        items: {
+          orderBy: (table, { asc }) => [asc(table.productId)],
+          with: { product: { columns: { id: true, name: true } } },
+        },
+      },
     });
-    return c.json(rows.map(toStockReport));
+    if (c.req.query("view") !== "page")
+      return c.json((await query).map(toStockReport));
+    const conditions = [
+      operationalScope(c.get("account").id, stockReports.reporterSalesForceId),
+    ];
+    for (const key of ["reporterSalesForceId", "salesForceId"] as const) {
+      const value = c.req.query(key);
+      if (value)
+        conditions.push(sql`${stockReports.reporterSalesForceId} = ${value}`);
+    }
+    const outletId = c.req.query("outletId");
+    if (outletId) conditions.push(sql`${stockReports.outletId} = ${outletId}`);
+    const [rows, totals] = await createDb(c.env.DB).batch([
+      query,
+      createDb(c.env.DB)
+        .select({ total: sql<number>`count(*)` })
+        .from(stockReports)
+        .where(sql.join(conditions, sql` and `)),
+    ]);
+    return c.json({
+      items: rows.map((report) => ({
+        ...toStockReport(report),
+        reporter: report.reporterSalesForce,
+        items: report.items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          product: item.product,
+        })),
+      })),
+      total: totals[0]!.total,
+    });
   });
 
   app.notFound((c) => c.json({ error: "Not found" }, 404));

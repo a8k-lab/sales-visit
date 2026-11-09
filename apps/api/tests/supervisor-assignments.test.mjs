@@ -286,6 +286,84 @@ test("operational overview aggregates all records in a zero-filled WIB window wi
       )
       .bind(id, reporter, visit, start)
       .run();
+  const first = await get(
+    "/visits?view=page&limit=100&channel=telegram",
+    "sup-a"
+  );
+  assert.equal(first.total, 121);
+  assert.equal(first.items.length, 100);
+  assert.equal(
+    first.items[0].stockReportCount,
+    0,
+    "other-team reporter is not counted"
+  );
+  const second = await get(
+    "/visits?view=page&limit=100&offset=100&channel=telegram",
+    "sup-a"
+  );
+  assert.equal(second.total, 121);
+  assert.equal(second.items.length, 21);
+  assert.equal(
+    new Set([...first.items, ...second.items].map((v) => v.id)).size,
+    121
+  );
+  assert.equal(
+    (await get("/visits?view=page&salesForceId=b", "sup-a")).total,
+    0
+  );
+  assert.equal(
+    (await get("/visits?view=page&q=Synthetic%20b", "sup-a")).total,
+    0
+  );
+  assert.equal(
+    (await get("/visits?view=page&stock=with&channel=telegram", "sup-a")).total,
+    1
+  );
+  assert.equal(
+    (await get("/visits?view=page&stock=with&channel=telegram")).total,
+    3
+  );
+  assert.equal(
+    (await get("/visits?view=page&date=" + initial.dailyVisits[0].date)).total,
+    125
+  );
+  assert.equal((await get("/visits?view=page&outletId=missing")).total, 0);
+  assert.equal((await get("/visits?view=page&q=%25")).total, 0);
+  assert.deepEqual((await get("/sales-force?view=page", "sup-a")).items, [
+    { id: "a", name: "Synthetic a" },
+  ]);
+  assert.equal((await get("/sales-force?view=page", "sup-empty")).total, 0);
+  assert.equal((await get("/outlets?view=page&q=Synthetic")).total, 1);
+  assert.equal((await get("/products?view=page&q=missing")).total, 0);
+  assert.equal((await get("/outlets/outlet")).businessId, null);
+  assert.equal(
+    (await get("/stock-reports?view=page&outletId=outlet", "sup-a")).total,
+    3
+  );
+  assert.equal(
+    (await get("/stock-reports?view=page&outletId=missing", "sup-a")).total,
+    0
+  );
+  assert.equal((await request("/visits/live-124", "sup-a")).status, 404);
+  assert.equal((await request("/visits/missing", "sup-a")).status, 404);
+  assert.equal((await get("/visits/live-000", "sup-a")).stockReports.length, 0);
+  for (const query of [
+    "date=2026-02-30",
+    "date=bad",
+    "channel=bot",
+    "stock=yes",
+    "view=all",
+    "q=",
+    "q=a&q=b",
+    "limit=101",
+    "offset=100001",
+    "outletId=",
+  ])
+    assert.equal((await request("/visits?" + query)).status, 400, query);
+  assert.equal(
+    (await request("/sales-force?view=page", "sf-user")).status,
+    403
+  );
   const admin = await get("/dashboard/overview");
   assert.deepEqual(admin.metrics, {
     visits: 126,
