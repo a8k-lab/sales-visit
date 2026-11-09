@@ -1,7 +1,16 @@
 # ADR-0006 — Build the web dashboard static-first
 
-- **Status:** Accepted for current development phase
+- **Status:** Accepted for the initial prototype; operational monitoring has advanced beyond static data
 - **Date:** 2026-11-02
+
+## Phase transition (2026-11-09)
+
+The [Live Operational Dashboard milestone](../live-dashboard.md) replaces the
+prototype's monitoring sources with authenticated API/D1 reads. Local-only Web
+submission is disabled rather than presented as operational. Reusable controls
+remain for the committed Sales Force Web submission milestone (ADR-0002). The
+original static-first decision below records the historical bootstrap phase; its
+no-integration scope is not a prohibition on subsequent operational milestones.
 
 ## Context
 

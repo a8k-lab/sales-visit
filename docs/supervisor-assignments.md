@@ -2,7 +2,7 @@
 
 ## Architecture and MVP policy
 
-This milestone advances assignment administration beyond ADR-0006's initial static-first phase; it does **not** convert the mock reporting dashboard or browser-local submission form to live data. It preserves ADR-0002's two-channel roadmap and ADR-0003's independent Visit/Stock Report reporters.
+The original assignment milestone advanced administration beyond ADR-0006's static-first phase. The subsequent [live dashboard milestone](live-dashboard.md) now integrates operational Web reads and disables local-only submission without changing the assignment semantics below. ADR-0002's two-channel roadmap and ADR-0003's independent Visit/Stock Report reporters remain unchanged.
 
 An active Admin manages explicit **current Supervisor assignments**. A Supervisor can monitor many Sales Force members; each Sales Force has zero or one Supervisor. No assignment is inferred from a Sales Force code, location, username, Outlet, or shared schedule. There are no formal Sales Groups, territories, spreadsheet imports, or production seeds.
 
@@ -59,7 +59,7 @@ Operational list contracts remain bare arrays with existing bounded `limit`/`off
 
 ## Admin Web page
 
-`/supervisor-assignments` (menu **Penugasan Supervisor**) is Admin-only in navigation and renders denial for other roles; the API independently enforces authorization. Uses existing shadcn/ui components and a feature directory. Lists current assignments with active options, null/unassign selection, confirmation, Indonesian loading/empty/success/error states, reload and bounded pagination. Retained unavailable assignments are labeled without granting access. Dashboard reports remain synthetic; this page alone is labeled operational and persists to D1, including direct `/supervisor-assignments/` navigation with trailing slashes. API errors hide stale rows until reload. A transport failure can be an uncertain commit; reload before retrying (a satisfied retry is a no-op).
+`/supervisor-assignments` (menu **Penugasan Supervisor**) is Admin-only in navigation and renders denial for other roles; the API independently enforces authorization. Uses existing shadcn/ui components and a feature directory. Lists current assignments with active options, null/unassign selection, confirmation, Indonesian loading/empty/success/error states, reload and bounded pagination. Retained unavailable assignments are labeled without granting access. Assignments persist to D1, including direct `/supervisor-assignments/` navigation with trailing slashes. Other dashboard reports now use the [operational read integration](live-dashboard.md). API errors hide stale rows until reload. A transport failure can be an uncertain commit; reload before retrying (a satisfied retry is a no-op).
 
 ## Local verification evidence
 
@@ -71,6 +71,8 @@ Required local checks: `pnpm -r --if-present test`, `pnpm typecheck`, `pnpm chec
 
 ## Operator-controlled rollout checklist
 
+**Historical assignment activation (0008):** do not replay this migration checklist for the subsequent [live dashboard release](live-dashboard.md#operator-controlled-activation-and-smoke-test), which adds no migration.
+
 **Nothing below is executed by this PR. Do not merge, migrate, deploy, change webhooks or enable CD automatically.** Use existing [CI/CD guards](ci-cd.md), approved current-main revision, target verification and restricted operator change record.
 
 1. Review/approve the PR and local/CI evidence. Keep `ENABLE_AUTO_DEPLOY=false`, disable competing deployment writers, verify existing Worker names/D1 UUID, API vars/OIDC origins/rate limiters and `BotIdentity` binding. Record current API/Web revisions. Arrange a maintenance window or restrict Supervisor use until the scoped API is verified: old API code still has global Supervisor access.
@@ -79,7 +81,7 @@ Required local checks: `pnpm -r --if-present test`, `pnpm typecheck`, `pnpm chec
 4. After separate operator approval, run the existing guarded `pnpm db:migrate:remote` on verified main. Apply only pending 0008. Use `pnpm db:verify:remote` and guarded history inspection; expect 0000–0008 once, 15 application tables, both new tables/indexes, all prior counts preserved, empty assignment/history initially, and `PRAGMA foreign_key_check` empty. No new remote seeds/backfill. The guarded verification command now includes the explicit counts, DDL, indexes and FK metadata described [below](#read-only-post-migration-verification).
 5. Dispatch manual deployment **target `api`**, validation-only first, actual release only after approval. All existing migration/resource/revision/rate-limiter/health guards remain mandatory. Do not select `all`: current orchestration starts Web before API. Verify unauthenticated denial, non-Admin assignment denial, unassigned-Supervisor empty Web/Bot results, Admin global access and unchanged Sales Force `/jadwal`/reporting. `/health` alone is insufficient.
 6. **Bot deployment is not required:** RPC contracts and Bot source are unchanged; existing Bot receives scoped schedules from the newly deployed API. If a dependent Bot change is later approved, deploy it separately only after API compatibility verification, preserving webhook/secret behavior.
-7. Deploy **target `web`** separately (validation-only, then approved actual release). Check direct SPA route, Admin-only menu/denial, loading/error/empty states, active options, confirmation/cancel, assign/reassign/unassign and refresh; verify old Supervisor session loses historical access and new one gains it. Use only approved operator-managed records for acceptance, not production seeds. Confirm all other dashboard reports remain clearly synthetic. Verify Bot monitoring filters/pagination using verified actors without exposing credentials.
+7. Deploy **target `web`** separately (validation-only, then approved actual release). Check direct SPA route, Admin-only menu/denial, loading/error/empty states, active options, confirmation/cancel, assign/reassign/unassign and refresh; verify old Supervisor session loses historical access and new one gains it. Use only approved operator-managed records for acceptance, not production seeds. For the historical assignment-only release, confirm other reports remain clearly synthetic; for the subsequent live dashboard release, follow its operational smoke-test checklist instead. Verify Bot monitoring filters/pagination using verified actors without exposing credentials.
 8. Inspect restricted assignment audit/FK integrity and sanitized error rates. Sign off and end the maintenance window. Keep automatic CD off unless separately authorized. On failure stop; do not fall back to old globally permissive Supervisor code as a security-safe rollback. Prefer a reviewed forward fix or restrict access during recovery. Worker rollback does not undo assignments/audit or restore old authorization semantics safely. Restore D1 only with explicit approval and reconciliation of all intervening visits, reports, schedules and identity writes; never drop audit/tables as a shortcut.
 
 ## Read-only post-migration verification

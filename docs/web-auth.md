@@ -110,7 +110,7 @@ This code-only hotfix needs **no new migration, frontend build/release, Bot rele
 
 ## Manual release checklist
 
-**Historical initial-auth rollout (0007):** for the current 0008 milestone use the [Supervisor assignment rollout](supervisor-assignments.md#operator-controlled-rollout-checklist), not this historical checklist.
+**Historical initial-auth rollout (0007):** assignment prerequisites are documented in the [0008 rollout](supervisor-assignments.md#operator-controlled-rollout-checklist). For current operational monitoring use the [live dashboard API-first rollout](live-dashboard.md#operator-controlled-activation-and-smoke-test); it adds no migration.
 
 This is a **manual operator procedure, not work performed by this PR**. Use the existing [CI/CD](ci-cd.md) and [deployment/recovery](deployment.md) guards and approved GitHub Environment. No remote seed data is required.
 
@@ -129,6 +129,6 @@ This is a **manual operator procedure, not work performed by this PR**. Use the 
 
 `pnpm -r --if-present test`, `pnpm test:deployment`, `pnpm typecheck`, `pnpm check`, `pnpm --filter @sales-visit/db db:check`, and `pnpm build:web` are local/offline checks. Auth tests use synthetic Users, disposable local D1, locally generated RSA keys and a local JWKS verifier. Abuse tests include native local Wrangler bindings plus deterministic limited/error/missing-binding decisions, shared hashed keys and safe 429s; deployment tests cover strict declarations, active metadata, disabled-only bootstrap and post-upload attestation. Existing Bot, registration, Outlet, Schedule, transport and Visit/RPC suites remain included. No remote Cloudflare/Telegram credential or frontend test framework is needed.
 
-Dashboard metrics/charts/Visits/Outlets and the browser-local Visit form are **synthetic-only demo content behind login**, not live D1 reporting. The shell labels this explicitly. The Admin-only Penugasan Supervisor page is the exception: it manages live assignments and is labeled operational. The prototype form never calls the API; browser-local mock entries remain distinct from sessionStorage credentials. Sales Force navigation excludes the monitoring directory and direct entry shows an unauthorized state. Intended internal redirects are allowlisted; external/protocol-relative/backslash redirects are rejected.
+Dashboard metrics/charts/Visits/Outlets now use authenticated D1 reads with current assignment/reporter scope; see [live dashboard behavior](live-dashboard.md). Local Visit submission is disabled, the browser-local Visit store is removed and old entries are ignored. Sales Force is routed to an explicit workspace-not-yet-available notice. Intended internal redirects remain allowlisted; external/protocol-relative/backslash redirects are rejected.
 
-Remaining milestones: live dashboard reads/role-specific operational UI, Web Visit/Stock Report submission authorization, stronger same-origin cookie/BFF architecture if desired, reporting/pagination UX, and explicit session administration/retention automation. Real browser Telegram/popup checks and production configuration/migration/deployment are operator acceptance steps, not claimed by offline CI.
+Remaining milestones: dedicated Sales Force workspace and Web Visit/Stock Report submission authorization, stronger same-origin cookie/BFF architecture if desired, further reporting UX, and explicit session administration/retention automation. Real browser Telegram/popup checks and production configuration/migration/deployment are operator acceptance steps, not claimed by offline CI.
