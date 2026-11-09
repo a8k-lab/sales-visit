@@ -23,6 +23,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { LoginPage } from "@/features/auth/pages/login-page";
+import { WorkspacePage } from "@/features/auth/pages/workspace-page";
 import { ApiError, restoreSession, safeReturn } from "@/features/auth/session";
 import {
   loadDirectory,
@@ -105,6 +106,10 @@ const dashboardRoute = createRoute({
         search: { redirect: safeReturn(location.href) },
         replace: true,
       });
+    if (account.role === "sales_force" && location.pathname !== "/workspace")
+      throw redirect({ to: "/workspace", replace: true });
+    if (account.role !== "sales_force" && location.pathname === "/workspace")
+      throw redirect({ to: "/overview", replace: true });
   },
   pendingComponent: () => <p role="status">Memeriksa sesi…</p>,
   errorComponent: SessionUnavailable,
@@ -125,6 +130,11 @@ const indexRoute = createRoute({
   beforeLoad: () => {
     throw redirect({ to: "/overview", replace: true });
   },
+});
+const workspaceRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: "/workspace",
+  component: WorkspacePage,
 });
 const overviewRoute = createRoute({
   getParentRoute: () => dashboardRoute,
@@ -231,6 +241,7 @@ export const router = createRouter({
     indexRoute,
     loginRoute,
     dashboardRoute.addChildren([
+      workspaceRoute,
       overviewRoute,
       assignmentsRoute,
       visitsRoute,
@@ -242,6 +253,9 @@ export const router = createRouter({
     ]),
   ]),
   scrollRestoration: true,
+  defaultStaleTime: 0,
+  defaultGcTime: 0,
+  defaultPreload: false,
 });
 
 declare module "@tanstack/react-router" {
