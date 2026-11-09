@@ -126,6 +126,7 @@ contacting Telegram or Cloudflare. The private-terminal test-bot helper is
 
 ## Documentation and design references
 
+- **[Admin user management (A1)](docs/admin-user-management.md):** Pengguna & Akses, account lifecycle, API contracts, security and operator-controlled rollout.
 - **[Live Operational Dashboard](docs/live-dashboard.md):** contracts, permissions, KPI window, verification and manual API-first rollout.
 - **[CONTEXT.md](CONTEXT.md):** shared domain glossary and naming conventions.
 - **[Architecture Decision Records](docs/adr/):** decisions and alternatives behind the proposed system.

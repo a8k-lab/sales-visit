@@ -43,13 +43,17 @@ rejected; bounded exact reference filters preserve legacy IDs.
 See [Web authentication and release setup](../../docs/web-auth.md) for Telegram
 OIDC, challenge/session contracts, CORS, role scoping and migration 0007.
 Only `/health` is public among the business GETs below. All others require a
-valid Web Bearer session; public HTTP writes remain denied even with a session.
+valid Web Bearer session; HTTP report writes remain denied even with a session.
 Admin can monitor all operational data; Supervisor sees only currently assigned
 Sales Force members' records (Stock Reports scoped independently by reporter).
 Sales Force cannot list Sales Force and can read only their own Visits/Stock Reports
 plus limited Outlet/Product references. Authorization is applied within SQL before
 pagination. See [Supervisor assignments](../../docs/supervisor-assignments.md) for
 migration 0008, lifecycle policy, assignment API, permission matrix and rollout order.
+
+See [Admin user management (A1)](../../docs/admin-user-management.md) for
+`/admin/users` list/options/current-state reads, strict JSON lifecycle mutations,
+Web/Bot invariants, transactional session authorization, and staged rollout.
 
 Admin-only Web routes: `GET /supervisors`, `GET /supervisor-assignments`, and
 `PUT /supervisor-assignments` with `{ salesForceId: string, supervisorUserId: string | null }`.
