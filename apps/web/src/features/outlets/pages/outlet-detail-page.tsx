@@ -1,8 +1,13 @@
-import { ArrowLeftIcon, ClipboardTextIcon } from "@phosphor-icons/react";
-import { Link, useLoaderData } from "@tanstack/react-router";
+import {
+  Link,
+  useLoaderData,
+  useNavigate,
+  useSearch,
+} from "@tanstack/react-router";
 
 import { ChannelBadge } from "@/components/channel-badge";
-import { Badge } from "@/components/ui/badge";
+import { OperationalRefresh } from "@/components/operational-state";
+import { ReadPagination } from "@/components/read-pagination";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,213 +16,136 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import { FieldError } from "@/components/ui/field";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { StockReportCard } from "@/features/stock-reports/components/stock-report-card";
 import { formatTime } from "@/lib/formatters";
 
 export function OutletDetailPage() {
-  const { outlet, visits, stockReports, storageError } = useLoaderData({
+  const { outlet, visits, stockReports } = useLoaderData({
     from: "/dashboard/outlets/$outletId",
   });
+  const search = useSearch({ from: "/dashboard/outlets/$outletId" });
+  const navigate = useNavigate({ from: "/outlets/$outletId" });
+  const update = (key: "visitOffset" | "reportOffset", offset: number) =>
+    void navigate({ search: { ...search, [key]: offset }, resetScroll: false });
   return (
     <>
-      <div>
+      <div className="flex flex-wrap gap-2">
         <Button
           nativeButton={false}
           variant="ghost"
-          size="sm"
           render={<Link to="/outlets" search={{}} />}
         >
-          <ArrowLeftIcon data-icon="inline-start" />
           Kembali ke Outlet
         </Button>
+        <OperationalRefresh />
       </div>
       <div className="flex flex-col gap-2">
-        <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+        <p className="text-muted-foreground text-xs break-all">
           Detail Outlet · {outlet.id}
         </p>
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
           {outlet.name}
         </h1>
       </div>
-      {storageError && <FieldError>{storageError}</FieldError>}
       <Card>
         <CardHeader>
           <CardTitle>Informasi Outlet</CardTitle>
-          <CardDescription>Alamat dan kontak Outlet.</CardDescription>
+          <CardDescription>Identitas bisnis dari master data.</CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-4 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-muted-foreground text-xs">Alamat</dt>
-              <dd className="mt-1">{outlet.address}</dd>
+              <dt className="text-muted-foreground">ID bisnis</dt>
+              <dd>{outlet.businessId ?? "Belum tersedia"}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground text-xs">Kontak</dt>
-              <dd className="mt-1">
-                {outlet.contact}
-                <a
-                  href={`tel:${outlet.phone.replace(/\s/g, "")}`}
-                  className="mt-1 block underline underline-offset-4"
-                >
-                  {outlet.phone}
-                </a>
-              </dd>
+              <dt className="text-muted-foreground">No. RS</dt>
+              <dd>{outlet.noRs ?? "Belum tersedia"}</dd>
             </div>
           </dl>
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>
-            Riwayat kunjungan <Badge variant="secondary">{visits.length}</Badge>
-          </CardTitle>
-          <CardDescription>Terbaru dahulu · Waktu dalam WIB</CardDescription>
+          <CardTitle>Riwayat kunjungan</CardTitle>
+          <CardDescription>
+            Terbaru dahulu · WIB · Sesuai akses Anda.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          {visits.length ? (
-            <>
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Kunjungan</TableHead>
-                      <TableHead>Waktu kunjungan (WIB)</TableHead>
-                      <TableHead>Sales Force</TableHead>
-                      <TableHead>Kanal pelaporan</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {visits.map((visit) => (
-                      <TableRow key={visit.id}>
-                        <TableCell>
-                          <Link
-                            to="/visits/$visitId"
-                            params={{ visitId: visit.id }}
-                            search={{}}
-                            className="font-medium underline-offset-4 hover:underline"
-                          >
-                            {visit.id}
-                          </Link>
-                          {visit.submittedAt && (
-                            <span className="text-muted-foreground mt-1 block text-xs">
-                              Tersimpan di browser ini
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>{formatTime(visit.visitedAt)}</TableCell>
-                        <TableCell>{visit.member.name}</TableCell>
-                        <TableCell>
-                          <ChannelBadge channel={visit.submissionChannel} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="flex flex-col gap-3 md:hidden">
-                {visits.map((visit) => (
-                  <Link
-                    key={visit.id}
-                    to="/visits/$visitId"
-                    params={{ visitId: visit.id }}
-                    search={{}}
-                    className="focus-visible:outline-ring flex flex-col gap-2 rounded-lg border p-4 text-sm focus-visible:outline-2"
-                  >
-                    <span className="font-medium">{visit.id}</span>
-                    <span>{visit.member.name}</span>
-                    <span className="text-muted-foreground text-xs">
+        <CardContent className="flex flex-col gap-4">
+          {visits.items.length ? (
+            <ul className="divide-y">
+              {visits.items.map((visit) => (
+                <li
+                  key={visit.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-4"
+                >
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <Link
+                      to="/visits/$visitId"
+                      params={{ visitId: visit.id }}
+                      search={{}}
+                      className="font-medium break-all underline-offset-4 hover:underline"
+                    >
+                      {visit.id}
+                    </Link>
+                    <span className="text-muted-foreground text-sm">
+                      {visit.member?.name ?? visit.salesForceId} ·{" "}
                       {formatTime(visit.visitedAt)} WIB
                     </span>
-                    <div>
-                      <ChannelBadge channel={visit.submissionChannel} />
-                    </div>
-                    {visit.submittedAt && (
-                      <span className="text-muted-foreground text-xs">
-                        Tersimpan di browser ini
-                      </span>
-                    )}
-                  </Link>
-                ))}
-              </div>
-            </>
+                  </div>
+                  <ChannelBadge channel={visit.submissionChannel} />
+                </li>
+              ))}
+            </ul>
           ) : (
             <Empty>
               <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <ClipboardTextIcon />
-                </EmptyMedia>
-                <EmptyTitle>Belum ada kunjungan</EmptyTitle>
-                <EmptyDescription>
-                  Belum ada kunjungan tercatat untuk Outlet ini.
-                </EmptyDescription>
+                <EmptyTitle>
+                  Belum ada kunjungan yang dapat Anda akses
+                </EmptyTitle>
               </EmptyHeader>
             </Empty>
           )}
+          <ReadPagination
+            offset={search.visitOffset}
+            count={visits.items.length}
+            total={visits.total}
+            onChange={(offset) => update("visitOffset", offset)}
+          />
         </CardContent>
       </Card>
       <section
         aria-labelledby="outlet-reports-title"
         className="flex flex-col gap-4"
       >
-        <div className="flex flex-col gap-2">
-          <h2 id="outlet-reports-title" className="text-lg font-semibold">
-            Riwayat laporan stok{" "}
-            <Badge variant="secondary">{stockReports.length}</Badge>
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            Terbaru dahulu, termasuk laporan tanpa kunjungan. Jumlah dilaporkan
-            sesuai waktu pelaporan, bukan stok terkini.
-          </p>
-        </div>
-        {stockReports.length ? (
-          stockReports.map((report) => (
-            <div key={report.id} className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <Badge variant={report.visitId ? "secondary" : "outline"}>
-                  {report.visitId
-                    ? "Terkait kunjungan"
-                    : "Laporan mandiri · Tanpa kunjungan"}
-                </Badge>
-                {report.visitId && (
-                  <Link
-                    to="/visits/$visitId"
-                    params={{ visitId: report.visitId }}
-                    search={{}}
-                    className="underline underline-offset-4"
-                  >
-                    {report.visitId}
-                  </Link>
-                )}
-              </div>
-              <StockReportCard report={report} />
-            </div>
+        <h2 id="outlet-reports-title" className="text-lg font-semibold">
+          Riwayat laporan stok
+        </h2>
+        <p className="text-muted-foreground text-sm">
+          Sesuai pelapor yang dapat Anda akses, termasuk laporan mandiri. Bukan
+          stok terkini.
+        </p>
+        {stockReports.items.length ? (
+          stockReports.items.map((report) => (
+            <StockReportCard key={report.id} report={report} />
           ))
         ) : (
-          <Empty className="border">
+          <Empty>
             <EmptyHeader>
-              <EmptyTitle>Belum ada laporan stok</EmptyTitle>
-              <EmptyDescription>
-                Belum ada laporan stok tercatat untuk Outlet ini.
-              </EmptyDescription>
+              <EmptyTitle>
+                Belum ada laporan stok yang dapat Anda akses
+              </EmptyTitle>
             </EmptyHeader>
           </Empty>
         )}
+        <ReadPagination
+          offset={search.reportOffset}
+          count={stockReports.items.length}
+          total={stockReports.total}
+          onChange={(offset) => update("reportOffset", offset)}
+        />
       </section>
     </>
   );

@@ -7,6 +7,7 @@ import {
 import { Link, useLoaderData, useSearch } from "@tanstack/react-router";
 
 import { ChannelBadge } from "@/components/channel-badge";
+import { OperationalRefresh } from "@/components/operational-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,16 +24,20 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { visitContext } from "@/data/visit-store";
 import { StockReportCard } from "@/features/stock-reports/components/stock-report-card";
 import { formatTime } from "@/lib/formatters";
 
 export function VisitDetailPage() {
-  const { visit, stockReports } = useLoaderData({
+  const visit = useLoaderData({
     from: "/dashboard/visits/$visitId",
   });
   const filters = useSearch({ from: "/dashboard/visits/$visitId" });
-  const { outlet, member, reports } = visitContext(visit, stockReports);
+  const outlet = visit.outlet ?? { id: visit.outletId, name: visit.outletId };
+  const member = visit.member ?? {
+    id: visit.salesForceId,
+    name: visit.salesForceId,
+  };
+  const reports = visit.stockReports;
   return (
     <>
       <div>
@@ -57,12 +62,9 @@ export function VisitDetailPage() {
           Dikunjungi oleh {member.name} · {formatTime(visit.visitedAt)} WIB
         </p>
       </div>
-      {visit.submittedAt && (
-        <p role="status" className="text-muted-foreground text-sm">
-          Kunjungan tersimpan di browser ini · {formatTime(visit.submittedAt)}{" "}
-          WIB. Belum dikirim ke server.
-        </p>
-      )}
+      <div>
+        <OperationalRefresh />
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -86,16 +88,6 @@ export function VisitDetailPage() {
                   </Link>
                 </dd>
               </div>
-              <div>
-                <dt className="text-muted-foreground text-xs">Alamat</dt>
-                <dd className="mt-1">{outlet.address}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground text-xs">Kontak</dt>
-                <dd className="mt-1">
-                  {outlet.contact} · {outlet.phone}
-                </dd>
-              </div>
             </dl>
           </CardContent>
         </Card>
@@ -114,10 +106,6 @@ export function VisitDetailPage() {
               <div>
                 <dt className="text-muted-foreground text-xs">Sales Force</dt>
                 <dd className="mt-1 font-medium">{member.name}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground text-xs">Wilayah</dt>
-                <dd className="mt-1">{member.territory}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground text-xs">
@@ -185,7 +173,8 @@ export function VisitDetailPage() {
             <Badge variant="secondary">{reports.length}</Badge>
           </div>
           <p className="text-muted-foreground text-sm">
-            Jumlah stok dicatat sesuai waktu pelaporan, bukan stok terkini.
+            Laporan yang dapat Anda akses, maksimal 100 terbaru. Jumlah sesuai
+            waktu pelaporan, bukan stok terkini.
           </p>
         </div>
         {reports.length ? (
@@ -202,7 +191,8 @@ export function VisitDetailPage() {
                 Belum ada laporan stok untuk kunjungan ini
               </EmptyTitle>
               <EmptyDescription>
-                Kunjungan ini dicatat tanpa laporan stok.
+                Tidak ada laporan stok yang dapat Anda akses untuk kunjungan
+                ini.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

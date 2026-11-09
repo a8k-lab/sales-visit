@@ -13,7 +13,10 @@ export interface ReadPage<T> {
   total: number;
 }
 export type VisitListItem = NamedVisit & { stockReportCount: number };
-export type NamedStockReport = import("./stock-report.ts").StockReport & {
+export type NamedStockReport = Omit<
+  import("./stock-report.ts").StockReport,
+  "items"
+> & {
   reporter: Reference | null;
   items: (import("./stock-report.ts").StockReportItem & {
     product: Reference | null;

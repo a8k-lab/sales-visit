@@ -1,6 +1,13 @@
-import { Link, useLoaderData } from "@tanstack/react-router";
+import {
+  Link,
+  useLoaderData,
+  useNavigate,
+  useSearch,
+} from "@tanstack/react-router";
 
-import { Badge } from "@/components/ui/badge";
+import { OperationalRefresh } from "@/components/operational-state";
+import { ReadPagination } from "@/components/read-pagination";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -8,6 +15,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -16,143 +26,144 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { outlets, products, salesForce } from "@/data/mock-data";
 import { StockReportCard } from "@/features/stock-reports/components/stock-report-card";
 
 export function DirectoryPage() {
-  const { stockReports } = useLoaderData({ from: "/dashboard/directory" });
+  const data = useLoaderData({ from: "/dashboard/directory" });
+  const search = useSearch({ from: "/dashboard/directory" });
+  const navigate = useNavigate({ from: "/directory" });
+  const page = data.references ?? data.records;
+  const title = {
+    "sales-force": "Sales Force",
+    products: "Produk",
+    "stock-reports": "Laporan stok",
+  }[search.kind];
   return (
     <>
       <div className="flex flex-col gap-2">
-        <p className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
-          Data ruang kerja
-        </p>
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
           Data referensi
         </h1>
         <p className="text-muted-foreground text-sm">
-          Lihat data Sales Force, Outlet, produk, dan laporan stok.
+          Master data dan laporan operasional sesuai akses Anda.
         </p>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Sales Force <Badge variant="secondary">{salesForce.length}</Badge>
-          </CardTitle>
-          <CardDescription>
-            Sales Force dapat melapor melalui Dashboard Web atau Telegram Bot.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>Wilayah</TableHead>
-                <TableHead>Kontak</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {salesForce.map((member) => (
-                <TableRow key={member.id}>
-                  <TableCell>{member.name}</TableCell>
-                  <TableCell>{member.territory}</TableCell>
-                  <TableCell>{member.phone}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Outlet <Badge variant="secondary">{outlets.length}</Badge>
-          </CardTitle>
-          <CardDescription>
-            Informasi dan riwayat Outlet tersedia di halaman khusus Outlet.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link
-            to="/outlets"
-            search={{}}
-            className="text-sm font-medium underline underline-offset-4"
+      <nav aria-label="Jenis referensi" className="flex flex-wrap gap-2">
+        {(["sales-force", "products", "stock-reports"] as const).map((kind) => (
+          <Button
+            key={kind}
+            nativeButton={false}
+            variant={search.kind === kind ? "secondary" : "outline"}
+            render={
+              <Link
+                to="/directory"
+                search={{ kind }}
+                aria-current={search.kind === kind ? "page" : undefined}
+              />
+            }
           >
-            Lihat daftar Outlet
-          </Link>
-        </CardContent>
-      </Card>
+            {
+              {
+                "sales-force": "Sales Force",
+                products: "Produk",
+                "stock-reports": "Laporan stok",
+              }[kind]
+            }
+          </Button>
+        ))}
+        <Button
+          nativeButton={false}
+          variant="outline"
+          render={<Link to="/outlets" search={{}} />}
+        >
+          Outlet
+        </Button>
+        <OperationalRefresh />
+      </nav>
       <Card>
         <CardHeader>
-          <CardTitle>
-            Produk <Badge variant="secondary">{products.length}</Badge>
-          </CardTitle>
+          <CardTitle>{title}</CardTitle>
           <CardDescription>
-            Daftar produk dan satuan pelaporannya.
+            {search.kind === "stock-reports"
+              ? "Terbaru dahulu, termasuk laporan tanpa kunjungan. Bukan stok terkini."
+              : "Nama dan ID dari master data."}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Produk</TableHead>
-                <TableHead>Kategori</TableHead>
-                <TableHead>Satuan</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {products.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell className="whitespace-normal">
-                    {product.name}
-                  </TableCell>
-                  <TableCell>{product.category}</TableCell>
-                  <TableCell>{product.unit}</TableCell>
+        <CardContent className="flex flex-col gap-5">
+          {data.references && (
+            <Field>
+              <FieldLabel htmlFor="directory-search">
+                Cari nama atau ID
+              </FieldLabel>
+              <Input
+                id="directory-search"
+                value={search.q}
+                maxLength={200}
+                onChange={(e) =>
+                  void navigate({
+                    search: { ...search, q: e.target.value, offset: 0 },
+                    replace: true,
+                    resetScroll: false,
+                  })
+                }
+              />
+            </Field>
+          )}
+          {!page.items.length && (
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>Belum ada data yang sesuai</EmptyTitle>
+              </EmptyHeader>
+            </Empty>
+          )}
+          {data.references && data.references.items.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nama</TableHead>
+                  <TableHead>ID</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-      <section className="flex flex-col gap-4" aria-labelledby="reports-title">
-        <div className="flex flex-col gap-2">
-          <h2 id="reports-title" className="text-lg font-semibold">
-            Daftar laporan stok{" "}
-            <Badge variant="secondary">{stockReports.length}</Badge>
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            Laporan stok dari Sales Force, dengan atau tanpa kunjungan terkait.
-          </p>
-        </div>
-        {stockReports.map((report) => (
-          <div key={report.id} className="flex flex-col gap-2">
-            <p className="text-sm font-medium">
+              </TableHeader>
+              <TableBody>
+                {data.references.items.map((record) => (
+                  <TableRow key={record.id}>
+                    <TableCell className="whitespace-normal">
+                      {record.name}
+                    </TableCell>
+                    <TableCell className="break-all whitespace-normal">
+                      {record.id}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {data.records?.items.map((report) => (
+            <div key={report.id} className="flex flex-col gap-2">
               <Link
                 to="/outlets/$outletId"
                 params={{ outletId: report.outletId }}
-                className="underline underline-offset-4"
+                search={{}}
+                className="text-sm break-all underline underline-offset-4"
               >
-                {outlets.find((outlet) => outlet.id === report.outletId)!.name}
-              </Link>{" "}
-              ·{" "}
-              {report.visitId ? (
-                <Link
-                  to="/visits/$visitId"
-                  params={{ visitId: report.visitId }}
-                  search={{}}
-                  className="underline underline-offset-4"
-                >
-                  {report.visitId}
-                </Link>
-              ) : (
-                "Tanpa kunjungan terkait"
-              )}
-            </p>
-            <StockReportCard report={report} />
-          </div>
-        ))}
-      </section>
+                Outlet · {report.outletId}
+              </Link>
+              <StockReportCard report={report} />
+            </div>
+          ))}
+          <ReadPagination
+            offset={search.offset}
+            count={page.items.length}
+            total={page.total}
+            onChange={(offset) =>
+              void navigate({
+                search: { ...search, offset },
+                resetScroll: false,
+              })
+            }
+          />
+        </CardContent>
+      </Card>
     </>
   );
 }

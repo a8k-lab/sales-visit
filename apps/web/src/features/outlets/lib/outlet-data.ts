@@ -1,57 +1,42 @@
-import { outlets } from "@/data/mock-data";
-import {
-  loadVisitData,
-  visitContext,
-  type VisitData,
-} from "@/data/visit-store";
+import type {
+  NamedStockReport,
+  OutletReadDetail,
+  ReadPage,
+  Reference,
+  VisitListItem,
+} from "@sales-visit/contracts";
 
-function outletVisits(outletId: string, data: VisitData) {
-  return data.visits
-    .filter((visit) => visit.outletId === outletId)
-    .toSorted((a, b) => Date.parse(b.visitedAt) - Date.parse(a.visitedAt));
+import { api } from "@/features/auth/session";
+
+export function catalogQuery(q: string, offset: number) {
+  const query = new URLSearchParams({
+    view: "page",
+    limit: "25",
+    offset: String(offset),
+  });
+  if (q.trim()) query.set("q", q.trim());
+  return query;
 }
-
-export function loadOutletDirectory() {
-  const data = loadVisitData();
-  return {
-    storageError: data.storageError,
-    outlets: outlets.map((outlet) => {
-      const visits = outletVisits(outlet.id, data);
-      return {
-        ...outlet,
-        visitCount: visits.length,
-        lastVisitedAt: visits[0]?.visitedAt,
-      };
-    }),
-  };
-}
-
-export function searchOutlets<T extends (typeof outlets)[number]>(
-  entries: T[],
-  query: string
-): T[] {
-  const term = query.trim().toLocaleLowerCase("id-ID");
-  return entries.filter((outlet) =>
-    [outlet.name, outlet.address, outlet.contact, outlet.phone].some((value) =>
-      value.toLocaleLowerCase("id-ID").includes(term)
-    )
+export const loadOutletDirectory = (q: string, offset: number) =>
+  api<ReadPage<Reference>>(`/outlets?${catalogQuery(q, offset)}`);
+export async function loadOutletDetail(
+  outletId: string,
+  visitOffset: number,
+  reportOffset: number
+) {
+  const outlet = await api<OutletReadDetail>(
+    `/outlets/${encodeURIComponent(outletId)}`
   );
+  const query = new URLSearchParams({ view: "page", limit: "25", outletId });
+  const [visits, stockReports] = await Promise.all([
+    api<ReadPage<VisitListItem>>(`/visits?${query}&offset=${visitOffset}`),
+    api<ReadPage<NamedStockReport>>(
+      `/stock-reports?${query}&offset=${reportOffset}`
+    ),
+  ]);
+  return { outlet, visits, stockReports };
 }
-
-export function loadOutletDetail(outletId: string) {
-  const outlet = outlets.find((entry) => entry.id === outletId);
-  if (!outlet) return undefined;
-  const data = loadVisitData();
-  return {
-    outlet,
-    storageError: data.storageError,
-    visits: outletVisits(outletId, data).map((visit) => ({
-      ...visit,
-      member: visitContext(visit, data.stockReports).member,
-    })),
-    // Independent reports belong to the Outlet too; never derive this from Visits.
-    stockReports: data.stockReports
-      .filter((report) => report.outletId === outletId)
-      .toSorted((a, b) => Date.parse(b.reportedAt) - Date.parse(a.reportedAt)),
-  };
-}
+export const validOffset = (value: unknown) =>
+  /^\d{1,6}$/.test(String(value)) && Number(value) <= 100000
+    ? Number(value)
+    : 0;
