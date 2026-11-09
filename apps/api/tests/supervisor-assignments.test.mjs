@@ -238,6 +238,101 @@ async function setup(t) {
 }
 const ids = (rows) => rows.map((row) => row.id);
 
+test("operational overview aggregates all records in a zero-filled WIB window with current reporter scope", async (t) => {
+  const { db, get, request, assign } = await setup(t);
+  const initial = await get("/dashboard/overview");
+  assert.deepEqual(initial.metrics, {
+    visits: 0,
+    outlets: 0,
+    salesForce: 0,
+    stockReports: 0,
+  });
+  assert.equal(initial.dailyVisits.length, 14);
+  assert.ok(initial.dailyVisits.every((d) => d.count === 0));
+  const start = Date.parse(initial.period.start);
+  const end = Date.parse(initial.period.end);
+  assert.equal(new Date(start).getUTCHours(), 17);
+  await assign("a", "sup-a");
+  await assign("b", "sup-b");
+  await db.batch(
+    Array.from({ length: 125 }, (_, i) =>
+      db
+        .prepare(
+          "INSERT INTO visits (id,outlet_id,sales_force_id,visited_at,submission_channel) VALUES (?, 'outlet', ?, ?, 'telegram')"
+        )
+        .bind(`live-${String(i).padStart(3, "0")}`, i < 120 ? "a" : "b", start)
+    )
+  );
+  // Exact start inclusive; end exclusive; a later WIB day and a pre-window record.
+  for (const [id, timestamp] of [
+    ["later", start + 86400000],
+    ["before", start - 1],
+    ["after", end],
+  ])
+    await db
+      .prepare(
+        "INSERT INTO visits (id,outlet_id,sales_force_id,visited_at,submission_channel) VALUES (?, 'outlet', 'a', ?, 'web')"
+      )
+      .bind(id, timestamp)
+      .run();
+  for (const [id, reporter, visit] of [
+    ["independent", "a", null],
+    ["linked", "a", "live-124"],
+    ["other-reporter", "b", "live-000"],
+  ])
+    await db
+      .prepare(
+        "INSERT INTO stock_reports (id,outlet_id,reporter_sales_force_id,visit_id,reported_at,submission_channel) VALUES (?, 'outlet', ?, ?, ?, 'telegram')"
+      )
+      .bind(id, reporter, visit, start)
+      .run();
+  const admin = await get("/dashboard/overview");
+  assert.deepEqual(admin.metrics, {
+    visits: 126,
+    outlets: 1,
+    salesForce: 2,
+    stockReports: 3,
+  });
+  assert.deepEqual(
+    admin.dailyVisits.map((d) => d.count),
+    [125, 1, ...Array(12).fill(0)]
+  );
+  assert.deepEqual(admin.channels, [
+    { channel: "web", count: 1 },
+    { channel: "telegram", count: 125 },
+  ]);
+  assert.equal(admin.recentVisits.length, 5);
+  assert.equal(admin.recentVisits[0].id, "later");
+  assert.equal(admin.recentVisits[1].id, "live-000");
+  assert.equal(admin.recentVisits[0].outlet.name, "Synthetic Outlet");
+  assert.deepEqual((await get("/dashboard/overview", "sup-a")).metrics, {
+    visits: 121,
+    outlets: 1,
+    salesForce: 1,
+    stockReports: 2,
+  });
+  assert.equal((await get("/dashboard/overview", "sup-b")).metrics.visits, 5);
+  assert.equal(
+    (await get("/dashboard/overview", "sup-empty")).metrics.visits,
+    0
+  );
+  await assign("a", "sup-b");
+  assert.equal(
+    (await get("/dashboard/overview", "sup-a")).metrics.stockReports,
+    0
+  );
+  assert.equal((await get("/dashboard/overview", "sup-b")).metrics.visits, 126);
+  await assign("a", null);
+  assert.equal((await get("/dashboard/overview", "sup-b")).metrics.visits, 5);
+  assert.equal((await request("/dashboard/overview", null)).status, 401);
+  assert.equal((await request("/dashboard/overview", "sf-user")).status, 403);
+  assert.equal((await request("/dashboard/overview?period=bad")).status, 400);
+  assert.equal(
+    (await request("/dashboard/overview")).headers.get("cache-control"),
+    "no-store"
+  );
+});
+
 test("assignment API, current Web scope, nested reporter isolation and Bot RPC", async (t) => {
   const { db, request, get, assign, rpc } = await setup(t);
   const audit = async () =>

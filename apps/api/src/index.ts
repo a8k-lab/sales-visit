@@ -7,6 +7,7 @@ const page = (c: Context<WebEnv>) => ({
 });
 import type { JWTVerifyGetKey } from "jose";
 
+import { dashboardOverview } from "./dashboard.ts";
 import {
   createVisit,
   createStockReport,
@@ -96,7 +97,7 @@ export function createApp(
   app.use("*", async (c, next) => {
     if (
       !["GET", "HEAD"].includes(c.req.method) ||
-      !/^\/(sales-force|outlets|products|visits|stock-reports)(\/|$)/.test(
+      !/^\/(dashboard|sales-force|outlets|products|visits|stock-reports)(\/|$)/.test(
         c.req.path
       )
     )
@@ -127,6 +128,7 @@ export function createApp(
     }
     await next();
   });
+  app.get("/dashboard/overview", dashboardOverview);
   app.get("/sales-force", async (c) => {
     const rows = await createDb(c.env.DB).query.salesForce.findMany({
       ...page(c),
