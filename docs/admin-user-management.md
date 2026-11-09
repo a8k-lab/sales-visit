@@ -208,7 +208,8 @@ D1 batch, reads pre-commit account state, and verifies both late-commit and
 post-cutoff rejection paths. It covers missing/lost responses, no-op/rejection
 termination without audit, post-commit failure, replay fencing, all lifecycle
 cutoffs, authorization and atomic rollback. Shared contract tests reject malformed
-operation handles and caller-supplied deadline/identity overrides. Frontend tests
+operation handles and caller-supplied deadline/identity overrides. The explicit
+CI API test list includes both `admin-users` and `admin-operation`. Frontend tests
 remain prohibited; the browser regression checklist below is still manual.
 
 Local validation passed: contracts **18/18**, DB **16/16**, API/Bot integration
