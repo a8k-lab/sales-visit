@@ -80,7 +80,7 @@ export const roleChangeSchema = approvalSchema;
 export const webOperationIdSchema = z
   .string()
   .regex(
-    /^web:[0-9]{13}:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    /^web:[0-9]{13}:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![\s\S])/
   );
 export const webOperationDeadline = (operationId: string) =>
   Number(operationId.split(":")[1]);
