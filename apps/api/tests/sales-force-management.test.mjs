@@ -436,7 +436,8 @@ test("Sales Force master management with migrated disposable D1", async (t) => {
       ).results;
       const actual = [];
       for (const { name } of tables.filter(
-        ({ name }) => !name.startsWith("sqlite_") && !name.startsWith("_cf_")
+        (table) =>
+          !table.name.startsWith("sqlite_") && !table.name.startsWith("_cf_")
       )) {
         // Names from sqlite_master, not request input.
         for (const fk of (
@@ -525,7 +526,7 @@ test("Sales Force master management with migrated disposable D1", async (t) => {
         post("create", { id: "race", name: "Start" }),
         post("create", { id: "race", name: "Start" }, db, "admin2"),
       ]);
-      assert.deepEqual(responses.map((x) => x.status).sort(), [201, 409]);
+      assert.deepEqual(responses.map((x) => x.status).toSorted(), [201, 409]);
       assert.equal(await count(), n + 1);
       responses = await Promise.all([
         post("rename", { id: "race", expectedName: "Start", name: "A" }),
@@ -536,13 +537,13 @@ test("Sales Force master management with migrated disposable D1", async (t) => {
           "admin2"
         ),
       ]);
-      assert.deepEqual(responses.map((x) => x.status).sort(), [200, 409]);
+      assert.deepEqual(responses.map((x) => x.status).toSorted(), [200, 409]);
       assert.equal(await count(), n + 2);
       responses = await Promise.all([
         post("delete", { id: "race" }),
         post("delete", { id: "race" }, db, "admin2"),
       ]);
-      assert.deepEqual(responses.map((x) => x.status).sort(), [200, 404]);
+      assert.deepEqual(responses.map((x) => x.status).toSorted(), [200, 404]);
       assert.equal(await count(), n + 3);
       await post("create", { id: "mixed", name: "Start" });
       responses = await Promise.all([
@@ -552,6 +553,53 @@ test("Sales Force master management with migrated disposable D1", async (t) => {
       assert.equal(responses[1].status, 200);
       assert.ok([200, 404].includes(responses[0].status));
       assert.equal(await row("mixed"), null);
+    }
+  );
+  await t.test(
+    "concurrent new references and deletion never orphan business data",
+    async () => {
+      await post("create", { id: "reference-race", name: "Reference race" });
+      const [deletion, reference] = await Promise.allSettled([
+        post("delete", { id: "reference-race" }),
+        run(
+          "INSERT INTO visit_schedules(id,sales_force_id,outlet_id,weekday) VALUES ('race-plan','reference-race','outlet',2)"
+        ),
+      ]);
+      assert.equal(deletion.status, "fulfilled");
+      if (reference.status === "fulfilled") {
+        assert.equal(deletion.value.status, 409);
+        assert.ok(await row("reference-race"));
+      } else {
+        assert.match(String(reference.reason), /FOREIGN KEY/);
+        assert.equal(deletion.value.status, 200);
+        assert.equal(await row("reference-race"), null);
+      }
+      assert.deepEqual(
+        (await db.prepare("PRAGMA foreign_key_check").all()).results,
+        []
+      );
+    }
+  );
+  await t.test(
+    "one master operation cannot concurrently record multiple changes",
+    async () => {
+      const operationId = await ticket();
+      const n = await count();
+      const responses = await Promise.all([
+        post("create", { id: "same-op-a", name: "A", operationId }),
+        post(
+          "create",
+          { id: "same-op-b", name: "B", operationId },
+          db,
+          "admin2"
+        ),
+      ]);
+      assert.deepEqual(
+        responses.map((response) => response.status).toSorted(),
+        [201, 409]
+      );
+      assert.equal(await count(), n + 1);
+      assert.equal(await outcome(operationId), "committed");
     }
   );
   await t.test(
