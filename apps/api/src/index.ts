@@ -18,6 +18,7 @@ import {
 } from "./operations.ts";
 import { operationalScope } from "./read-scope.ts";
 import { toStockReport } from "./records.ts";
+import { salesForceManagementRoutes } from "./sales-force-management.ts";
 import { supervisorAssignmentRoutes } from "./supervisor-assignments.ts";
 import { listVisits, validReadQuery, visitDetail } from "./visit-reads.ts";
 import { authRoutes, sessionAccount, type WebEnv } from "./web-auth.ts";
@@ -63,6 +64,7 @@ export function createApp(
   });
   app.route("/auth", authRoutes(telegramKeys));
   app.route("/admin/users", adminUserRoutes());
+  app.route("/admin/sales-force", salesForceManagementRoutes());
   // Dedicated routes authenticate themselves, including PUT requests.
   app.route("/", supervisorAssignmentRoutes());
 
