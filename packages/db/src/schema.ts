@@ -289,6 +289,32 @@ export const accessAudit = sqliteTable(
   ]
 );
 
+// Business history survives deletion of an unused master; deliberately no SF FK.
+export const salesForceMasterAudit = sqliteTable(
+  "sales_force_master_audit",
+  {
+    id: id(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    salesForceId: text("sales_force_id").notNull(),
+    action: text("action", { enum: ["create", "rename", "delete"] }).notNull(),
+    previousName: text("previous_name"),
+    newName: text("new_name"),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index("sales_force_master_audit_sf_idx").on(table.salesForceId),
+    check(
+      "sales_force_master_audit_transition",
+      sql`(${table.action} = 'create' and ${table.previousName} is null and ${table.newName} is not null) or (${table.action} = 'rename' and ${table.previousName} is not null and ${table.newName} is not null and ${table.previousName} <> ${table.newName}) or (${table.action} = 'delete' and ${table.previousName} is not null and ${table.newName} is null)`
+    ),
+  ]
+);
+
 export const usersRelations = relations(users, ({ one, many }) => ({
   supervisedSalesForce: many(salesForceSupervisors),
   assignmentActions: many(supervisorAssignmentAudit, {
