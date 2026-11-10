@@ -66,7 +66,7 @@ jobs:
       - run: pnpm --filter @sales-visit/contracts --filter @sales-visit/db test
       - run: >-
           node --test
-          apps/api/tests/{api,identity,planning,web-auth,auth-abuse,admin-users,admin-operation}.test.mjs
+          apps/api/tests/{api,identity,planning,web-auth,auth-abuse,admin-users,admin-operation,sales-force-management}.test.mjs
       - if: needs.changes.outputs.db == 'true'
         run: pnpm --filter @sales-visit/db db:check
   bot:
