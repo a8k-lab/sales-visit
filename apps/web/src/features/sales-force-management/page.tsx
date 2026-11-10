@@ -1,4 +1,9 @@
-import { useLoaderData, useNavigate, useSearch } from "@tanstack/react-router";
+import {
+  Link,
+  useLoaderData,
+  useNavigate,
+  useSearch,
+} from "@tanstack/react-router";
 import { useState } from "react";
 
 import { OperationalRefresh } from "@/components/operational-state";
@@ -47,6 +52,25 @@ export function SalesForceManagementPage() {
       </div>
       <div className="flex flex-wrap gap-2">
         <MasterEditor onMessage={setMessage} />
+        <Button
+          nativeButton={false}
+          variant="outline"
+          render={
+            <Link
+              to="/users"
+              search={{ after: "", pendingAfter: "", status: "" }}
+            />
+          }
+        >
+          Pengguna &amp; Akses
+        </Button>
+        <Button
+          nativeButton={false}
+          variant="outline"
+          render={<Link to="/supervisor-assignments" />}
+        >
+          Penugasan Supervisor
+        </Button>
         <OperationalRefresh />
       </div>
       <p role="status" aria-live="polite">
