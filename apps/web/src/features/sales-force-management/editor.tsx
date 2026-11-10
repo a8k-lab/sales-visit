@@ -13,12 +13,14 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
-import { validMasterText } from "./data";
+import { validMasterText, type ManagedSalesForce } from "./data";
 import { MasterOutcome, useMasterMutation } from "./mutation";
 
 export function MasterEditor({
+  row,
   onMessage,
 }: {
+  row?: ManagedSalesForce;
   onMessage: (message: string) => void;
 }) {
   const fieldId = useId();
@@ -26,9 +28,11 @@ export function MasterEditor({
   const [open, setOpen] = useState(false);
   const [id, setId] = useState("");
   const [name, setName] = useState("");
+  const [expectedName, setExpectedName] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const mutation = useMasterMutation(onMessage, () => setOpen(false));
-  const idInvalid = !validMasterText(id, 128);
+  const idInvalid = !row && !validMasterText(id, 128);
+  const title = row ? "Ubah nama" : "Tambah Sales Force";
   const nameInvalid = !validMasterText(name, 200);
   return (
     <Dialog
@@ -36,16 +40,25 @@ export function MasterEditor({
       onOpenChange={(value) => {
         if (mutation.busy) return;
         if (value) {
-          setId("");
-          setName("");
+          setId(row?.id ?? "");
+          setName(row?.name ?? "");
+          setExpectedName(row?.name ?? "");
           setSubmitted(false);
           mutation.setError("");
         }
         setOpen(value);
       }}
     >
-      <DialogTrigger ref={trigger} render={<Button />}>
-        Tambah Sales Force
+      <DialogTrigger
+        ref={trigger}
+        render={
+          <Button
+            variant={row ? "outline" : "default"}
+            size={row ? "sm" : "default"}
+          />
+        }
+      >
+        {title}
       </DialogTrigger>
       <DialogContent
         showCloseButton={!mutation.busy}
@@ -57,10 +70,11 @@ export function MasterEditor({
         className="max-h-[90dvh] overflow-y-auto"
       >
         <DialogHeader>
-          <DialogTitle>Tambah Sales Force</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Buat master bisnis saja, bukan akun Telegram. Kode tidak dapat
-            diubah setelah disimpan.
+            {row
+              ? "Nama baru juga akan tampil pada laporan historis yang merujuk Sales Force ini. Kode tidak dapat diubah."
+              : "Buat master bisnis saja, bukan akun Telegram. Kode tidak dapat diubah setelah disimpan."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -69,33 +83,43 @@ export function MasterEditor({
             event.preventDefault();
             setSubmitted(true);
             if (!idInvalid && !nameInvalid)
-              void mutation.save("create", { id, name });
+              void mutation.save(row ? "rename" : "create", {
+                id,
+                name,
+                ...(row ? { expectedName } : {}),
+              });
           }}
           noValidate
         >
           <FieldGroup>
-            <Field data-invalid={submitted && idInvalid}>
-              <FieldLabel htmlFor={fieldId + "-id"}>
-                Kode Sales Force
-              </FieldLabel>
-              <Input
-                id={fieldId + "-id"}
-                value={id}
-                onChange={(e) => setId(e.target.value)}
-                maxLength={128}
-                disabled={mutation.blocked}
-                aria-invalid={submitted && idInvalid}
-                aria-describedby={fieldId + "-id-help"}
-              />
-              <p
-                id={fieldId + "-id-help"}
-                className="text-muted-foreground text-sm"
-              >
-                Wajib 1–128 karakter; tanpa spasi awal/akhir atau karakter
-                kontrol. Huruf besar/kecil dipertahankan. Contoh:
-                SF-TIMIKA-6-BRIAN.
+            {row ? (
+              <p className="text-muted-foreground text-sm break-all">
+                Kode Sales Force (tetap): {id}
               </p>
-            </Field>
+            ) : (
+              <Field data-invalid={submitted && idInvalid}>
+                <FieldLabel htmlFor={fieldId + "-id"}>
+                  Kode Sales Force
+                </FieldLabel>
+                <Input
+                  id={fieldId + "-id"}
+                  value={id}
+                  onChange={(e) => setId(e.target.value)}
+                  maxLength={128}
+                  disabled={mutation.blocked}
+                  aria-invalid={submitted && idInvalid}
+                  aria-describedby={fieldId + "-id-help"}
+                />
+                <p
+                  id={fieldId + "-id-help"}
+                  className="text-muted-foreground text-sm"
+                >
+                  Wajib 1–128 karakter; tanpa spasi awal/akhir atau karakter
+                  kontrol. Huruf besar/kecil dipertahankan. Contoh:
+                  SF-TIMIKA-6-BRIAN.
+                </p>
+              </Field>
+            )}
             <Field data-invalid={submitted && nameInvalid}>
               <FieldLabel htmlFor={fieldId + "-name"}>
                 Nama Sales Force
@@ -107,7 +131,9 @@ export function MasterEditor({
                 maxLength={200}
                 disabled={mutation.blocked}
                 aria-invalid={submitted && nameInvalid}
-                aria-describedby={fieldId + "-name-help"}
+                aria-describedby={
+                  submitted && nameInvalid ? fieldId + "-name-help" : undefined
+                }
               />
               {submitted && nameInvalid && (
                 <p id={fieldId + "-name-help"} role="alert">

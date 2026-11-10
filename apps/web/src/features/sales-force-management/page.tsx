@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/table";
 import { useAccount } from "@/features/auth/session";
 
-import { accountStatusLabels, referenceLabels } from "./data";
+import { accountStatusLabels } from "./data";
+import { MasterDelete } from "./delete-dialog";
 import { MasterEditor } from "./editor";
 import { MasterOutcome } from "./mutation";
 
@@ -87,7 +88,7 @@ export function SalesForceManagementPage() {
               <TableHead>Asosiasi akun</TableHead>
               <TableHead>Supervisor</TableHead>
               <TableHead>Dibuat (WIB)</TableHead>
-              <TableHead>Penggunaan</TableHead>
+              <TableHead>Tindakan</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -119,10 +120,11 @@ export function SalesForceManagementPage() {
                     timeStyle: "short",
                   })}
                 </TableCell>
-                <TableCell className="whitespace-normal">
-                  {row.references
-                    .map((reason) => referenceLabels[reason] ?? reason)
-                    .join(", ") || "Belum digunakan"}
+                <TableCell>
+                  <div className="flex flex-col gap-2">
+                    <MasterEditor row={row} onMessage={setMessage} />
+                    <MasterDelete row={row} onMessage={setMessage} />
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

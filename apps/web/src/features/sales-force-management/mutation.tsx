@@ -83,18 +83,28 @@ export function useMasterMutation(
         (failure instanceof ApiError &&
           [400, 403, 404, 409].includes(failure.status))
       ) {
-        finish(operationId);
-        message =
-          failure instanceof SessionExpiredError
-            ? failure.message
-            : failure.status === 409
-              ? "Perubahan ditolak: kode sudah digunakan, nama telah berubah, atau data masih dirujuk. Perbarui data dan tinjau kembali sebelum melanjutkan."
-              : failure.status === 404
-                ? "Sales Force tidak ditemukan. Perbarui data."
-                : failure.status === 400
-                  ? "Kode atau nama tidak valid. Periksa isian."
-                  : "Akses tidak diizinkan.";
-        setError(message);
+        try {
+          finish(operationId);
+          message =
+            failure instanceof SessionExpiredError
+              ? failure.message
+              : failure.status === 409
+                ? action === "rename"
+                  ? "Nama telah berubah atau operasi berakhir. Tutup dialog, perbarui data, lalu buka kembali untuk meninjau nama terbaru."
+                  : action === "delete"
+                    ? "Sales Force masih dirujuk atau operasi berakhir. Perbarui data untuk memeriksa penggunaan."
+                    : "Kode sudah digunakan atau operasi berakhir. Periksa daftar sebelum membuat permintaan baru."
+                : failure.status === 404
+                  ? "Sales Force tidak ditemukan. Perbarui data."
+                  : failure.status === 400
+                    ? "Kode atau nama tidak valid. Periksa isian."
+                    : "Akses tidak diizinkan.";
+          setError(message);
+        } catch {
+          setError(
+            "Respons diterima, tetapi penanda operasi belum dapat dibersihkan. Periksa hasil operasi."
+          );
+        }
       } else
         setError(
           "Hasil perubahan belum pasti. Jangan kirim ulang; periksa hasil operasi."
