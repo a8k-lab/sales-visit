@@ -1,6 +1,6 @@
 # First API + Telegram test deployment
 
-> **Current milestone:** [Supervisor Assignment & API Scoping](supervisor-assignments.md#operator-controlled-rollout-checklist) adds migration 0008 (15 application tables) and requires migration → API → Web order. No Bot source/contract deployment is required. Earlier bootstrap/auth checklists below are historical, not instructions to replay migrations.
+> **Current milestone:** [Sales Force Master Management (A2)](sales-force-management.md#operator-controlled-rollout-not-performed) adds audit migration 0009 (16 application tables). An approved backup and migration must precede API → Web releases using separate targets, never `all`. No Bot source/contract deployment is required. Earlier bootstrap/auth checklists below are historical, not instructions to replay migrations.
 >
 > **Current release procedure:** use [GitHub Actions CI/CD](ci-cd.md).
 > The bootstrap sections below are historical instructions, not authorization to
