@@ -368,7 +368,7 @@ change webhooks, or modify credentials. Use the existing separate test bot only,
 after independently approved API migration/release and Bot release procedures.
 For local testing, use the tunnel procedure in `apps/bot/README.md` instead.
 Keep all business records synthetic while public business GETs remain unauthenticated.
-See the [exact command grammar](../apps/bot/README.md#outlet--schedule-command-grammar).
+See the [exact command grammar](telegram-bot-reference.md#outlet--schedule-command-grammar).
 
 - [ ] Confirm intended bot username, exclusive Worker ownership, named `IDENTITY`
       binding to `BotIdentity`, migration 0003 and active test Admin/Supervisor/SF.

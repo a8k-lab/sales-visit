@@ -238,4 +238,4 @@ supports its existing optional `stockReport`; the wizard does not collect it.
 No financial formulas, partner metrics, data imports, callbacks, account lifecycle
 extensions or production cutover are introduced. Attribution for the adapted
 Indonesian guided-entry/preview/confirm/cancel interaction remains in the
-[Bot README](../../apps/bot/README.md#attribution-and-deliberate-differences).
+[Bot reference](../telegram-bot-reference.md#attribution-and-deliberate-differences).

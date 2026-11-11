@@ -181,6 +181,6 @@ regressions remain in the local suite. Actual Telegram delivery and remote relea
 are separate consenting operator checks, not claimed by these tests.
 
 Local sandbox: `pnpm db:migrate:local`, `pnpm db:seed:local`; optional schedule
-fixture and controlled Admin bootstrap are documented in the [Bot README](../../apps/bot/README.md#reproducible-local-sandbox)
+fixture and controlled Admin bootstrap are documented in the [Bot README](../../apps/bot/README.md#local-accounts)
 and [identity guide](../../packages/db/IDENTITY.md). These local commands must
 never be repurposed as production seed or migration automation.
