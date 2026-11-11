@@ -14,6 +14,7 @@
     "db:verify:remote": "node scripts/cloudflare-remote.mjs verify-remote",
     "test:deployment": "node --test scripts/*.test.mjs",
     "telegram:test-bot": "node scripts/telegram-test-bot.mjs",
+    "telegram:local": "node scripts/telegram-local.mjs",
     "db:migrate:local": "pnpm --filter @sales-visit/api db:migrate:local",
     "db:seed:local": "pnpm --filter @sales-visit/api db:seed:local",
     "dev:bot": "pnpm --filter @sales-visit/bot dev",

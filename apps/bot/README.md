@@ -1,241 +1,165 @@
 # Sales Visit Telegram Bot
 
 A grammY Worker for registration, account administration, Outlets, schedules and
-guided Visit reporting. It calls the local API through the `IDENTITY` Service
-Binding; only API accesses D1.
+guided Visit reporting. It calls the API through the `IDENTITY` Service Binding;
+only API accesses D1. No Telegraf setup is needed.
 
-## Local setup
+## Quick Start
 
-Use Node.js 24.x and pnpm 10.30.1. Complete the root
-[Local Development guide](../../README.md#local-development) for dependency installation
-and local API configuration. **All commands here run from the repository root.**
-Follow the sequence below before starting the Workers; Web/OIDC setup is optional.
+Already have a token? Use it only if it belongs to a **separate, dedicated test
+bot**, not a production or shared bot. Its webhook must initially be unset. Stop
+any Telegraf instance or polling client using that token; do not run competing
+consumers. If needed, create a new test bot with the verified **@BotFather**.
 
-### 1. Create a separate test bot
+All commands run from the repository root. Use Node.js 24.x, pnpm 10.30.1 and
+[cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
+(macOS: `brew install cloudflared`). See the root
+[Local Development guide](../../README.md#local-development) for general prerequisites.
 
-In Telegram, open the verified **@BotFather**, send `/newbot`, and follow the
-prompts. Use this new bot only, never a production bot or production credentials.
+### One-time setup
 
 ```sh
-cp apps/bot/.dev.vars.example apps/bot/.dev.vars # first setup only
+pnpm install
+cp apps/api/.dev.vars.example apps/api/.dev.vars # only if absent
+cp apps/bot/.dev.vars.example apps/bot/.dev.vars # only if absent
 ```
 
-Edit the ignored file privately:
+Edit `apps/bot/.dev.vars` privately:
 
-- `TELEGRAM_BOT_TOKEN`: the token BotFather gives your test bot.
-- `TELEGRAM_WEBHOOK_SECRET`: a new random test-only secret, e.g. 32 random bytes
-  encoded as hex, generated and saved with a password manager. Telegram permits
-  1–256 characters from `A-Z`, `a-z`, `0-9`, `_` and `-`.
+- `TELEGRAM_BOT_TOKEN`: your dedicated test bot's token.
+- `TELEGRAM_LOCAL_TEST_BOT_USERNAME`: that bot's username, without `@`. The helper
+  checks it against the token before every operation; this is a safety check,
+  not permission to use a production bot.
+- `TELEGRAM_WEBHOOK_SECRET`: a fresh test-only secret, e.g. 32 random bytes encoded
+  as hex from a password manager. Allowed: `A-Z`, `a-z`, `0-9`, `_`, `-` (1–256 characters).
 
-Do not paste secrets into shell commands, URLs, logs, screenshots or Git. Do not
-source the file with shell tracing enabled. The registration example below reads
-it directly without printing credentials. Restart Bot after changing the file.
+Never put credentials in CLI arguments, logs, screenshots or Git. The helper
+reads only the ignored `.dev.vars`, not exported credentials. Web/OIDC is optional.
 
-Before starting services, apply the root guide's
-[local D1 migrations and synthetic seed](../../README.md#3-prepare-local-d1)
-if you have not already done so. Then identify and bootstrap your local Admin below.
+```sh
+pnpm db:migrate:local
+pnpm db:seed:local
+```
+
+These commands use API-local D1 in `apps/api/.wrangler/state`, not a remote DB.
+Seed records are synthetic; they do not create approved Telegram accounts.
+**Admin setup is optional for basic testing.** If you want this Telegram account
+to be the first Admin, complete [First-time Admin Setup](#first-time-admin-setup)
+**before** using `/register`. Otherwise, continue below.
+
+### Daily development
+
+1. Start API, then Bot, each in its own terminal:
+
+   ```sh
+   pnpm dev:api # http://localhost:8787
+   ```
+
+   ```sh
+   pnpm dev:bot # http://localhost:8788
+   ```
+
+   Wait for Wrangler's `IDENTITY` binding to connect to local `sales-visit-api`.
+   Restart Bot after changing `.dev.vars`. Do not use `--remote`.
+
+2. In another terminal, expose Bot:
+
+   ```sh
+   cloudflared tunnel --url http://localhost:8788
+   ```
+
+   This account-free **Quick Tunnel** forwards public HTTPS requests to the local
+   Worker. Telegram cannot deliver webhooks to your computer's `localhost`.
+   Keep the tunnel running; no Cloudflare login or dashboard is needed. BotFather
+   Web/OIDC login origins are unrelated to webhook delivery.
+
+3. Copy the printed tunnel URL and register it:
+
+   ```sh
+   pnpm telegram:local webhook:set https://YOUR-TUNNEL.trycloudflare.com
+   ```
+
+   A restarted tunnel gets a new URL: run the command again. The helper preserves
+   webhook-secret validation and accepts only HTTPS Quick Tunnel root URLs.
+   It checks the current webhook and refuses unrecognized URLs, custom certificates
+   or unexpected update types. It replaces only webhooks it previously recorded
+   for this test bot in ignored `apps/bot/.wrangler/telegram-local-*.json` files.
+   Keep those files until cleanup; do not run helper commands concurrently.
+   An existing webhook from another tool is deliberately **not** taken over—use
+   a separate test bot with an unset webhook instead. `pnpm telegram:test-bot`
+   remains an operator-only deployment helper, not part of this workflow.
+
+### Test messages and clean up
+
+In a **private chat** with your test bot, send `/start`, `/help` and `/me`.
+No Admin is needed for those commands. To exercise registration against local D1,
+send `/register`, then `/me`; the account stays pending until approved. Do not
+register an account you intend to provision as the first Admin.
+
+For protected flows after [Admin setup](#first-time-admin-setup), use a consenting
+second test account: `/register`, then Admin `/pending` and
+`/approve SECOND_TELEGRAM_ID sales sf-01` after verifying the account and synthetic
+SF link. The second account can use `/me` and `/salesvisit`, selecting seeded
+Outlet `out-01`, then `/konfirmasi` or `/batal`. See the
+[Visit wizard guide](../../docs/design/telegram-visit-wizard.md) for the exact flow.
+
+When finished:
+
+```sh
+pnpm telegram:local webhook:delete
+```
+
+This removes only an owned test webhook and **discards pending test updates**.
+Then stop the tunnel and Workers with Ctrl-C. Never alter production webhooks.
+
+## First-time Admin Setup
+
+**Optional for basic testing; required for approvals and protected commands.**
 
 ### Local accounts
 
-Seed data includes Sales Force records `sf-01`, `sf-02`, `sf-03`, not approved
-Telegram accounts.
-
-**Find your own Telegram User ID before bootstrapping.** With the new test bot's
-webhook still unset and no Bot Worker or other polling client running, open its
-private chat from the Telegram account you intend to make Admin. Send a fresh,
-unique plain-text marker, e.g. `local-admin-` plus random text (not `/register`
-and not a forwarded message). Replace the public marker argument below with that
-exact text, then run this one-time read of your test bot's pending messages:
+Before starting the Workers or registering a webhook, obtain your own verified
+Telegram **User ID**. If you already know it from a trusted authenticated Telegram
+interaction, skip the lookup. Otherwise, send a fresh unique plain-text marker
+(e.g. `local-admin-` plus random text) from your intended Admin account to the
+new test bot's private chat, then run:
 
 ```sh
-node --input-type=module - YOUR-EXACT-MARKER <<'NODE'
-import { readFileSync } from 'node:fs';
-import { parseEnv } from 'node:util';
-try {
-  const { TELEGRAM_BOT_TOKEN: token } = parseEnv(readFileSync('apps/bot/.dev.vars', 'utf8'));
-  const marker = process.argv[2];
-  if (!token || !marker || marker === 'YOUR-EXACT-MARKER') throw new Error();
-  const response = await fetch(`https://api.telegram.org/bot${token}/getUpdates`, {
-    method: 'POST', redirect: 'error',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ allowed_updates: ['message'], timeout: 0 }),
-  });
-  const result = await response.json();
-  if (!response.ok || !result.ok || !Array.isArray(result.result)) throw new Error();
-  const matches = result.result.map(update => update.message).filter(message =>
-    message?.chat?.type === 'private' && message.text === marker &&
-    !message.forward_origin && message.from?.is_bot === false &&
-    message.chat.id === message.from.id);
-  if (matches.length !== 1 || !Number.isSafeInteger(matches[0].from.id) ||
-      matches[0].from.id <= 0) throw new Error();
-  console.log(`Telegram User ID: ${matches[0].from.id}`);
-} catch {
-  console.error('ID lookup failed; check the test token, unset webhook and fresh marker privately.');
-  process.exitCode = 1;
-}
-NODE
+pnpm telegram:local user-id YOUR-EXACT-MARKER
 ```
 
-This verifies the sender of the exact message you just sent through your own
-Telegram session; it needs neither a registered application account nor an Admin.
-If no unique match is found, send a new marker and retry; do not guess from other
-updates. Keep the ID/output private and never print the token or raw API response.
-Do not use arbitrary third-party ID lookup bots, usernames or display names as
-identity evidence. Stop polling before registering the webhook later.
+Replace `YOUR-EXACT-MARKER` with the exact text you sent. Use 8–128 letters,
+digits, `_` or `-`; do not forward the message. This performs one read of pending
+messages, not a polling loop, and requires an unset webhook.
+It reports only a unique matching private human sender. No application account
+or Admin is needed. Keep the ID/output private; do not trust arbitrary third-party
+lookup bots, usernames or display names as identity evidence.
 
-- **Telegram User ID:** the human sender's `message.from.id` above. Its positive
-  decimal text belongs in **`<telegram-bot-user-id>`** in the bootstrap SQL.
-- **Bot ID:** identifies the bot itself (e.g. `getMe`'s `id`), not your account;
-  never put it in that placeholder.
-- **BotFather OIDC Client ID:** configures Web login as `TELEGRAM_CLIENT_ID`;
-  it is not the Admin's Telegram User ID, even if it resembles a Bot ID.
-- **`<internal-user-id>`:** a fresh application UUID, not any Telegram ID.
+The returned **human User ID**, as positive decimal text, goes in
+`<telegram-bot-user-id>` in the
+[controlled bootstrap procedure](../../packages/db/IDENTITY.md#controlled-first-admin-provisioning).
+It is **not** the Bot ID or BotFather OIDC Client ID (`TELEGRAM_CLIENT_ID` for Web
+login). Use a fresh application UUID for `<internal-user-id>`.
 
-For the first local Admin, follow the exact
-[controlled bootstrap procedure](../../packages/db/IDENTITY.md#controlled-first-admin-provisioning)
-using your verified test-account **Bot API user ID**, a fresh internal UUID and a
-private SQL file outside Git. Bootstrap before that Admin account uses `/register`;
-do not use bootstrap to promote an existing account. Apply the SQL to the API
-sandbox (not the database package's separate sandbox):
+Follow that complete procedure, keeping its SQL in a private file outside Git.
+Bootstrap before this account uses `/register`; never use it to promote an
+existing account. Apply the SQL to the **API** sandbox, not the database package's
+separate sandbox:
 
 ```sh
 pnpm --filter @sales-visit/api exec wrangler d1 execute DB --local --file /absolute/private/bootstrap.sql
 pnpm --filter @sales-visit/api exec wrangler d1 execute DB --local --command 'PRAGMA foreign_key_check;'
 ```
 
-Verify the intended active Admin, Telegram ID, null SF link, one active Admin
-and no foreign-key errors, as required by the linked procedure. Keep personal
-IDs and bootstrap output private. Later accounts use `/register` and Admin approval;
-no development permission bypass is needed.
-
-### 2. Run API and Bot
-
-In separate terminals:
-
-```sh
-pnpm dev:api # http://localhost:8787; owns local D1
-```
-
-```sh
-pnpm dev:bot # http://localhost:8788
-```
-
-Wait for Wrangler to show `IDENTITY` connected to local `sales-visit-api`.
-A disconnected binding is not an authentication fallback. Do not use `--remote`.
-
-```sh
-curl --fail http://localhost:8787/health
-curl --fail http://localhost:8788/health
-```
-
-Both return `status: "ok"`; this checks liveness only, not the binding or D1.
-
-### 3. Expose Bot with a Quick Tunnel
-
-Install [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
-if needed (on macOS: `brew install cloudflared`), then run:
-
-```sh
-cloudflared tunnel --url http://localhost:8788
-```
-
-This [Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)
-needs **no Cloudflare account, login or dashboard**. Keep it running and copy the
-printed `https://…trycloudflare.com` URL. If a local `.cloudflared/config.yaml`
-prevents Quick Tunnels, temporarily move that config aside and restore it later.
-
-Telegram sends webhooks to a public HTTPS URL; it cannot reach your computer's
-`localhost`. The tunnel forwards those requests to the local Bot Worker at `/`.
-**BotFather allowed login origins are for Web/OIDC login, not webhook delivery**;
-adding localhost there will not deliver messages. Keep webhook-secret validation
-enabled: the tunnel makes your local Bot publicly reachable.
-
-### 4. Register only the test bot's webhook
-
-Replace only the public tunnel URL below. Confirm `.dev.vars` contains your
-**new test bot's** token. Run this once from the repository root; it reads the
-ignored file directly. It sends a matching `secret_token` and handles text-message
-updates only. Do not use `curl https://api.telegram.org/bot<TOKEN>/...`, shell
-tracing, verbose HTTP logging or raw error logging: those can expose the token.
-
-```sh
-node --input-type=module - https://YOUR-TUNNEL.trycloudflare.com <<'NODE'
-import { readFileSync } from 'node:fs';
-import { parseEnv } from 'node:util';
-try {
-  const vars = parseEnv(readFileSync('apps/bot/.dev.vars', 'utf8'));
-  const token = vars.TELEGRAM_BOT_TOKEN;
-  const secret = vars.TELEGRAM_WEBHOOK_SECRET;
-  const url = new URL(process.argv[2]);
-  if (!token || !/^[A-Za-z0-9_-]{1,256}$/.test(secret ?? '') ||
-      url.protocol !== 'https:' || !url.hostname.endsWith('.trycloudflare.com') ||
-      url.username || url.password || url.port || url.pathname !== '/' ||
-      url.search || url.hash) throw new Error();
-  const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
-    method: 'POST', redirect: 'error',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: url.href, secret_token: secret, allowed_updates: ['message'] }),
-  });
-  const result = await response.json();
-  if (!response.ok || !result.ok) throw new Error();
-  console.log('Test webhook registered.');
-} catch {
-  console.error('Webhook registration failed; check test configuration privately.');
-  process.exitCode = 1;
-}
-NODE
-```
-
-A restarted Quick Tunnel gets a new URL; register that new URL again. The existing
-`pnpm telegram:test-bot` deployment helper deliberately does **not** support local
-tunnel URLs; do not change its deployment guards for local testing.
-
-### Test messages and clean up
-
-In a **private chat** with the new test bot:
-
-1. Send `/start`, `/help` and `/me` from the bootstrapped Admin account.
-2. From a consenting second test account, send `/register`, then `/me` (pending).
-3. Admin: `/pending`, verify the second account's identity and synthetic SF record,
-   then `/approve SECOND_TELEGRAM_ID sales sf-01` (replace the placeholder).
-4. Second account: `/me` (active), then `/salesvisit`. Use seeded Outlet `out-01`
-   when asked, follow the prompts, review and send `/konfirmasi` (or `/batal`).
-   This exercises the Bot → API → **local D1** path. See the
-   [Visit wizard guide](../../docs/design/telegram-visit-wizard.md) for the exact flow.
-
-When finished, remove **only this test bot's webhook**, still using its ignored
-local credentials file:
-
-```sh
-node --input-type=module <<'NODE'
-import { readFileSync } from 'node:fs';
-import { parseEnv } from 'node:util';
-try {
-  const vars = parseEnv(readFileSync('apps/bot/.dev.vars', 'utf8'));
-  const token = vars.TELEGRAM_BOT_TOKEN;
-  if (!token) throw new Error();
-  const response = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`, {
-    method: 'POST', redirect: 'error',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ drop_pending_updates: true }),
-  });
-  const result = await response.json();
-  if (!response.ok || !result.ok) throw new Error();
-  console.log('Test webhook removed; pending test updates discarded.');
-} catch {
-  console.error('Webhook removal failed; check test configuration privately.');
-  process.exitCode = 1;
-}
-NODE
-```
-
-Stop the tunnel and Workers with Ctrl-C and remove local credentials when no
-longer needed. Never modify a production webhook or poll with a production token.
+Verify the intended active Admin, Telegram binding, null SF link, one active Admin
+and no foreign-key errors, as required by the procedure. Later accounts use
+`/register` and Admin approval; there is no development permission bypass.
 
 ## Common commands and documentation
 
 ```sh
 pnpm --filter @sales-visit/api test # offline Bot/API integration tests
+node --test scripts/telegram-local.test.mjs # offline helper tests
 pnpm typecheck
 pnpm check
 ```

@@ -1,6 +1,8 @@
 # Copy to apps/bot/.dev.vars and edit privately. Never commit the filled file.
 # Use a NEW BotFather test bot, never a production bot's credentials.
 TELEGRAM_BOT_TOKEN=""
+# Local helper safety check: your dedicated test bot's username, without @.
+TELEGRAM_LOCAL_TEST_BOT_USERNAME=""
 # Generate a fresh secret privately: e.g. 32 random bytes encoded as hex.
 # Allowed characters: A-Z a-z 0-9 _ - (1–256 characters).
 TELEGRAM_WEBHOOK_SECRET=""
