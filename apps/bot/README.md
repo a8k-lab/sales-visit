@@ -7,8 +7,9 @@ Binding; only API accesses D1.
 ## Local setup
 
 Use Node.js 24.x and pnpm 10.30.1. Complete the root
-[Local Development guide](../../README.md#local-development) for dependencies,
-local D1 migrations and synthetic seed. **All commands here run from the repository root.**
+[Local Development guide](../../README.md#local-development) for dependency installation
+and local API configuration. **All commands here run from the repository root.**
+Follow the sequence below before starting the Workers; Web/OIDC setup is optional.
 
 ### 1. Create a separate test bot
 
@@ -29,6 +30,83 @@ Edit the ignored file privately:
 Do not paste secrets into shell commands, URLs, logs, screenshots or Git. Do not
 source the file with shell tracing enabled. The registration example below reads
 it directly without printing credentials. Restart Bot after changing the file.
+
+Before starting services, apply the root guide's
+[local D1 migrations and synthetic seed](../../README.md#3-prepare-local-d1)
+if you have not already done so. Then identify and bootstrap your local Admin below.
+
+### Local accounts
+
+Seed data includes Sales Force records `sf-01`, `sf-02`, `sf-03`, not approved
+Telegram accounts.
+
+**Find your own Telegram User ID before bootstrapping.** With the new test bot's
+webhook still unset and no Bot Worker or other polling client running, open its
+private chat from the Telegram account you intend to make Admin. Send a fresh,
+unique plain-text marker, e.g. `local-admin-` plus random text (not `/register`
+and not a forwarded message). Replace the public marker argument below with that
+exact text, then run this one-time read of your test bot's pending messages:
+
+```sh
+node --input-type=module - YOUR-EXACT-MARKER <<'NODE'
+import { readFileSync } from 'node:fs';
+import { parseEnv } from 'node:util';
+try {
+  const { TELEGRAM_BOT_TOKEN: token } = parseEnv(readFileSync('apps/bot/.dev.vars', 'utf8'));
+  const marker = process.argv[2];
+  if (!token || !marker || marker === 'YOUR-EXACT-MARKER') throw new Error();
+  const response = await fetch(`https://api.telegram.org/bot${token}/getUpdates`, {
+    method: 'POST', redirect: 'error',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ allowed_updates: ['message'], timeout: 0 }),
+  });
+  const result = await response.json();
+  if (!response.ok || !result.ok || !Array.isArray(result.result)) throw new Error();
+  const matches = result.result.map(update => update.message).filter(message =>
+    message?.chat?.type === 'private' && message.text === marker &&
+    !message.forward_origin && message.from?.is_bot === false &&
+    message.chat.id === message.from.id);
+  if (matches.length !== 1 || !Number.isSafeInteger(matches[0].from.id) ||
+      matches[0].from.id <= 0) throw new Error();
+  console.log(`Telegram User ID: ${matches[0].from.id}`);
+} catch {
+  console.error('ID lookup failed; check the test token, unset webhook and fresh marker privately.');
+  process.exitCode = 1;
+}
+NODE
+```
+
+This verifies the sender of the exact message you just sent through your own
+Telegram session; it needs neither a registered application account nor an Admin.
+If no unique match is found, send a new marker and retry; do not guess from other
+updates. Keep the ID/output private and never print the token or raw API response.
+Do not use arbitrary third-party ID lookup bots, usernames or display names as
+identity evidence. Stop polling before registering the webhook later.
+
+- **Telegram User ID:** the human sender's `message.from.id` above. Its positive
+  decimal text belongs in **`<telegram-bot-user-id>`** in the bootstrap SQL.
+- **Bot ID:** identifies the bot itself (e.g. `getMe`'s `id`), not your account;
+  never put it in that placeholder.
+- **BotFather OIDC Client ID:** configures Web login as `TELEGRAM_CLIENT_ID`;
+  it is not the Admin's Telegram User ID, even if it resembles a Bot ID.
+- **`<internal-user-id>`:** a fresh application UUID, not any Telegram ID.
+
+For the first local Admin, follow the exact
+[controlled bootstrap procedure](../../packages/db/IDENTITY.md#controlled-first-admin-provisioning)
+using your verified test-account **Bot API user ID**, a fresh internal UUID and a
+private SQL file outside Git. Bootstrap before that Admin account uses `/register`;
+do not use bootstrap to promote an existing account. Apply the SQL to the API
+sandbox (not the database package's separate sandbox):
+
+```sh
+pnpm --filter @sales-visit/api exec wrangler d1 execute DB --local --file /absolute/private/bootstrap.sql
+pnpm --filter @sales-visit/api exec wrangler d1 execute DB --local --command 'PRAGMA foreign_key_check;'
+```
+
+Verify the intended active Admin, Telegram ID, null SF link, one active Admin
+and no foreign-key errors, as required by the linked procedure. Keep personal
+IDs and bootstrap output private. Later accounts use `/register` and Admin approval;
+no development permission bypass is needed.
 
 ### 2. Run API and Bot
 
@@ -51,26 +129,6 @@ curl --fail http://localhost:8788/health
 ```
 
 Both return `status: "ok"`; this checks liveness only, not the binding or D1.
-
-### Local accounts
-
-Seed data includes Sales Force records `sf-01`, `sf-02`, `sf-03`, not approved
-Telegram accounts. For the first local Admin, follow the exact
-[controlled bootstrap procedure](../../packages/db/IDENTITY.md#controlled-first-admin-provisioning)
-using your verified test-account **Bot API user ID**, a fresh internal UUID and a
-private SQL file outside Git. Bootstrap before that Admin account uses `/register`;
-do not use bootstrap to promote an existing account. Apply the SQL to the API
-sandbox (not the database package's separate sandbox):
-
-```sh
-pnpm --filter @sales-visit/api exec wrangler d1 execute DB --local --file /absolute/private/bootstrap.sql
-pnpm --filter @sales-visit/api exec wrangler d1 execute DB --local --command 'PRAGMA foreign_key_check;'
-```
-
-Verify the intended active Admin, Telegram ID, null SF link, one active Admin
-and no foreign-key errors, as required by the linked procedure. Keep personal
-IDs and bootstrap output private. Later accounts use `/register` and Admin approval;
-no development permission bypass is needed.
 
 ### 3. Expose Bot with a Quick Tunnel
 

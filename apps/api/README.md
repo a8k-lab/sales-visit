@@ -12,6 +12,11 @@ for Node/pnpm, dependencies and local migrations/seed. From the repository root:
 ```sh
 cp apps/api/.dev.vars.example apps/api/.dev.vars # first setup only
 pnpm dev:api
+```
+
+Keep that terminal running; check health from a second terminal:
+
+```sh
 curl --fail http://localhost:8787/health
 ```
 
