@@ -27,13 +27,18 @@ type. Only the API should access persistence; Web and Bot use the shared API.
 
 ## Schema decisions
 
-- Fifteen application tables through migration 0008: `sales_force`, `outlets`,
+- Sixteen application tables through migration 0009: `sales_force`, `outlets`,
   `products`, `visits`, `stock_reports`, `stock_report_items`, `users`,
   `telegram_identities`, `access_audit`, `visit_schedules`, `telegram_visit_drafts`,
   `web_login_challenges`, `web_sessions`, `sales_force_supervisors`, and
-  `supervisor_assignment_audit`. Sales Force staff and Outlet business records
+  `supervisor_assignment_audit`, and `sales_force_master_audit`. Sales Force staff and Outlet business records
   are not application accounts. See [identity invariants](IDENTITY.md) and the
   [assignment model, migration prerequisites and rollout](../../docs/supervisor-assignments.md).
+- Additive migration `0009_certain_supreme_intelligence.sql` records atomic Admin
+  master create/rename/delete events with previous/new names. Actor references
+  remain restrictive; the SF business ID intentionally has no FK so allowed
+  deletion preserves audit history. Existing reference FKs still block deletion.
+  See [A2 decisions, migration and rollout](../../docs/sales-force-management.md).
 - Additive migration `0008_demonic_princess_powerful.sql` adds current Supervisor
   responsibility (one optional Supervisor per Sales Force) and restricted
   assignment-change history. Existing records remain untouched and initially

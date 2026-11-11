@@ -1,5 +1,5 @@
 import type { Account } from "@sales-visit/contracts";
-import { useRouter } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -345,7 +345,14 @@ export function AccountAction({
                   !sfOptions.length && (
                     <p>
                       Belum ada Sales Force yang tersedia. Tambahkan master
-                      Sales Force terlebih dahulu.
+                      Sales Force terlebih dahulu.{" "}
+                      <Link
+                        to="/master/sales-force"
+                        search={{ q: "", after: "" }}
+                        className="underline"
+                      >
+                        Buka Kelola Sales Force
+                      </Link>
                     </p>
                   )
                 )}

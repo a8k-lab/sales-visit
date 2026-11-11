@@ -26,9 +26,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAccount } from "@/features/auth/session";
 import { StockReportCard } from "@/features/stock-reports/components/stock-report-card";
 
 export function DirectoryPage() {
+  const account = useAccount();
   const data = useLoaderData({ from: "/dashboard/directory" });
   const search = useSearch({ from: "/dashboard/directory" });
   const navigate = useNavigate({ from: "/directory" });
@@ -78,6 +80,17 @@ export function DirectoryPage() {
         >
           Outlet
         </Button>
+        {account?.role === "admin" && search.kind === "sales-force" && (
+          <Button
+            nativeButton={false}
+            variant="outline"
+            render={
+              <Link to="/master/sales-force" search={{ q: "", after: "" }} />
+            }
+          >
+            Kelola Sales Force
+          </Button>
+        )}
         <OperationalRefresh />
       </nav>
       <Card>

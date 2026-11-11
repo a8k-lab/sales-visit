@@ -31,6 +31,11 @@ const navigation = [
   { title: "Data referensi", to: "/directory", icon: DatabaseIcon },
   { title: "Pengguna & Akses", to: "/users", icon: DatabaseIcon },
   {
+    title: "Kelola Sales Force",
+    to: "/master/sales-force",
+    icon: DatabaseIcon,
+  },
+  {
     title: "Penugasan Supervisor",
     to: "/supervisor-assignments",
     icon: DatabaseIcon,
@@ -84,7 +89,11 @@ export function AppSidebar() {
                     (account?.role === "sales_force"
                       ? item.to === "/workspace"
                       : item.to !== "/workspace") &&
-                    (!["/supervisor-assignments", "/users"].includes(item.to) ||
+                    (![
+                      "/supervisor-assignments",
+                      "/users",
+                      "/master/sales-force",
+                    ].includes(item.to) ||
                       account?.role === "admin")
                 )
                 .map(({ title, to, icon: Icon }) => (

@@ -88,19 +88,21 @@ export function DashboardLayout() {
                     </BreadcrumbLink>
                   ) : (
                     <BreadcrumbPage>
-                      {pathname === "/users"
-                        ? "Pengguna & Akses"
-                        : isAssignment
-                          ? "Penugasan Supervisor"
-                          : pathname === "/overview"
-                            ? "Ringkasan"
-                            : pathname === "/workspace"
-                              ? "Ruang kerja"
-                              : pathname === "/directory"
-                                ? "Data referensi"
-                                : isOutlet
-                                  ? "Outlet"
-                                  : "Kunjungan"}
+                      {pathname === "/master/sales-force"
+                        ? "Kelola Sales Force"
+                        : pathname === "/users"
+                          ? "Pengguna & Akses"
+                          : isAssignment
+                            ? "Penugasan Supervisor"
+                            : pathname === "/overview"
+                              ? "Ringkasan"
+                              : pathname === "/workspace"
+                                ? "Ruang kerja"
+                                : pathname === "/directory"
+                                  ? "Data referensi"
+                                  : isOutlet
+                                    ? "Outlet"
+                                    : "Kunjungan"}
                     </BreadcrumbPage>
                   )}
                 </BreadcrumbItem>

@@ -44,6 +44,11 @@ import { OutletDetailPage } from "@/features/outlets/pages/outlet-detail-page";
 import { OutletsPage } from "@/features/outlets/pages/outlets-page";
 import { loadOverview } from "@/features/overview/lib/overview-data";
 import { OverviewPage } from "@/features/overview/pages/overview-page";
+import {
+  loadMaster,
+  masterSearch,
+} from "@/features/sales-force-management/data";
+import { SalesForceManagementPage } from "@/features/sales-force-management/page";
 import { AssignmentsPage } from "@/features/supervisor-assignments/pages/assignments-page";
 import { loadUsers, userSearch } from "@/features/user-management/data";
 import { UserManagementPage } from "@/features/user-management/page";
@@ -217,6 +222,21 @@ const usersRoute = createRoute({
   component: UserManagementPage,
 });
 
+const salesForceMasterRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: "/master/sales-force",
+  beforeLoad: () => {
+    if (currentAccount()?.role !== "admin")
+      throw redirect({ to: "/overview", replace: true });
+  },
+  validateSearch: masterSearch,
+  loaderDeps: ({ search }) => search,
+  loader: ({ deps }) => loadMaster(deps),
+  pendingComponent: OperationalPending,
+  errorComponent: OperationalError,
+  component: SalesForceManagementPage,
+});
+
 const assignmentsRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: "/supervisor-assignments",
@@ -267,6 +287,7 @@ export const router = createRouter({
       overviewRoute,
       assignmentsRoute,
       usersRoute,
+      salesForceMasterRoute,
       visitsRoute,
       newVisitRoute,
       detailRoute,
