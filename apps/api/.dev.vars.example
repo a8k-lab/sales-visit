@@ -1,0 +1,7 @@
+# Local Wrangler overrides only. Copy to apps/api/.dev.vars; never commit that file.
+# Leave the production vars in wrangler.jsonc unchanged.
+WEB_ORIGINS="http://localhost:5173"
+
+# Optional for Web login: your separate test bot's BotFather OIDC Client ID.
+# Empty disables local Web login; Bot webhook testing does not need OIDC.
+TELEGRAM_CLIENT_ID=""
