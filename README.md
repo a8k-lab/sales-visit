@@ -1,170 +1,136 @@
 # Sales Visit
 
-**Sales Visit** is a university **Computing Project** focused on digitizing field-sales visits and outlet reporting for a Telkomsel product-distribution workflow associated with partner **Citra Indah**.
+Sales Visit records field-sales Visits and Outlet Stock Reports for a Telkomsel
+distribution workflow with partner Citra Indah. The Web Dashboard provides
+role-based monitoring and administration; the Telegram Bot supports guided Visit
+submission. Web report submission is not yet available.
 
-> **Project status:** Admin/Supervisor Web monitoring now reads actual API/D1 Visits, Stock Reports and master catalogs using Telegram OIDC sessions and current Supervisor assignment scope. Telegram guided Visit reporting persists through the API. Web submission is **not enabled**; the local-only form/store have been disabled/removed. A dedicated Sales Force Web workspace and D1-backed submission remain the next milestone. See [live dashboard contracts, permissions, KPI definitions and API-first rollout](docs/live-dashboard.md). Local checks do not establish deployed versions or real Telegram/browser verification; releases remain operator-controlled.
+## Tech stack and workspace
 
-## Background
+pnpm workspaces and TypeScript, with independently deployed applications:
 
-In the current workflow described during team brainstorming, Sales Force staff visit outlets, record information in a physical notebook, and hand those records to an Admin for re-entry and reporting. The manual handoff creates duplicated work and makes it harder to review field activity promptly.
+| Path                 | Purpose                                           | Stack                                                 |
+| -------------------- | ------------------------------------------------- | ----------------------------------------------------- |
+| `apps/api`           | Shared backend; owns database access              | Hono, Cloudflare Workers, D1                          |
+| `apps/bot`           | Telegram interface; calls API via Service Binding | grammY, Cloudflare Workers                            |
+| `apps/web`           | Dashboard                                         | React, Vite, TanStack Router, Tailwind CSS, shadcn/ui |
+| `packages/contracts` | Shared types and validation                       | TypeScript, Zod                                       |
+| `packages/db`        | Schema and migrations                             | Drizzle ORM, D1                                       |
+| `docs`               | Feature guides, references and ADRs               | Markdown                                              |
 
-Sales Visit aims to provide a single place to record visits, view outlet information, and monitor reports—without turning the project into a full POS system or replacing DigiPOS.
+## Local Development
 
-## Goals
+All commands below run from the repository root. API, migrations, seed and Bot
+use **local D1** in `apps/api/.wrangler/state`. No Cloudflare account or deployment
+is required. Use synthetic data only; do not use remote D1, production bot tokens
+or production webhooks.
 
-- Reduce handwritten reporting and duplicate data entry.
-- Let **Sales Force submit reports using either Telegram Bot or Web Dashboard**, based on their preference.
-- Give Admin and Supervisor role-appropriate visibility into visits and outlet activity.
-- Maintain consistent data and business rules regardless of the submission channel.
-- Keep the initial delivery manageable while allowing the domain model to evolve following partner feedback.
+### 1. Install dependencies
 
-## Users and scope
+Install **Node.js 24.x** and **pnpm 10.30.1** (the version pinned in
+`package.json`). With Node 24 active, install pnpm if needed:
 
-| Actor                     | Intended capabilities                                                                                             | Current scope          |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| **Sales Force**           | Select an outlet, record a visit, report stock observations, and review their reports through **Web or Telegram** | MVP direction          |
-| **Admin**                 | Maintain sales, outlet, and product records; inspect reports                                                      | MVP direction          |
-| **Supervisor / Manager**  | Monitor visits and evaluate reported activity                                                                     | MVP direction          |
-| **Outlet representative** | Potentially submit independent stock reports and restock requests                                                 | **Proposed, deferred** |
+```sh
+npm install --global pnpm@10.30.1
+node --version  # v24.x
+pnpm --version # 10.30.1
 
-An **Outlet** is always modeled as an operational entity, even if no outlet representative ever receives an application account.
-
-### Core reporting model
-
-A **Visit** represents Sales Force field activity. A **Stock Report** represents quantities reported for an Outlet at a given time. They are separate concepts: a Stock Report may be linked to a Visit, but it does not require one. This permits future independent outlet reporting without misclassifying stock submissions as Sales Force visits.
-
-Web and Telegram are two interfaces for the **same business operations**, not separate databases or conflicting reporting processes. Both are intended to use a shared API and validation logic once integration is implemented.
-
-See [CONTEXT.md](CONTEXT.md) for precise terminology and [ADR-0003](docs/adr/0003-separate-visit-and-stock-report.md) for the modeling decision.
-
-## Planned functionality
-
-**Operational Web monitoring:**
-
-- Existing responsive shadcn/ui shell and role-appropriate navigation.
-- D1-backed 14-day WIB overview, scoped aggregates and recent Visits.
-- Server-filtered/paginated Visit list and authenticated Visit detail.
-- Actual Outlet/reference catalogs and independently scoped Stock Report history.
-- Explicit unavailable Web submission route; Sales Force workspace notice.
-
-**Implemented local backend:** D1-backed reads for Sales Force, Outlets, Products,
-Visits (including linked Stock Reports), and Stock Reports; atomic Visit/Stock
-Report creation with shared validation, trusted-identity boundaries and retry
-protection; plus local migrations and idempotent synthetic seeding. Default
-runtime report writes are unauthorized. Telegram `/register`, `/me`, `/pending`,
-`/approve`, and `/reject` use API-owned identity operations. See
-[API documentation](apps/api/README.md) and the [Bot sandbox runbook](apps/bot/README.md).
-
-**Next milestone:** dedicated Sales Force workspace and Web report-write authorization backed by D1, using the same domain rules as Telegram. Telegram guided reporting remains available through its existing private RPC/wizard.
-
-**Not part of the current MVP commitment:** Outlet login/self-reporting, advanced product recommendations, comprehensive sales-order and payment flows, or replacement of DigiPOS. These require business validation and an explicit scope decision.
-
-## Proposed technology stack
-
-| Layer             | Choice                                                                  |
-| ----------------- | ----------------------------------------------------------------------- |
-| Workspace         | pnpm workspaces + TypeScript                                            |
-| Web               | React, Vite, TanStack Router, Tailwind CSS, shadcn/ui                   |
-| Web data/forms    | TanStack Query / TanStack Form where useful                             |
-| API               | Hono on Cloudflare Workers                                              |
-| Telegram Bot      | grammY with Telegram webhooks on Cloudflare Workers                     |
-| Persistence       | Cloudflare D1 with Drizzle ORM                                          |
-| Shared contracts  | TypeScript + Zod                                                        |
-| Developer tooling | Oxlint, Oxfmt, Lefthook                                                 |
-| Hosting direction | Cloudflare Free-tier-first, subject to quota and operational validation |
-
-The three apps are intended to be **deployed independently** even though they share a monorepo. See the [ADRs](docs/adr/) for the rationale and trade-offs.
-
-## Target repository structure
-
-The workspace contains the following apps and shared packages:
-
-```text
-sales-visit/
-├── README.md
-├── CONTEXT.md
-├── apps/
-│   ├── web/             # React dashboard
-│   ├── api/             # Shared backend
-│   └── bot/             # Telegram interface
-├── packages/
-│   ├── contracts/       # Shared types and runtime schemas
-│   └── db/              # Database schema and migrations
-├── docs/
-│   └── adr/             # Architecture Decision Records
-├── pnpm-workspace.yaml
-└── package.json
-```
-
-## Local development
-
-Use **Node.js 24.x** and **pnpm 10.30.1**, as declared in the root `package.json`.
-
-From the repository root:
-
-```bash
+git clone https://github.com/a8k-lab/sales-visit.git
+cd sales-visit
 pnpm install
 ```
 
+### 2. Configure local applications
+
 ```sh
-pnpm dev:web             # API-backed dashboard; configure VITE_API_URL and OIDC
-pnpm db:migrate:local    # API-local D1 only
-pnpm db:seed:local       # Idempotent synthetic seed
-pnpm dev:api             # http://localhost:8787
+cp apps/api/.dev.vars.example apps/api/.dev.vars
+cp apps/web/.env.example apps/web/.env
+cp apps/bot/.dev.vars.example apps/bot/.dev.vars
 ```
 
-See [Web instructions](apps/web/README.md) and [API instructions](apps/api/README.md)
-for details. For registration/approval, follow the [Bot instructions](apps/bot/README.md)
-for local Admin bootstrap, ignored test secrets, and running both Workers.
-No remote Cloudflare resources are needed for local development.
+Skip the Bot copy if you only need API/Web. Do not overwrite existing local
+configuration. Edit these files privately; actual env files are ignored by Git.
 
-Operational scripts use native Node.js 24 ES modules (no additional runtime).
-`pnpm test:deployment` runs all deployment-tool tests using `node:test`, without
-contacting Telegram or Cloudflare. The private-terminal test-bot helper is
-`scripts/telegram-test-bot.mjs` (`pnpm telegram:test-bot --help`); follow the
-[deployment runbook](docs/deployment.md) before any remote operation.
+- **API:** the example allows only `http://localhost:5173` for local CORS.
+  This overrides local vars without editing production `wrangler.jsonc`.
+- **Web:** `VITE_API_URL=http://localhost:8787`. All `VITE_*` values are public;
+  never put secrets there.
+- **Bot:** create a separate BotFather test bot and fill in its token and a fresh
+  webhook secret. Follow the [Bot setup](apps/bot/README.md) for the tunnel and
+  safe webhook registration.
 
-## Documentation and design references
+The Web login page can run locally, but protected data requires real Telegram
+OIDC, an approved local account, and the test Client ID in the API vars. There is
+no demo login or authentication bypass. See [Web setup](apps/web/README.md) for
+login prerequisites and local rate-limit limitations. Bot webhook testing does
+not require Web login or OIDC configuration.
 
-- **[Sales Force master management (A2)](docs/sales-force-management.md):** Kelola Sales Force, immutable business IDs, guarded deletion, dedicated audit and migration → API → Web rollout.
-- **[Admin user management (A1)](docs/admin-user-management.md):** Pengguna & Akses, account lifecycle, API contracts, security and operator-controlled rollout.
-- **[Live Operational Dashboard](docs/live-dashboard.md):** contracts, permissions, KPI window, verification and manual API-first rollout.
-- **[CONTEXT.md](CONTEXT.md):** shared domain glossary and naming conventions.
-- **[Architecture Decision Records](docs/adr/):** decisions and alternatives behind the proposed system.
-- **[GitHub Actions CI/CD](docs/ci-cd.md):** change-aware CI, existing-Worker release guards, operator setup and manual migration policy. Automatic CD is OFF; deployed API/Bot versions are unverified.
-- **[API + Bot test deployment](docs/deployment.md):** historical bootstrap and separate operator-only Telegram/recovery procedures; do not replay applied migrations.
-- **[Sales Visit FigJam](https://www.figma.com/board/xYjjlXsulf3fGKFFyNhd0W/Sales-Visit?node-id=0-1):** team brainstorming and research notes.
-- **[As-Is business flow](https://www.figma.com/board/xYjjlXsulf3fGKFFyNhd0W/Sales-Visit?node-id=104-115):** existing handwritten visit-report workflow.
-- **[Initial To-Be business flow](https://www.figma.com/board/xYjjlXsulf3fGKFFyNhd0W/Sales-Visit?node-id=105-147):** **outdated draft** drawn before confirming that Sales Force can use **both** Web and Telegram. Must be revised before treating it as the agreed flow.
+### 3. Prepare local D1
 
-### Architecture Decision Records
+```sh
+pnpm db:migrate:local
+pnpm db:seed:local
+```
 
-1. [ADR-0001 — pnpm monorepo and independent deployments](docs/adr/0001-pnpm-monorepo.md)
-2. [ADR-0002 — Dual-channel Sales Force reporting](docs/adr/0002-dual-channel-sales-input.md)
-3. [ADR-0003 — Separate Visit and Stock Report](docs/adr/0003-separate-visit-and-stock-report.md)
-4. [ADR-0004 — Optional Outlet self-reporting](docs/adr/0004-optional-outlet-self-reporting.md)
-5. [ADR-0005 — Cloudflare-first deployment](docs/adr/0005-cloudflare-first-deployment.md)
-6. [ADR-0006 — Static-first dashboard](docs/adr/0006-static-first-dashboard.md)
+The seed is synthetic and repeatable; it does not reset existing data or create
+application accounts. For local Admin bootstrap and Sales Force approval, see
+[Bot account setup](apps/bot/README.md#local-accounts).
 
-## Open business questions
+### 4. Start each application
 
-The team must validate these before formalizing related data rules or KPI calculations:
+Use a separate terminal for each command, from the repository root:
 
-- What precisely do **stock**, **sales in / selling**, and **sales out / sellout** mean in the partner's existing records?
-- How should **total belanja** and **outlet aktif** be determined?
-- Must stock be reported on every Sales Force Visit?
-- Does the partner actually want Outlet self-reporting and, if so, how should it be validated?
-- Which recommendation, order, and payment features are necessary within the agreed delivery scope?
+```sh
+pnpm dev:api # http://localhost:8787
+```
 
-Until confirmed, avoid presenting invented business calculations as actual operational metrics.
+```sh
+pnpm dev:web # http://localhost:5173
+```
 
-## Near-term milestones
+```sh
+pnpm dev:bot # http://localhost:8788; requires Bot secrets
+```
 
-The team's FigJam notes list a **static dashboard target of 3 November 2026** and a **planned partner discussion on 4 November 2026**. These dates reflect the working plan, not completed deliverables.
+Start API before Bot and wait for Wrangler's `IDENTITY` Service Binding to show
+as connected. Web and Bot can be run independently of each other; both use API.
+Keep port 5173 free so Vite's origin matches the local CORS configuration.
 
-The Web operational reads, API/D1 operations and Telegram reporting are implemented
-as independent units. Web submission remains deferred; monitoring never mixes mock
-or browser-local Visits with D1 data. Follow the [live dashboard rollout](docs/live-dashboard.md)
-and [Web authentication setup](docs/web-auth.md). Existing Workers must be reused.
-The operator confirms remote D1 migration 0004 is applied; deployed API/Bot versions
-remain unverified until inspected. See the [release runbook](docs/ci-cd.md).
+### 5. Verify
+
+```sh
+curl --fail http://localhost:8787/health
+curl --fail http://localhost:8788/health # if Bot is running
+curl --fail -o /dev/null http://localhost:5173/ # if Web is running
+```
+
+Health endpoints return `status: "ok"`; they check liveness, not D1 or Service
+Binding connectivity. Open `http://localhost:5173` for Web. API business endpoints
+return 401 without a valid Web session. To verify the Bot-to-D1 path, follow the
+[Telegram message test](apps/bot/README.md#test-messages-and-clean-up).
+
+## Common commands
+
+| Command                                     | Purpose                                             |
+| ------------------------------------------- | --------------------------------------------------- |
+| `pnpm typecheck`                            | Generate Worker types and check all workspaces      |
+| `pnpm check`                                | Lint and formatting checks                          |
+| `pnpm --filter @sales-visit/api test`       | API/Bot integration tests with disposable local D1  |
+| `pnpm --filter @sales-visit/db test`        | Database tests                                      |
+| `pnpm --filter @sales-visit/contracts test` | Shared validation tests                             |
+| `pnpm test:deployment`                      | Offline deployment-tool tests; no remote operations |
+| `pnpm build:web`                            | Build the dashboard                                 |
+| `pnpm preview:web`                          | Build and preview locally with Wrangler             |
+
+## Documentation
+
+- Application setup: [API](apps/api/README.md), [Bot](apps/bot/README.md), [Web](apps/web/README.md).
+- Domain language and open business questions: [CONTEXT.md](CONTEXT.md).
+- Architecture decisions: [ADRs](docs/adr/).
+- Detailed references: [API](docs/api-reference.md), [Bot commands and security](docs/telegram-bot-reference.md).
+- Feature guides: [dashboard](docs/live-dashboard.md), [Web authentication](docs/web-auth.md),
+  [user management](docs/admin-user-management.md), [Sales Force management](docs/sales-force-management.md),
+  [Supervisor assignments](docs/supervisor-assignments.md), [Visit wizard](docs/design/telegram-visit-wizard.md).
+- Operator-only releases: [CI/CD](docs/ci-cd.md), [deployment runbook](docs/deployment.md).
+- Research and initial workflow sketches: [team FigJam](https://www.figma.com/board/xYjjlXsulf3fGKFFyNhd0W/Sales-Visit?node-id=0-1)
+  (historical sketches are not current requirements).
