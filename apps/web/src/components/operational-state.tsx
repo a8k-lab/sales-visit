@@ -49,7 +49,7 @@ export function OperationalRefresh() {
         if (inFlight.current) return;
         inFlight.current = true;
         setRefreshing(true);
-        void router.invalidate().finally(() => {
+        void router.invalidate({ sync: true }).finally(() => {
           inFlight.current = false;
           setRefreshing(false);
         });
