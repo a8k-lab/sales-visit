@@ -54,8 +54,10 @@ const directoryTitles = {
 export function DashboardBreadcrumbs() {
   const location = useRouterState({ select: (state) => state.location });
   const pathname = location.pathname.replace(/\/+$/, "");
-  const page = pages.find((page) =>
-    "detail" in page ? pathname.startsWith(page.path) : pathname === page.path
+  const page = pages.find((entry) =>
+    "detail" in entry
+      ? pathname.startsWith(entry.path)
+      : pathname === entry.path
   );
   const directoryKind = location.search.kind;
   const directoryTitle = directoryKind && directoryTitles[directoryKind];

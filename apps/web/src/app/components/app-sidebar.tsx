@@ -124,6 +124,7 @@ export function AppSidebar() {
             <SidebarMenuButton
               size="lg"
               tooltip="Sales Visit"
+              className="group-data-[collapsible=icon]:justify-center"
               render={
                 <Link
                   to={
@@ -134,7 +135,9 @@ export function AppSidebar() {
               onClick={() => setOpenMobile(false)}
             >
               <MapPinIcon aria-hidden="true" />
-              <span className="truncate font-semibold">Sales Visit</span>
+              <span className="truncate font-semibold group-data-[collapsible=icon]:hidden">
+                Sales Visit
+              </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -184,11 +187,17 @@ export function AppSidebar() {
           <SidebarMenu>
             <SidebarMenuItem>
               <DialogTrigger
-                render={<SidebarMenuButton size="lg" tooltip="Akun & keluar" />}
+                render={
+                  <SidebarMenuButton
+                    size="lg"
+                    tooltip="Akun & keluar"
+                    className="group-data-[collapsible=icon]:justify-center"
+                  />
+                }
                 aria-label="Akun & keluar"
               >
                 <UserGearIcon aria-hidden="true" />
-                <span className="grid min-w-0 text-left">
+                <span className="grid min-w-0 text-left group-data-[collapsible=icon]:hidden">
                   <span className="truncate">{account?.name}</span>
                   <span className="text-muted-foreground truncate text-xs">
                     {account && roleLabel(account.role)}
@@ -212,7 +221,7 @@ export function AppSidebar() {
                 setLoggingOut(true);
                 setError("");
                 void logout()
-                  .then(() => locationReplace())
+                  .then(() => window.location.replace("/login"))
                   .catch(() => {
                     setLoggingOut(false);
                     setError("Gagal keluar. Periksa koneksi lalu coba lagi.");
@@ -228,8 +237,4 @@ export function AppSidebar() {
       <SidebarRail />
     </Sidebar>
   );
-}
-
-function locationReplace() {
-  window.location.replace("/login");
 }
