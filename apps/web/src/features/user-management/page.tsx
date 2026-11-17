@@ -49,10 +49,11 @@ function UserTable({
     return (
       <Empty>
         <EmptyHeader>
-          <EmptyTitle>Tidak ada pengguna</EmptyTitle>
+          <EmptyTitle>Tidak ada pengguna pada daftar ini</EmptyTitle>
           <EmptyDescription>
-            Registrasi dilakukan sendiri melalui Telegram Bot. Akun baru akan
-            tampil setelah pengguna mendaftar.
+            Periksa filter status atau halaman daftar. Anggota tim mendaftar
+            sendiri melalui Telegram Bot; setelah itu Admin dapat menyetujui
+            akun dan menentukan perannya di sini.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
