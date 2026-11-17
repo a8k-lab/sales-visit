@@ -54,6 +54,22 @@ operation recovery and PR #20 master mutation recovery remain unchanged.
   empty states explain appropriate next actions without introducing CRUD destinations.
 - Operational zeros remain genuine API data; no mock fallback was introduced.
 
+### Remaining assignment timeout uncertainty
+
+The fresh-read gate is a best-effort UI safeguard, not a terminal operation result.
+The client request can time out while its server-side write is still running. A
+successful reload may observe the old assignment **before** that write commits;
+the delayed write can then change the assignment after reload, or race with a later
+manual change. Neither the timeout nor a single fresh read proves rollback or
+completion. The gate is page-local and does not survive leaving/reloading the page.
+
+Do not blindly repeat an uncertain save. Recheck the assignment and coordinate with
+other Admins before making another change; this reduces confusion but cannot fence
+a delayed write. There is no guaranteed safe waiting interval or terminal receipt
+in this assignment flow. Stronger guarantees would require a separately scoped
+backend completion/fencing protocol. A3 does not add one and does not extend the
+PR #19/#20 operation protocols to assignments.
+
 ## Executed verification
 
 All passed:
@@ -71,6 +87,24 @@ All passed:
 Build limitation: Vite reports the >500 kB chunk advisory. No bundle architecture or
 additional test framework was introduced for this milestone.
 
+### PR #21 review follow-up verification
+
+Verified all three review findings against the implementation and installed Router
+sources. Sidebar and breadcrumbs now read `/dashboard/directory`'s validated search
+via `useSearch` (optional outside that route), rather than raw URL search. Its existing
+allowlist defaults unsupported values to `sales-force` before any title lookup or
+active-state comparison, including prototype-property names. Manual refresh now uses
+`router.invalidate({ sync: true })`: the installed Router passes this option into
+loading and disables stale-data background reloads, so `finally` releases the guards
+only after loaders settle.
+
+Reran Web typecheck, repository lint, format check, Web production build, `pnpm check`,
+and `git diff --check` after these fixes; all passed. Active LSP checks on the three
+changed TSX files found no code errors (one informational Indonesian spelling flag).
+The Vite chunk advisory remains. The 208-test result above is from the initial A3
+implementation; those suites were not rerun for this minimal follow-up. Browser,
+real Telegram OIDC, and delayed-write race checks remain unexecuted.
+
 ## Intended browser checks — NOT EXECUTED
 
 Use approved local/test accounts and disposable data. Do not create synthetic production
@@ -81,12 +115,16 @@ records. No screenshots or browser/OIDC success claims are available from this w
 - [ ] Sales Force: only Ruang kerja; monitoring/Admin routes retain existing boundaries.
 - [ ] Expanded/collapsed sidebar, icon tooltips, narrow mobile Sheet, account dialog/logout,
       long identity text, and closing the mobile menu after navigation.
-- [ ] Directory kinds highlight exactly one sidebar destination; reload/deep link works.
+- [ ] `/directory` highlights Sales Force by default. Explicit `products` and
+      `stock-reports` select their own titles/navigation. Unsupported kinds, including
+      `__proto__`, `constructor`, and `toString`, fall back to Sales Force without
+      invalid React children; reload/deep link works.
 - [ ] Breadcrumb detail parents work, visit filters survive return navigation, group labels
       are not clickable, long content truncates without horizontal header overflow.
 - [ ] Network panel: leave overview open >60 seconds and blur/refocus; no global polling.
-- [ ] Manual refresh: pending label announced, size stable, repeated click ignored; filters
-      and unrelated controls remain usable. Failed route load exposes explicit retry.
+- [ ] Manual refresh: pending label announced, size stable, repeated click ignored until
+      slow route loaders finish (including stale-data reloads); filters and unrelated
+      controls remain usable. Failed route load exposes explicit retry.
 - [ ] Existing account/master mutations and their uncertain-outcome recovery still refresh
       affected data without relying on polling.
 - [ ] Telegram: normal login success and validated return URL; preparation failure, idle
@@ -96,7 +134,9 @@ records. No screenshots or browser/OIDC success claims are available from this w
       old/new names; cancel/Escape restores focus without saving; confirm saves once.
 - [ ] Assignment/reassignment/unassignment, inactive existing Supervisor, loading feedback,
       API-returned row, and success message. Simulate a dropped save response and verify
-      no repeat write is offered before successful explicit reload.
+      no repeat write is offered before successful explicit reload. Separately check a
+      write delayed beyond the reload: the reload must not be treated as proof that
+      the earlier write is terminal; the remaining race is documented above.
 - [ ] Empty master list and no active Supervisors provide working links; filtered account
       and reference empty states are truthful. Zero-Visit Admin guide does not show completed
       steps; Supervisor does not see it; populated overview keeps actual data.
