@@ -1,5 +1,5 @@
 import { MoonIcon, SunIcon } from "@phosphor-icons/react";
-import { Outlet, useRouter } from "@tanstack/react-router";
+import { Outlet } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { AppSidebar } from "@/app/components/app-sidebar";
@@ -17,22 +17,9 @@ import { useAccount } from "@/features/auth/session";
 
 export function DashboardLayout() {
   const account = useAccount();
-  const router = useRouter();
   useEffect(() => {
     if (!account) location.replace("/login");
   }, [account]);
-  useEffect(() => {
-    const check = () => {
-      if (document.visibilityState !== "visible") return;
-      void router.invalidate();
-    };
-    const timer = window.setInterval(check, 60000);
-    window.addEventListener("focus", check);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener("focus", check);
-    };
-  }, [router]);
   const { theme, setTheme } = useTheme();
   return (
     <TooltipProvider>
@@ -69,9 +56,7 @@ export function DashboardLayout() {
             <Outlet />
           </div>
           <footer className="text-muted-foreground px-4 py-4 text-xs md:px-8">
-            Sales Visit · Data sesuai hak akses · Waktu dalam WIB. Diperbarui
-            setiap 60 detik saat halaman aktif, saat kembali ke jendela, atau
-            melalui Perbarui data.
+            Sales Visit · Data sesuai hak akses · Waktu dalam WIB.
           </footer>
         </SidebarInset>
       </SidebarProvider>

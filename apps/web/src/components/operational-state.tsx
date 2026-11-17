@@ -1,4 +1,6 @@
+import { ArrowClockwiseIcon } from "@phosphor-icons/react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -32,14 +34,29 @@ export function OperationalError() {
 }
 export function OperationalRefresh() {
   const router = useRouter();
-  const busy = useRouterState({ select: (state) => state.isLoading });
+  const routeBusy = useRouterState({ select: (state) => state.isLoading });
+  const [refreshing, setRefreshing] = useState(false);
+  const inFlight = useRef(false);
+  const busy = refreshing || routeBusy;
   return (
     <Button
-      variant="outline"
+      variant="ghost"
+      size="sm"
       disabled={busy}
-      onClick={() => void router.invalidate()}
+      aria-label={busy ? "Memperbarui data" : "Perbarui data"}
+      aria-busy={busy}
+      onClick={() => {
+        if (inFlight.current) return;
+        inFlight.current = true;
+        setRefreshing(true);
+        void router.invalidate().finally(() => {
+          inFlight.current = false;
+          setRefreshing(false);
+        });
+      }}
     >
-      {busy ? "Memperbarui…" : "Perbarui data"}
+      <ArrowClockwiseIcon data-icon="inline-start" aria-hidden="true" />
+      Perbarui data
     </Button>
   );
 }
