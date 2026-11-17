@@ -1,13 +1,27 @@
 import {
   ChartBarIcon,
   ClipboardTextIcon,
-  DatabaseIcon,
   MapPinIcon,
   StorefrontIcon,
+  PackageIcon,
+  UsersIcon,
+  UserGearIcon,
+  TreeStructureIcon,
+  NotebookIcon,
+  SignOutIcon,
 } from "@phosphor-icons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useState } from "react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Sidebar,
   SidebarContent,
@@ -21,34 +35,87 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useAccount, roleLabel } from "@/features/auth/session";
+import { logout, useAccount, roleLabel } from "@/features/auth/session";
 
 const navigation = [
-  { title: "Ruang kerja", to: "/workspace", icon: ChartBarIcon },
-  { title: "Ringkasan", to: "/overview", icon: ChartBarIcon },
-  { title: "Kunjungan", to: "/visits", icon: ClipboardTextIcon },
-  { title: "Outlet", to: "/outlets", icon: StorefrontIcon },
-  { title: "Data referensi", to: "/directory", icon: DatabaseIcon },
-  { title: "Pengguna & Akses", to: "/users", icon: DatabaseIcon },
+  {
+    title: "Ruang kerja",
+    to: "/workspace",
+    icon: ChartBarIcon,
+    group: "Ruang kerja",
+  },
+  {
+    title: "Ringkasan",
+    to: "/overview",
+    icon: ChartBarIcon,
+    group: "Monitoring",
+  },
+  {
+    title: "Kunjungan",
+    to: "/visits",
+    icon: ClipboardTextIcon,
+    group: "Monitoring",
+  },
+  {
+    title: "Laporan stok",
+    to: "/directory",
+    kind: "stock-reports",
+    icon: NotebookIcon,
+    group: "Monitoring",
+  },
+  {
+    title: "Outlet",
+    to: "/outlets",
+    icon: StorefrontIcon,
+    group: "Data / Referensi",
+  },
+  {
+    title: "Sales Force",
+    to: "/directory",
+    kind: "sales-force",
+    icon: UsersIcon,
+    group: "Data / Referensi",
+  },
+  {
+    title: "Produk",
+    to: "/directory",
+    kind: "products",
+    icon: PackageIcon,
+    group: "Data / Referensi",
+  },
   {
     title: "Kelola Sales Force",
     to: "/master/sales-force",
-    icon: DatabaseIcon,
+    icon: UsersIcon,
+    group: "Administrasi",
+  },
+  {
+    title: "Pengguna & Akses",
+    to: "/users",
+    icon: UserGearIcon,
+    group: "Administrasi",
   },
   {
     title: "Penugasan Supervisor",
     to: "/supervisor-assignments",
-    icon: DatabaseIcon,
+    icon: TreeStructureIcon,
+    group: "Administrasi",
   },
 ] as const;
 
 // Adapted from the official shadcn/ui sidebar-07 block (Base UI / nova).
 export function AppSidebar() {
   const account = useAccount();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const location = useRouterState({ select: (state) => state.location });
   const { setOpenMobile } = useSidebar();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [error, setError] = useState("");
+  const items = navigation.filter((item) =>
+    account?.role === "sales_force"
+      ? item.to === "/workspace"
+      : item.to !== "/workspace" &&
+        (item.group !== "Administrasi" || account?.role === "admin")
+  );
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
@@ -56,6 +123,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
+              tooltip="Sales Visit"
               render={
                 <Link
                   to={
@@ -65,80 +133,103 @@ export function AppSidebar() {
               }
               onClick={() => setOpenMobile(false)}
             >
-              <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                <MapPinIcon className="size-5" weight="fill" />
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">Sales Visit</span>
-                <span className="text-muted-foreground truncate text-xs">
-                  Citra Indah · Bandung
-                </span>
-              </div>
+              <MapPinIcon aria-hidden="true" />
+              <span className="truncate font-semibold">Sales Visit</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Ruang kerja</SidebarGroupLabel>
-          <nav aria-label="Navigasi utama">
-            <SidebarMenu>
-              {navigation
-                .filter(
-                  (item) =>
-                    (account?.role === "sales_force"
-                      ? item.to === "/workspace"
-                      : item.to !== "/workspace") &&
-                    (![
-                      "/supervisor-assignments",
-                      "/users",
-                      "/master/sales-force",
-                    ].includes(item.to) ||
-                      account?.role === "admin")
-                )
-                .map(({ title, to, icon: Icon }) => (
-                  <SidebarMenuItem key={to}>
-                    <SidebarMenuButton
-                      tooltip={title}
-                      isActive={pathname.startsWith(to)}
-                      render={<Link to={to} search={{}} />}
-                      onClick={() => setOpenMobile(false)}
-                    >
-                      <Icon />
-                      <span>{title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-            </SidebarMenu>
-          </nav>
-        </SidebarGroup>
-        <SidebarGroup className="mt-auto group-data-[collapsible=icon]:hidden">
-          <div className="text-muted-foreground flex flex-col gap-2 rounded-lg border p-3 text-xs">
-            <span className="text-foreground font-medium">
-              Satu alur pelaporan, dua pilihan.
-            </span>
-            <p>
-              Pelaporan melalui Telegram Bot. Pelaporan Web tersedia pada tahap
-              berikutnya.
-            </p>
-            <p>Pemantauan memakai data operasional sesuai hak akses Anda.</p>
-          </div>
-        </SidebarGroup>
+        {[...new Set(items.map((item) => item.group))].map((group) => (
+          <SidebarGroup key={group}>
+            <SidebarGroupLabel>{group}</SidebarGroupLabel>
+            <nav aria-label={group}>
+              <SidebarMenu>
+                {items
+                  .filter((item) => item.group === group)
+                  .map((item) => {
+                    const kind = "kind" in item ? item.kind : undefined;
+                    const active = kind
+                      ? location.pathname === "/directory" &&
+                        location.search.kind === kind
+                      : location.pathname === item.to ||
+                        location.pathname.startsWith(`${item.to}/`);
+                    return (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton
+                          tooltip={item.title}
+                          isActive={active}
+                          render={
+                            <Link
+                              to={item.to}
+                              search={kind ? { kind } : {}}
+                              aria-current={active ? "page" : undefined}
+                            />
+                          }
+                          onClick={() => setOpenMobile(false)}
+                        >
+                          <item.icon aria-hidden="true" />
+                          <span>{item.title}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+              </SidebarMenu>
+            </nav>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter>
-        <div className="flex items-center gap-2 overflow-hidden p-2">
-          <Avatar className="size-8 shrink-0">
-            <AvatarFallback>SV</AvatarFallback>
-          </Avatar>
-          <div className="grid min-w-0 text-xs group-data-[collapsible=icon]:hidden">
-            <span className="truncate font-medium">{account?.name}</span>
-            <span className="text-muted-foreground truncate">
-              {account && roleLabel(account.role)}
-            </span>
-          </div>
-        </div>
+        <Dialog>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <DialogTrigger
+                render={<SidebarMenuButton size="lg" tooltip="Akun & keluar" />}
+                aria-label="Akun & keluar"
+              >
+                <UserGearIcon aria-hidden="true" />
+                <span className="grid min-w-0 text-left">
+                  <span className="truncate">{account?.name}</span>
+                  <span className="text-muted-foreground truncate text-xs">
+                    {account && roleLabel(account.role)}
+                  </span>
+                </span>
+              </DialogTrigger>
+            </SidebarMenuItem>
+          </SidebarMenu>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Akun</DialogTitle>
+              <DialogDescription className="break-words">
+                {account?.name} · {account && roleLabel(account.role)}
+              </DialogDescription>
+            </DialogHeader>
+            {error && <p role="alert">{error}</p>}
+            <Button
+              variant="outline"
+              disabled={loggingOut}
+              onClick={() => {
+                setLoggingOut(true);
+                setError("");
+                void logout()
+                  .then(() => locationReplace())
+                  .catch(() => {
+                    setLoggingOut(false);
+                    setError("Gagal keluar. Periksa koneksi lalu coba lagi.");
+                  });
+              }}
+            >
+              <SignOutIcon data-icon="inline-start" />
+              {loggingOut ? "Keluar…" : "Keluar"}
+            </Button>
+          </DialogContent>
+        </Dialog>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );
+}
+
+function locationReplace() {
+  window.location.replace("/login");
 }

@@ -5,11 +5,10 @@ import {
   useRouter,
   useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { AppSidebar } from "@/app/components/app-sidebar";
 import { useTheme } from "@/app/providers/theme-provider";
-import { Badge } from "@/components/ui/badge";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -26,7 +25,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { logout, useAccount, roleLabel } from "@/features/auth/session";
+import { useAccount } from "@/features/auth/session";
 
 export function DashboardLayout() {
   const account = useAccount();
@@ -34,8 +33,6 @@ export function DashboardLayout() {
   useEffect(() => {
     if (!account) location.replace("/login");
   }, [account]);
-  const [logoutError, setLogoutError] = useState("");
-  const [loggingOut, setLoggingOut] = useState(false);
   useEffect(() => {
     const check = () => {
       if (document.visibilityState !== "visible") return;
@@ -123,32 +120,6 @@ export function DashboardLayout() {
               </BreadcrumbList>
             </Breadcrumb>
             <div className="ml-auto flex items-center gap-2">
-              <Badge variant="outline">
-                {account?.role === "sales_force"
-                  ? "Web segera hadir"
-                  : "Data operasional"}
-              </Badge>
-              <span className="text-sm">
-                {account?.name} · {account && roleLabel(account.role)}
-              </span>
-              <Button
-                variant="outline"
-                disabled={loggingOut}
-                onClick={() => {
-                  setLoggingOut(true);
-                  setLogoutError("");
-                  void logout()
-                    .then(() => location.replace("/login"))
-                    .catch(() => {
-                      setLoggingOut(false);
-                      setLogoutError(
-                        "Gagal keluar. Periksa koneksi lalu coba lagi."
-                      );
-                    });
-                }}
-              >
-                Keluar
-              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -165,7 +136,6 @@ export function DashboardLayout() {
             tabIndex={-1}
             className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 outline-none md:p-6 lg:p-8"
           >
-            {logoutError && <p role="alert">{logoutError}</p>}
             <Outlet />
           </div>
           <footer className="text-muted-foreground px-4 py-4 text-xs md:px-8">
