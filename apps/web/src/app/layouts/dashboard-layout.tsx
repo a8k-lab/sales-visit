@@ -1,22 +1,10 @@
 import { MoonIcon, SunIcon } from "@phosphor-icons/react";
-import {
-  Link,
-  Outlet,
-  useRouter,
-  useRouterState,
-} from "@tanstack/react-router";
+import { Outlet, useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { AppSidebar } from "@/app/components/app-sidebar";
+import { DashboardBreadcrumbs } from "@/app/components/dashboard-breadcrumbs";
 import { useTheme } from "@/app/providers/theme-provider";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -45,16 +33,7 @@ export function DashboardLayout() {
       window.removeEventListener("focus", check);
     };
   }, [router]);
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
   const { theme, setTheme } = useTheme();
-  const isAssignment =
-    pathname.replace(/\/+$/, "") === "/supervisor-assignments";
-  const isOutlet = pathname === "/outlets" || pathname.startsWith("/outlets/");
-  const isDetail =
-    pathname.startsWith("/visits/") || pathname.startsWith("/outlets/");
-  const isNewVisit = pathname === "/visits/new";
   return (
     <TooltipProvider>
       <SidebarProvider>
@@ -69,57 +48,8 @@ export function DashboardLayout() {
           <header className="flex h-16 shrink-0 items-center gap-3 border-b px-4 md:px-6">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  {isDetail ? (
-                    <BreadcrumbLink
-                      render={
-                        <Link
-                          to={isOutlet ? "/outlets" : "/visits"}
-                          search={{}}
-                        />
-                      }
-                    >
-                      {isOutlet ? "Outlet" : "Kunjungan"}
-                    </BreadcrumbLink>
-                  ) : (
-                    <BreadcrumbPage>
-                      {pathname === "/master/sales-force"
-                        ? "Kelola Sales Force"
-                        : pathname === "/users"
-                          ? "Pengguna & Akses"
-                          : isAssignment
-                            ? "Penugasan Supervisor"
-                            : pathname === "/overview"
-                              ? "Ringkasan"
-                              : pathname === "/workspace"
-                                ? "Ruang kerja"
-                                : pathname === "/directory"
-                                  ? "Data referensi"
-                                  : isOutlet
-                                    ? "Outlet"
-                                    : "Kunjungan"}
-                    </BreadcrumbPage>
-                  )}
-                </BreadcrumbItem>
-                {isDetail && (
-                  <>
-                    <BreadcrumbSeparator />
-                    <BreadcrumbItem>
-                      <BreadcrumbPage>
-                        {isNewVisit
-                          ? "Pelaporan Web belum tersedia"
-                          : isOutlet
-                            ? "Detail Outlet"
-                            : "Detail kunjungan"}
-                      </BreadcrumbPage>
-                    </BreadcrumbItem>
-                  </>
-                )}
-              </BreadcrumbList>
-            </Breadcrumb>
-            <div className="ml-auto flex items-center gap-2">
+            <DashboardBreadcrumbs />
+            <div className="ml-auto flex shrink-0 items-center gap-2">
               <Button
                 variant="ghost"
                 size="icon"
