@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState, useSearch } from "@tanstack/react-router";
 
 import {
   Breadcrumb,
@@ -59,8 +59,13 @@ export function DashboardBreadcrumbs() {
       ? pathname.startsWith(entry.path)
       : pathname === entry.path
   );
-  const directoryKind = location.search.kind;
-  const directoryTitle = directoryKind && directoryTitles[directoryKind];
+  const directoryKind =
+    useSearch({
+      from: "/dashboard/directory",
+      shouldThrow: false,
+      select: (search) => search.kind,
+    }) ?? "sales-force";
+  const directoryTitle = directoryTitles[directoryKind];
   if (!page && pathname !== "/directory") return null;
   const title = page?.title ?? directoryTitle ?? "Sales Force";
   const group =

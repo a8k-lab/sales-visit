@@ -10,7 +10,7 @@ import {
   NotebookIcon,
   SignOutIcon,
 } from "@phosphor-icons/react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -107,6 +107,12 @@ const navigation = [
 export function AppSidebar() {
   const account = useAccount();
   const location = useRouterState({ select: (state) => state.location });
+  const directoryKind =
+    useSearch({
+      from: "/dashboard/directory",
+      shouldThrow: false,
+      select: (search) => search.kind,
+    }) ?? "sales-force";
   const { setOpenMobile } = useSidebar();
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState("");
@@ -154,7 +160,7 @@ export function AppSidebar() {
                     const kind = "kind" in item ? item.kind : undefined;
                     const active = kind
                       ? location.pathname === "/directory" &&
-                        location.search.kind === kind
+                        directoryKind === kind
                       : location.pathname === item.to ||
                         location.pathname.startsWith(`${item.to}/`);
                     return (
