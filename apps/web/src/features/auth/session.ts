@@ -61,7 +61,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
     headers,
     cache: "no-store",
-    credentials: "omit",
+    // Cloudflare Access uses its own cookie; application identity stays Bearer-only.
+    credentials: "include",
     signal: AbortSignal.timeout(15000),
   });
   if (response.status === 401) {
@@ -96,10 +97,16 @@ export async function restoreSession() {
   }
 }
 export async function finishLogin(idToken: string, challenge: string) {
-  const result = await api<{ token: string; account: Account }>(
-    "/auth/telegram",
-    { method: "POST", body: JSON.stringify({ idToken, challenge }) }
-  );
+  await loginWith("/auth/telegram", { idToken, challenge });
+}
+export async function finishDemoLogin(userId: string) {
+  await loginWith("/auth/demo/login", { userId });
+}
+async function loginWith(path: string, input: Record<string, string>) {
+  const result = await api<{ token: string; account: Account }>(path, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
   sessionStorage.setItem(key, result.token);
   sessionStorage.removeItem("sales-visit.session-ended");
   account = result.account;

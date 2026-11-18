@@ -1,4 +1,4 @@
-import type { Account, UserPage } from "@sales-visit/contracts";
+import type { WebUserAccount, UserPage } from "@sales-visit/contracts";
 
 import { api } from "@/features/auth/session";
 
@@ -32,8 +32,10 @@ export async function loadUsers(search: UserSearch) {
   ]);
   return { pending, users };
 }
-export const accountName = (row: Account) =>
-  [row.firstName, row.lastName].filter(Boolean).join(" ") || "Akun Telegram";
+export const accountName = (row: WebUserAccount) =>
+  (row.telegramUserId
+    ? [row.firstName, row.lastName].filter(Boolean).join(" ")
+    : row.displayName) || "Akun";
 export const statusLabels = {
   pending: "Menunggu persetujuan",
   active: "Aktif",

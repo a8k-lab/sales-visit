@@ -34,6 +34,7 @@ export const users = sqliteTable(
   "users",
   {
     id: id().default(sql`(lower(hex(randomblob(16))))`),
+    displayName: text("display_name"),
     status: text("status", {
       enum: ["pending", "active", "rejected", "disabled"],
     })

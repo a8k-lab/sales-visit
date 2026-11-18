@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 
 import { api, finishLogin, restoreSession, safeReturn } from "../session";
+import { DemoLogin } from "./demo-login";
 
 interface TelegramLogin {
   auth(
@@ -77,11 +78,11 @@ interface Ready {
 const destination = () =>
   safeReturn(new URLSearchParams(location.search).get("redirect"));
 export function LoginForm() {
-  const [preparing, setPreparing] = useState(true);
+  const [preparing, setPreparing] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [ready, setReady] = useState<Ready | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Menyiapkan login…");
+  const [message, setMessage] = useState("");
   const attempt = useRef(0);
   const timer = useRef<number | undefined>(undefined);
   const mounted = useRef(false);
@@ -102,7 +103,9 @@ export function LoginForm() {
       ]);
       if (!mounted.current || attempt.current !== current) return;
       setReady({ ...challenge, clientId: config.clientId });
-      setMessage("");
+      setMessage(
+        "Telegram siap. Pilih Masuk dengan Telegram untuk melanjutkan."
+      );
     } catch {
       if (mounted.current && attempt.current === current)
         setMessage("Login tidak tersedia. Periksa koneksi lalu coba lagi.");
@@ -120,7 +123,6 @@ export function LoginForm() {
         if (account && mounted.current) location.replace(destination());
       })
       .catch(() => {});
-    void prepare();
     return () => {
       mounted.current = false;
       preparingRef.current = false;
@@ -242,14 +244,19 @@ export function LoginForm() {
             Sesi Anda telah berakhir. Silakan masuk kembali.
           </p>
         )}
-        <Button disabled={!ready || busy} onClick={open}>
+        <Button
+          disabled={preparing || busy}
+          onClick={ready ? open : () => void prepare()}
+        >
           {preparing
             ? "Menyiapkan login…"
             : verifying
               ? "Memverifikasi akun…"
               : busy
                 ? "Menunggu Telegram…"
-                : "Masuk dengan Telegram"}
+                : ready
+                  ? "Masuk dengan Telegram"
+                  : "Siapkan Login Telegram"}
         </Button>
         <p
           role="status"
@@ -266,14 +273,14 @@ export function LoginForm() {
           >
             Batal
           </Button>
-        ) : !preparing && !ready ? (
+        ) : !preparing && !ready && message ? (
           <Button variant="outline" onClick={() => void prepare()}>
             Coba lagi
           </Button>
         ) : null}
+        <DemoLogin />
         <p className="text-muted-foreground text-center text-xs">
-          Pemantauan operasional untuk Admin dan Supervisor. Pelaporan Web belum
-          tersedia.
+          Pemantauan operasional sesuai role akun. Pelaporan Web belum tersedia.
         </p>
       </CardContent>
     </Card>

@@ -105,9 +105,36 @@ export const webUserRoleSchema = webUserTargetSchema
       ? !!input.salesForceId
       : input.salesForceId === undefined
   );
-export interface ManagedAccount extends Account {
+export interface WebUserAccount extends Omit<Account, "telegramUserId"> {
+  telegramUserId: string | null;
+  displayName: string | null;
+}
+export interface ManagedAccount extends WebUserAccount {
   salesForceName: string | null;
 }
+export const demoAccountCreateSchema = z
+  .object({
+    displayName: z
+      .string()
+      .trim()
+      .min(1)
+      .max(256)
+      .refine(
+        (value) =>
+          ![...value].some(
+            (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127
+          )
+      ),
+    role: z.enum(["admin", "supervisor", "sales_force"]),
+    salesForceId: z.string().min(1).max(256).optional(),
+    operationId: webOperationIdSchema,
+  })
+  .strict()
+  .refine((input) =>
+    input.role === "sales_force"
+      ? !!input.salesForceId
+      : input.salesForceId === undefined
+  );
 export interface UserPage {
   items: ManagedAccount[];
   next: string | null;

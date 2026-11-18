@@ -19,9 +19,19 @@ The example sets `VITE_API_URL` to that local API. Use the API's
 `http://localhost:5173`; do not change production CORS. Keep port 5173 free and
 restart Vite after env changes. `VITE_*` values are public, never secrets.
 
+### Demo Login (no Telegram needed)
+
+Use `APP_ENV=local` and `DEMO_AUTH_ENABLED=true` in the API local vars, run
+`pnpm db:migrate:local` then `pnpm db:seed:demo:local`, and start API + Web.
+Choose one of the 20 accounts grouped by role under **Demo Login** at `/login`.
+No Telegram SDK, BotFather setup, Bot secret, or Bot process is needed.
+Admin can add more through **Pengguna & Akses → Tambah Akun Demo**.
+See [staging Access and verification](../../docs/demo-environment.md).
+
 ### Telegram login
 
-There is no fake login or demo account. Protected data requires:
+The preserved Telegram flow is prepared only when selected (prepare, then click
+again to open the popup within a user gesture). Telegram Login requires:
 
 - A separate test bot configured for Telegram OIDC, with its BotFather Client ID
   set as `TELEGRAM_CLIENT_ID` in `apps/api/.dev.vars`.

@@ -43,6 +43,7 @@ export function createApp(
       if (!allowed.includes(origin))
         return c.json({ error: "Origin denied" }, 403);
       c.header("Access-Control-Allow-Origin", origin);
+      c.header("Access-Control-Allow-Credentials", "true");
       if (c.req.method === "OPTIONS") {
         const method = c.req.header("Access-Control-Request-Method");
         const headers = (c.req.header("Access-Control-Request-Headers") ?? "")
