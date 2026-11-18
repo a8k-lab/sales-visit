@@ -1,4 +1,4 @@
-import { useRouter } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,12 @@ export function DemoAccountDialog({
 }: {
   onMessage: (message: string) => void;
 }) {
-  const { data } = useDemoAccounts();
+  const {
+    data,
+    loading: discovering,
+    error: discoveryError,
+    retry,
+  } = useDemoAccounts();
   const router = useRouter();
   const pending = usePendingOperation();
   const [open, setOpen] = useState(false);
@@ -56,44 +61,54 @@ export function DemoAccountDialog({
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
+  // Match AccountAction: invalidate initial and paginated requests together.
+  const optionGeneration = useRef(0);
+  const invalidateOptions = () => {
+    optionGeneration.current += 1;
+    setLoading(false);
+  };
   const [error, setError] = useState("");
   useEffect(() => {
     setLoading(false);
     if (!open || role !== "sales_force") return;
-    let current = true;
+    const generation = ++optionGeneration.current;
+    const current = () => generation === optionGeneration.current;
     setLoading(true);
     void api<SalesForceOptions>("/admin/users/sales-force-options")
       .then((result) => {
-        if (current) setOptions(result);
+        if (current()) setOptions(result);
       })
       .catch(() => {
-        if (current)
+        if (current())
           setError(
             "Daftar Sales Force tidak dapat dimuat. Tutup lalu coba lagi."
           );
       })
       .finally(() => {
-        if (current) setLoading(false);
+        if (current()) setLoading(false);
       });
     return () => {
-      current = false;
+      optionGeneration.current += 1;
     };
   }, [open, role]);
   async function more() {
-    if (!options.next || loading) return;
+    if (!open || role !== "sales_force" || !options.next || loading) return;
+    const generation = optionGeneration.current;
+    const current = () => generation === optionGeneration.current;
     setLoading(true);
     try {
       const result = await api<SalesForceOptions>(
         `/admin/users/sales-force-options?after=${encodeURIComponent(options.next)}`
       );
-      setOptions((prev) => ({
-        items: [...prev.items, ...result.items],
-        next: result.next,
-      }));
+      if (current())
+        setOptions((prev) => ({
+          items: [...prev.items, ...result.items],
+          next: result.next,
+        }));
     } catch {
-      setError("Daftar Sales Force tidak dapat dimuat.");
+      if (current()) setError("Daftar Sales Force tidak dapat dimuat.");
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }
   async function save() {
@@ -144,6 +159,17 @@ export function DemoAccountDialog({
       setBusy(false);
     }
   }
+  if (discovering)
+    return <p role="status">Memeriksa ketersediaan akun demo…</p>;
+  if (discoveryError)
+    return (
+      <div className="flex flex-col gap-2">
+        <p role="alert">Fitur Tambah Akun Demo belum dapat dimuat.</p>
+        <Button variant="outline" onClick={retry}>
+          Coba lagi
+        </Button>
+      </div>
+    );
   if (!data) return null;
   const roles = ["admin", "supervisor", "sales_force"] as const;
   return (
@@ -151,6 +177,11 @@ export function DemoAccountDialog({
       open={open}
       onOpenChange={(value) => {
         if (!busy) {
+          invalidateOptions();
+          if (value) {
+            setOptions({ items: [], next: null });
+            setSf("");
+          }
           setOpen(value);
           setError("");
         }
@@ -194,6 +225,8 @@ export function DemoAccountDialog({
                   label: roleLabel(value),
                 }))}
                 onValueChange={(value) => {
+                  invalidateOptions();
+                  setOptions({ items: [], next: null });
                   if (value) setRole(value);
                   setSf("");
                   setError("");
@@ -241,8 +274,18 @@ export function DemoAccountDialog({
                   </SelectContent>
                 </Select>
                 {loading && <p role="status">Memuat Sales Force…</p>}
-                {!loading && !options.items.length && (
-                  <p>Belum ada master Sales Force tanpa pemilik.</p>
+                {!loading && !error && !options.items.length && (
+                  <p>
+                    Belum ada master Sales Force tanpa pemilik. Tambahkan master
+                    Sales Force terlebih dahulu.{" "}
+                    <Link
+                      to="/master/sales-force"
+                      search={{ q: "", after: "" }}
+                      className="underline"
+                    >
+                      Buka Kelola Sales Force
+                    </Link>
+                  </p>
                 )}
                 {options.next && (
                   <Button

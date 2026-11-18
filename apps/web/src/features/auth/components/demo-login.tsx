@@ -10,14 +10,7 @@ import {
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import {
-  api,
-  ApiError,
-  finishDemoLogin,
-  roleLabel,
-  safeReturn,
-  type Account,
-} from "../session";
+import { api, ApiError, roleLabel, type Account } from "../session";
 
 export type DemoAccounts = {
   environment: "local" | "staging";
@@ -54,26 +47,14 @@ export function useDemoAccounts() {
     retry: () => setRevision((value) => value + 1),
   };
 }
-export function DemoLogin() {
+export function DemoLogin({
+  disabled,
+  onLogin,
+}: {
+  disabled: boolean;
+  onLogin: (userId: string) => Promise<void>;
+}) {
   const { data, loading, error, retry } = useDemoAccounts();
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  async function login(userId: string) {
-    if (busy) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      await finishDemoLogin(userId);
-      location.replace(
-        safeReturn(new URLSearchParams(location.search).get("redirect"))
-      );
-    } catch {
-      setMessage(
-        "Login demo ditolak. Periksa koneksi dan status akun lalu coba lagi."
-      );
-      setBusy(false);
-    }
-  }
   if (loading)
     return (
       <div className="flex flex-col gap-2">
@@ -85,7 +66,7 @@ export function DemoLogin() {
     return (
       <div className="flex flex-col gap-2">
         <p role="alert">Demo Login belum dapat dimuat.</p>
-        <Button variant="outline" onClick={retry}>
+        <Button variant="outline" disabled={disabled} onClick={retry}>
           Coba lagi
         </Button>
       </div>
@@ -122,8 +103,8 @@ export function DemoLogin() {
               <Button
                 key={item.id}
                 variant="outline"
-                disabled={busy}
-                onClick={() => void login(item.id)}
+                disabled={disabled}
+                onClick={() => void onLogin(item.id)}
               >
                 {item.name} · {roleLabel(item.role)}
               </Button>
@@ -131,9 +112,6 @@ export function DemoLogin() {
           </div>
         ) : null;
       })}
-      <p role="status" aria-live="polite">
-        {busy ? "Memverifikasi akun…" : message}
-      </p>
     </section>
   );
 }

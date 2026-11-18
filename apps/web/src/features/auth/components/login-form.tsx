@@ -9,7 +9,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { api, finishLogin, restoreSession, safeReturn } from "../session";
+import {
+  api,
+  finishDemoLogin,
+  finishLogin,
+  restoreSession,
+  safeReturn,
+} from "../session";
 import { DemoLogin } from "./demo-login";
 
 interface TelegramLogin {
@@ -82,11 +88,13 @@ export function LoginForm() {
   const [verifying, setVerifying] = useState(false);
   const [ready, setReady] = useState<Ready | null>(null);
   const [busy, setBusy] = useState(false);
+  const [demoBusy, setDemoBusy] = useState(false);
   const [message, setMessage] = useState("");
   const attempt = useRef(0);
   const timer = useRef<number | undefined>(undefined);
   const mounted = useRef(false);
   const preparingRef = useRef(false);
+  // Shared synchronous guard: neither login method may start while the other is pending.
   const busyRef = useRef(false);
   async function prepare() {
     if (preparingRef.current || busyRef.current) return;
@@ -132,7 +140,7 @@ export function LoginForm() {
     };
   }, []);
   useEffect(() => {
-    if (!ready || busy) return;
+    if (!ready || busy || demoBusy) return;
     const expiry = window.setTimeout(
       () => {
         setReady(null);
@@ -143,7 +151,25 @@ export function LoginForm() {
       Math.max(0, ready.expiresAt - Date.now() - 5000)
     );
     return () => clearTimeout(expiry);
-  }, [ready, busy]);
+  }, [ready, busy, demoBusy]);
+  async function loginDemo(userId: string) {
+    if (preparingRef.current || busyRef.current) return;
+    busyRef.current = true;
+    setDemoBusy(true);
+    setMessage("Memverifikasi akun demo…");
+    try {
+      await finishDemoLogin(userId);
+      if (mounted.current) location.replace(destination());
+    } catch {
+      if (mounted.current) {
+        busyRef.current = false;
+        setDemoBusy(false);
+        setMessage(
+          "Login demo ditolak. Periksa koneksi dan status akun lalu coba lagi."
+        );
+      }
+    }
+  }
   function cancel(text = "Login dibatalkan. Silakan coba lagi.") {
     attempt.current++;
     clearTimeout(timer.current);
@@ -245,7 +271,7 @@ export function LoginForm() {
           </p>
         )}
         <Button
-          disabled={preparing || busy}
+          disabled={preparing || busy || demoBusy}
           onClick={ready ? open : () => void prepare()}
         >
           {preparing
@@ -274,11 +300,18 @@ export function LoginForm() {
             Batal
           </Button>
         ) : !preparing && !ready && message ? (
-          <Button variant="outline" onClick={() => void prepare()}>
+          <Button
+            variant="outline"
+            disabled={demoBusy}
+            onClick={() => void prepare()}
+          >
             Coba lagi
           </Button>
         ) : null}
-        <DemoLogin />
+        <DemoLogin
+          disabled={preparing || busy || demoBusy}
+          onLogin={loginDemo}
+        />
         <p className="text-muted-foreground text-center text-xs">
           Pemantauan operasional sesuai role akun. Pelaporan Web belum tersedia.
         </p>

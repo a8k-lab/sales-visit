@@ -494,6 +494,34 @@ test("deterministic seeds preserve existing data and real role-based monitoring 
   assert.equal(supervisors.items[0].name, "Agus Setiawan");
 });
 
+test("demo schedule seed preserves edits on primary-key and assignment conflicts", async (t) => {
+  const f = await setup(t);
+  await f.db.batch([
+    f.db.prepare(
+      "UPDATE visit_schedules SET weekday = 2 WHERE id = 'demo-schedule-demo-sf-01-1'"
+    ),
+    f.db.prepare(
+      "UPDATE visit_schedules SET id = 'custom-schedule' WHERE id = 'demo-schedule-demo-sf-01-2'"
+    ),
+  ]);
+  const before = await f.db
+    .prepare("SELECT * FROM visit_schedules ORDER BY id")
+    .all();
+  assert.equal(before.results.length, 98);
+  assert.equal(
+    before.results.find((row) => row.id === "demo-schedule-demo-sf-01-1")
+      .weekday,
+    2
+  );
+  assert.ok(before.results.some((row) => row.id === "custom-schedule"));
+  await f.seed();
+  await f.seed();
+  const after = await f.db
+    .prepare("SELECT * FROM visit_schedules ORDER BY id")
+    .all();
+  assert.deepEqual(after.results, before.results);
+});
+
 test("credentialed Access requests use exact origins and bounded preflights", async (t) => {
   const f = await setup(t);
   const response = await f.request("/auth/demo/accounts", {

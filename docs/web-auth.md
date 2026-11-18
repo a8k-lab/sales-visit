@@ -20,14 +20,16 @@ Sensitive responses and errors use `Cache-Control: no-store`. Errors contain no 
 
 No `/api` prefix. Success bodies are JSON; errors consistently use `{ "error": "sanitized message" }`.
 
-| Endpoint               | Access and success body                                                          |
-| ---------------------- | -------------------------------------------------------------------------------- |
-| `GET /health`          | Public liveness, `{ "status": "ok" }`                                            |
-| `GET /auth/config`     | Public `{ clientId: number, scope: ["profile"] }`; 503 if unavailable            |
-| `POST /auth/challenge` | Public, no body required; `{ challenge, nonce, expiresAt }` (epoch milliseconds) |
-| `POST /auth/telegram`  | Strict `{ idToken: string, challenge: string }`; `{ token, expiresAt, account }` |
-| `GET /auth/me`         | Bearer required; `{ account: { id, name, role, salesForceId } }`                 |
-| `POST /auth/logout`    | Bearer required; `{ ok: true }`, revokes server-side credential                  |
+| Endpoint                  | Access and success body                                                                                           |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `GET /health`             | Public liveness, `{ "status": "ok" }`                                                                             |
+| `GET /auth/config`        | Public `{ clientId: number, scope: ["profile"] }`; 503 if unavailable                                             |
+| `POST /auth/challenge`    | Public, no body required; `{ challenge, nonce, expiresAt }` (epoch milliseconds)                                  |
+| `POST /auth/telegram`     | Public proof exchange, strict `{ idToken: string, challenge: string }`; `{ token, expiresAt, account }`           |
+| `GET /auth/demo/accounts` | Public at the application layer, enabled local/staging only; `{ environment, items }`                             |
+| `POST /auth/demo/login`   | Public at the application layer, enabled local/staging only; strict `{ userId }`; `{ token, expiresAt, account }` |
+| `GET /auth/me`            | Bearer required; `{ account: { id, name, role, salesForceId } }`                                                  |
+| `POST /auth/logout`       | Bearer required; `{ ok: true }`, revokes server-side credential                                                   |
 
 Malformed input returns 400; invalid proof/challenge/account/session returns 401; forbidden origin/scope returns 403; service/configuration failures return 503. Abuse limits return 429 with `{ "error": "Too many requests" }`, `Retry-After: 60`, `Cache-Control: no-store` and normal approved-origin CORS headers; no key/IP/token or internal diagnostic is returned. Auth request bodies are limited to 16 KiB. Monitor 429/503 and D1/JWKS failure rates without capturing credentials. Expired challenges are incrementally pruned after an hour; session records retain revocation history. Schedule operator-reviewed deletion of expired session records according to the deployment's retention policy; no new cron infrastructure is introduced here.
 
@@ -69,7 +71,7 @@ Do not modify production settings, webhook, deploy, or migrate merely to test th
 
 Prepare actual values as a reviewed configuration change before the approved release; do not expect untracked Dashboard vars to survive Wrangler deployment. No new API runtime secret is required. The Bot's existing secrets remain private and separate.
 
-CORS permits only exact allowlisted origins and GET/POST/PUT preflights with Authorization/Content-Type. Unknown origins are denied, including `null` and deceptive suffixes; credentialed requests are permitted for Cloudflare Access cookies, but wildcard CORS is never used and application identity remains Bearer-only. Non-browser requests without Origin still require authentication. CORS is not authentication. Strict production deployment config validation permits exactly these four API vars, with production/demo values pinned, not arbitrary bindings or overrides, with offline regression tests.
+CORS permits only exact allowlisted origins and GET/POST/PUT preflights with Authorization/Content-Type. Unknown origins are denied, including `null` and deceptive suffixes; credentialed requests are permitted for Cloudflare Access cookies, but wildcard CORS is never used and application identity remains Bearer-only. Protected endpoints (including `/auth/me`, `/auth/logout`, business reads and Admin operations) require Bearer authentication regardless of whether `Origin` is present. Public endpoints such as `GET /health` and the Telegram/Demo Login endpoints do not require an existing application session; Telegram proof validation and demo environment/eligibility checks still apply. In staging, Cloudflare Access must protect all Web/API paths, explicitly including **both `/auth/demo/accounts` and `/auth/demo/login`**, against unauthenticated Internet access. Access cookies are separate from application Bearer authentication; CORS is neither. Strict production deployment config validation permits exactly these four API vars, with production/demo values pinned, not arbitrary bindings or overrides, with offline regression tests.
 
 ### Native auth abuse protection
 

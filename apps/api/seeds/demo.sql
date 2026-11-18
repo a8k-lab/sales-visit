@@ -78,4 +78,5 @@ INSERT INTO visit_schedules (id, sales_force_id, outlet_id, weekday, created_at,
 SELECT printf('demo-schedule-%s-%d',sf.id,i), sf.id,
  printf('demo-out-%02d',1+((cast(substr(sf.id,-2) AS INTEGER)*2+i)%35)), i, 1793664000000, 1793664000000
 FROM sales_force sf CROSS JOIN n WHERE sf.id >= 'demo-sf-01' AND sf.id <= 'demo-sf-14'
+ON CONFLICT (id) DO NOTHING
 ON CONFLICT (sales_force_id, outlet_id, weekday) DO NOTHING;
