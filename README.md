@@ -59,21 +59,26 @@ configuration. Edit these files privately; actual env files are ignored by Git.
   webhook secret. Follow the [Bot setup](apps/bot/README.md) for the tunnel and
   safe webhook registration.
 
-The Web login page can run locally, but protected data requires real Telegram
-OIDC, an approved local account, and the test Client ID in the API vars. There is
-no demo login or authentication bypass. See [Web setup](apps/web/README.md) for
-login prerequisites and local rate-limit limitations. Bot webhook testing does
-not require Web login or OIDC configuration.
+For Web + API **without Telegram**, set `APP_ENV="local"` and
+`DEMO_AUTH_ENABLED="true"` in `apps/api/.dev.vars` (included in the example).
+Leave `TELEGRAM_CLIENT_ID` empty and skip all Bot configuration/startup. After
+seeding below, open `/login` and choose an account under **Demo Login**.
+These are real D1 Users and sessions with live role-based authorization.
+Telegram Login remains available separately; its SDK initializes only on demand.
+See [demo/staging setup and safety](docs/demo-environment.md).
 
 ### 3. Prepare local D1
 
 ```sh
 pnpm db:migrate:local
-pnpm db:seed:local
+pnpm db:seed:local # optional original synthetic fixtures
+pnpm db:seed:demo:local # 20 demo accounts + operational fixtures
 ```
 
-The seed is synthetic and repeatable; it does not reset existing data or create
-application accounts. For local Admin bootstrap and Sales Force approval, see
+Both seeds are deterministic and repeatable; neither resets or overwrites
+existing data. Demo personas have no Telegram identity. The demo seed includes
+2 Admins, 4 Supervisors and 14 Sales Force users with distinct associations.
+For Telegram-only registration/approval, see
 [Bot account setup](apps/bot/README.md#local-accounts).
 
 ### 4. Start each application
