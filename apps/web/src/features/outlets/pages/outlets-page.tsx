@@ -4,6 +4,7 @@ import {
   useNavigate,
   useSearch,
 } from "@tanstack/react-router";
+import { useState } from "react";
 
 import { OperationalRefresh } from "@/components/operational-state";
 import { ReadPagination } from "@/components/read-pagination";
@@ -26,24 +27,43 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAccount } from "@/features/auth/session";
+
+import { OutletEditor } from "../management/editor";
+import { OutletOutcome } from "../management/mutation";
 
 export function OutletsPage() {
+  const account = useAccount();
+  const [message, setMessage] = useState("");
   const data = useLoaderData({ from: "/dashboard/outlets" });
   const { q, offset } = useSearch({ from: "/dashboard/outlets" });
   const navigate = useNavigate({ from: "/outlets" });
   return (
     <>
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+        <h1
+          id="outlet-title"
+          tabIndex={-1}
+          className="text-2xl font-semibold tracking-tight md:text-3xl"
+        >
           Outlet
         </h1>
         <p className="text-muted-foreground text-sm">
           Master Outlet dan riwayat operasional sesuai akses Anda.
         </p>
       </div>
-      <div>
+      <div className="flex flex-wrap gap-2">
+        {account?.role === "admin" && <OutletEditor onMessage={setMessage} />}
         <OperationalRefresh />
       </div>
+      {account?.role === "admin" && (
+        <>
+          <p role="status" aria-live="polite">
+            {message}
+          </p>
+          <OutletOutcome onMessage={setMessage} />
+        </>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>
@@ -52,7 +72,10 @@ export function OutletsPage() {
               {data.total.toLocaleString("id-ID")}
             </Badge>
           </CardTitle>
-          <CardDescription>Nama dan ID dari master data.</CardDescription>
+          <CardDescription>
+            Nama dan ID internal dari master data. Buka detail untuk melihat
+            identitas bisnis dan tindakan sesuai akses.
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <Field>

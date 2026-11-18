@@ -1,12 +1,15 @@
 import type {
   NamedStockReport,
   OutletReadDetail,
+  OutletDetail,
   ReadPage,
   Reference,
   VisitListItem,
 } from "@sales-visit/contracts";
 
-import { api } from "@/features/auth/session";
+import { api, currentAccount } from "@/features/auth/session";
+
+export type ManagedOutlet = OutletDetail & { references: string[] };
 
 export function catalogQuery(q: string, offset: number) {
   const query = new URLSearchParams({
@@ -24,9 +27,15 @@ export async function loadOutletDetail(
   visitOffset: number,
   reportOffset: number
 ) {
-  const outlet = await api<OutletReadDetail>(
-    `/outlets/${encodeURIComponent(outletId)}`
-  );
+  const managed =
+    currentAccount()?.role === "admin"
+      ? await api<ManagedOutlet>(
+          `/admin/outlets/detail?${new URLSearchParams({ id: outletId })}`
+        )
+      : null;
+  const outlet =
+    managed ??
+    (await api<OutletReadDetail>(`/outlets/${encodeURIComponent(outletId)}`));
   const query = new URLSearchParams({ view: "page", limit: "25", outletId });
   const [visits, stockReports] = await Promise.all([
     api<ReadPage<VisitListItem>>(`/visits?${query}&offset=${visitOffset}`),
@@ -34,7 +43,7 @@ export async function loadOutletDetail(
       `/stock-reports?${query}&offset=${reportOffset}`
     ),
   ]);
-  return { outlet, visits, stockReports };
+  return { outlet, managed, visits, stockReports };
 }
 export const validOffset = (value: unknown) =>
   /^\d{1,6}$/.test(String(value)) && Number(value) <= 100000

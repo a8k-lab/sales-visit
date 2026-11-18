@@ -34,6 +34,11 @@ See [Admin user management (A1)](./admin-user-management.md) for
 `/admin/users` list/options/current-state reads, strict JSON lifecycle mutations,
 Web/Bot invariants, transactional session authorization, and staged rollout.
 
+See [Web Outlet management (A4)](./outlet-management.md) for Admin-only
+`/admin/outlets` create/update/delete/detail routes, dedicated operation outcomes,
+Web audit migration 0010, validation, history-safe deletion and API-first rollout.
+Existing operational read contracts below are unchanged.
+
 Admin-only Web routes: `GET /supervisors`, `GET /supervisor-assignments`, and
 `PUT /supervisor-assignments` with `{ salesForceId: string, supervisorUserId: string | null }`.
 Sales Force IDs are sent exactly in JSON (not normalized URL path segments);

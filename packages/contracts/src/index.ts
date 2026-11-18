@@ -2,6 +2,7 @@ export * from "./dashboard.ts";
 export * from "./identity.ts";
 export * from "./visit-wizard.ts";
 export * from "./planning.ts";
+export * from "./outlet-management.ts";
 export { outletSchema, type Outlet } from "./outlet.ts";
 export { productSchema, type Product } from "./product.ts";
 export { salesForceSchema, type SalesForce } from "./sales-force.ts";
