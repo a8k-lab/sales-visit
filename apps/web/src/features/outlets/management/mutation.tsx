@@ -1,4 +1,5 @@
 import {
+  planningIdSchema,
   webOperationIdSchema,
   type WebOperationOutcome,
 } from "@sales-visit/contracts";
@@ -13,7 +14,11 @@ const key = "sales-visit.pending-outlet-operation";
 const listeners = new Set<() => void>();
 let initialized = false;
 type OutletAction = "create" | "update" | "delete";
-let pending: { operationId: string; action: OutletAction | null } | null = null;
+let pending: {
+  operationId: string;
+  action: OutletAction | null;
+  targetOutletId?: string;
+} | null = null;
 function snapshot() {
   if (!initialized) {
     const stored = sessionStorage.getItem(key);
@@ -29,6 +34,10 @@ function snapshot() {
         pending = {
           operationId: webOperationIdSchema.parse(value.operationId),
           action: value.action,
+          targetOutletId:
+            value.targetOutletId === undefined
+              ? undefined
+              : planningIdSchema.parse(value.targetOutletId),
         };
       }
     }
@@ -43,10 +52,19 @@ const usePendingOutlet = () =>
       listeners.delete(listener);
     };
   }, snapshot);
-function begin(id: string, action: OutletAction) {
+function begin(
+  id: string,
+  action: OutletAction,
+  outletId: string | null | undefined
+) {
   if (snapshot()) throw new Error("Unresolved operation");
   const parsed = webOperationIdSchema.parse(id);
-  const operation = { operationId: parsed, action };
+  const operation = {
+    operationId: parsed,
+    action,
+    targetOutletId:
+      action === "delete" ? planningIdSchema.parse(outletId) : undefined,
+  };
   sessionStorage.setItem(key, JSON.stringify(operation)); // must succeed BEFORE POST
   pending = operation;
   listeners.forEach((fn) => fn());
@@ -81,7 +99,7 @@ export function useOutletMutation(
       const ticket = await api<{ operationId: string }>(
         "/admin/outlets/operations/new"
       );
-      begin(ticket.operationId, action);
+      begin(ticket.operationId, action, input.id);
       operationId = ticket.operationId;
       await api("/admin/outlets/" + action, {
         method: "POST",
@@ -154,7 +172,7 @@ export function OutletOutcome({
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
   if (!operation) return null;
-  const { operationId, action } = operation;
+  const { operationId, action, targetOutletId } = operation;
   const check = async () => {
     setChecking(true);
     setError("");
@@ -176,8 +194,17 @@ export function OutletOutcome({
           : "Operasi sebelumnya tidak menyimpan perubahan dan tidak dapat diproses lagi. Periksa data sebelum tindakan baru.";
       onMessage(message);
       try {
-        // Shared by dialog and page-level recovery, including after reload.
-        if (result.status === "committed" && action === "delete")
+        // Check the live route after lookup: the user may have navigated away.
+        if (
+          result.status === "committed" &&
+          action === "delete" &&
+          targetOutletId !== undefined &&
+          router.state.matches.some(
+            (match) =>
+              match.routeId === "/dashboard/outlets/$outletId" &&
+              match.params.outletId === targetOutletId
+          )
+        )
           await router.navigate({ to: "/outlets", search: {} });
         await router.invalidate();
       } catch {
