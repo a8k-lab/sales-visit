@@ -7,7 +7,7 @@ import type {
   VisitListItem,
 } from "@sales-visit/contracts";
 
-import { api, currentAccount } from "@/features/auth/session";
+import { api, ApiError, currentAccount } from "@/features/auth/session";
 
 export type ManagedOutlet = OutletDetail & { references: string[] };
 
@@ -27,12 +27,17 @@ export async function loadOutletDetail(
   visitOffset: number,
   reportOffset: number
 ) {
-  const managed =
-    currentAccount()?.role === "admin"
-      ? await api<ManagedOutlet>(
-          `/admin/outlets/detail?${new URLSearchParams({ id: outletId })}`
-        )
-      : null;
+  let managed: ManagedOutlet | null = null;
+  if (currentAccount()?.role === "admin") {
+    try {
+      managed = await api<ManagedOutlet>(
+        `/admin/outlets/detail?${new URLSearchParams({ id: outletId })}`
+      );
+    } catch (error) {
+      // A demoted Admin can still monitor via the operational read endpoint.
+      if (!(error instanceof ApiError && error.status === 403)) throw error;
+    }
+  }
   const outlet =
     managed ??
     (await api<OutletReadDetail>(`/outlets/${encodeURIComponent(outletId)}`));

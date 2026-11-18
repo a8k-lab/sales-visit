@@ -12,11 +12,26 @@ import { api, ApiError, SessionExpiredError } from "@/features/auth/session";
 const key = "sales-visit.pending-outlet-operation";
 const listeners = new Set<() => void>();
 let initialized = false;
-let pending: string | null = null;
+type OutletAction = "create" | "update" | "delete";
+let pending: { operationId: string; action: OutletAction | null } | null = null;
 function snapshot() {
   if (!initialized) {
     const stored = sessionStorage.getItem(key);
-    pending = stored === null ? null : webOperationIdSchema.parse(stored);
+    if (stored !== null) {
+      const legacy = webOperationIdSchema.safeParse(stored);
+      if (legacy.success) {
+        // Keep pre-upgrade handles recoverable; never discard an unresolved POST.
+        pending = { operationId: legacy.data, action: null };
+      } else {
+        const value = JSON.parse(stored);
+        if (!["create", "update", "delete"].includes(value.action))
+          throw new Error("Invalid pending Outlet action");
+        pending = {
+          operationId: webOperationIdSchema.parse(value.operationId),
+          action: value.action,
+        };
+      }
+    }
     initialized = true;
   }
   return pending;
@@ -28,15 +43,16 @@ const usePendingOutlet = () =>
       listeners.delete(listener);
     };
   }, snapshot);
-function begin(id: string) {
+function begin(id: string, action: OutletAction) {
   if (snapshot()) throw new Error("Unresolved operation");
   const parsed = webOperationIdSchema.parse(id);
-  sessionStorage.setItem(key, parsed); // must succeed BEFORE POST
-  pending = parsed;
+  const operation = { operationId: parsed, action };
+  sessionStorage.setItem(key, JSON.stringify(operation)); // must succeed BEFORE POST
+  pending = operation;
   listeners.forEach((fn) => fn());
 }
 function finish(id: string) {
-  if (snapshot() !== id) return;
+  if (snapshot()?.operationId !== id) return;
   sessionStorage.removeItem(key);
   pending = null;
   listeners.forEach((fn) => fn());
@@ -51,7 +67,7 @@ export function useOutletMutation(
   const [error, setError] = useState("");
   const unresolved = usePendingOutlet();
   const save = async (
-    action: "create" | "update" | "delete",
+    action: OutletAction,
     input: Record<string, string | null | undefined>
   ) => {
     if (lock.current || snapshot()) return;
@@ -65,7 +81,7 @@ export function useOutletMutation(
       const ticket = await api<{ operationId: string }>(
         "/admin/outlets/operations/new"
       );
-      begin(ticket.operationId);
+      begin(ticket.operationId, action);
       operationId = ticket.operationId;
       await api("/admin/outlets/" + action, {
         method: "POST",
@@ -133,11 +149,12 @@ export function OutletOutcome({
 }: {
   onMessage: (message: string) => void;
 }) {
-  const operationId = usePendingOutlet();
+  const operation = usePendingOutlet();
   const router = useRouter();
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
-  if (!operationId) return null;
+  if (!operation) return null;
+  const { operationId, action } = operation;
   const check = async () => {
     setChecking(true);
     setError("");
@@ -145,7 +162,7 @@ export function OutletOutcome({
       const result = await api<WebOperationOutcome>(
         "/admin/outlets/operations/" + encodeURIComponent(operationId)
       );
-      if (snapshot() !== operationId) return;
+      if (snapshot()?.operationId !== operationId) return;
       if (result.status !== "committed" && result.status !== "not_committed") {
         setError(
           "Hasil belum pasti. Tunggu lalu periksa lagi. Jangan kirim ulang."
@@ -159,6 +176,9 @@ export function OutletOutcome({
           : "Operasi sebelumnya tidak menyimpan perubahan dan tidak dapat diproses lagi. Periksa data sebelum tindakan baru.";
       onMessage(message);
       try {
+        // Shared by dialog and page-level recovery, including after reload.
+        if (result.status === "committed" && action === "delete")
+          await router.navigate({ to: "/outlets", search: {} });
         await router.invalidate();
       } catch {
         onMessage(message + " Data belum dapat diperbarui.");
