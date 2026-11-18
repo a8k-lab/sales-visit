@@ -85,7 +85,12 @@ export function LoginForm() {
   const attempt = useRef(0);
   const timer = useRef<number | undefined>(undefined);
   const mounted = useRef(false);
+  const preparingRef = useRef(false);
+  const busyRef = useRef(false);
   async function prepare() {
+    if (preparingRef.current || busyRef.current) return;
+    preparingRef.current = true;
+    const current = ++attempt.current;
     setPreparing(true);
     setReady(null);
     setMessage("Menyiapkan login…");
@@ -95,14 +100,17 @@ export function LoginForm() {
         api<Omit<Ready, "clientId">>("/auth/challenge", { method: "POST" }),
         loadSdk(),
       ]);
-      if (!mounted.current) return;
+      if (!mounted.current || attempt.current !== current) return;
       setReady({ ...challenge, clientId: config.clientId });
       setMessage("");
     } catch {
-      if (mounted.current)
-        setMessage("Login tidak tersedia. Periksa koneksi atau hubungi Admin.");
+      if (mounted.current && attempt.current === current)
+        setMessage("Login tidak tersedia. Periksa koneksi lalu coba lagi.");
     } finally {
-      if (mounted.current) setPreparing(false);
+      if (mounted.current && attempt.current === current) {
+        preparingRef.current = false;
+        setPreparing(false);
+      }
     }
   }
   useEffect(() => {
@@ -115,28 +123,52 @@ export function LoginForm() {
     void prepare();
     return () => {
       mounted.current = false;
+      preparingRef.current = false;
       attempt.current++;
       clearTimeout(timer.current);
       window.Telegram?.Login.close();
     };
   }, []);
+  useEffect(() => {
+    if (!ready || busy) return;
+    const expiry = window.setTimeout(
+      () => {
+        setReady(null);
+        setMessage(
+          "Persiapan login kedaluwarsa. Pilih Coba lagi untuk melanjutkan."
+        );
+      },
+      Math.max(0, ready.expiresAt - Date.now() - 5000)
+    );
+    return () => clearTimeout(expiry);
+  }, [ready, busy]);
   function cancel(text = "Login dibatalkan. Silakan coba lagi.") {
     attempt.current++;
     clearTimeout(timer.current);
     window.Telegram?.Login.close();
+    busyRef.current = false;
     setBusy(false);
     setVerifying(false);
     setReady(null);
     setMessage(text);
   }
   function open() {
-    if (!ready || !window.Telegram?.Login) return;
+    if (
+      busyRef.current ||
+      preparingRef.current ||
+      !ready ||
+      !window.Telegram?.Login
+    )
+      return;
     if (ready.expiresAt <= Date.now() + 5000) {
       setReady(null);
-      setMessage("Persiapan login kedaluwarsa. Silakan siapkan ulang.");
+      setMessage(
+        "Persiapan login kedaluwarsa. Pilih Coba lagi untuk melanjutkan."
+      );
       return;
     }
     const current = ++attempt.current;
+    busyRef.current = true;
     setBusy(true);
     setMessage(
       "Selesaikan login di jendela Telegram. Jika tidak muncul, izinkan popup."
@@ -148,6 +180,7 @@ export function LoginForm() {
         ),
       90000
     );
+    let verifyingCallback = false;
     try {
       // No await before auth: window.open runs within this real click gesture.
       window.Telegram.Login.auth(
@@ -159,6 +192,8 @@ export function LoginForm() {
         },
         (result) => {
           if (attempt.current !== current || !mounted.current) return;
+          if (verifyingCallback) return;
+          verifyingCallback = true;
           clearTimeout(timer.current);
           if (
             !result ||
@@ -177,7 +212,7 @@ export function LoginForm() {
                 location.replace(destination());
             })
             .catch(() => {
-              if (mounted.current)
+              if (mounted.current && attempt.current === current)
                 cancel(
                   "Login ditolak atau sesi berakhir. Pastikan akun telah disetujui Admin."
                 );
@@ -208,7 +243,13 @@ export function LoginForm() {
           </p>
         )}
         <Button disabled={!ready || busy} onClick={open}>
-          Masuk dengan Telegram
+          {preparing
+            ? "Menyiapkan login…"
+            : verifying
+              ? "Memverifikasi akun…"
+              : busy
+                ? "Menunggu Telegram…"
+                : "Masuk dengan Telegram"}
         </Button>
         <p
           role="status"
@@ -225,15 +266,11 @@ export function LoginForm() {
           >
             Batal
           </Button>
-        ) : (
-          <Button
-            variant="outline"
-            disabled={preparing}
-            onClick={() => void prepare()}
-          >
-            Siapkan ulang login
+        ) : !preparing && !ready ? (
+          <Button variant="outline" onClick={() => void prepare()}>
+            Coba lagi
           </Button>
-        )}
+        ) : null}
         <p className="text-muted-foreground text-center text-xs">
           Pemantauan operasional untuk Admin dan Supervisor. Pelaporan Web belum
           tersedia.

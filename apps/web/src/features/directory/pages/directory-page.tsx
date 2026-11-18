@@ -15,7 +15,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -44,13 +49,15 @@ export function DirectoryPage() {
     <>
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-          Data referensi
+          {title}
         </h1>
         <p className="text-muted-foreground text-sm">
-          Master data dan laporan operasional sesuai akses Anda.
+          {search.kind === "stock-reports"
+            ? "Catatan laporan stok sesuai akses Anda."
+            : "Data referensi sesuai akses Anda."}
         </p>
       </div>
-      <nav aria-label="Jenis referensi" className="flex flex-wrap gap-2">
+      <nav aria-label="Jenis data" className="flex flex-wrap gap-2">
         {(["sales-force", "products", "stock-reports"] as const).map((kind) => (
           <Button
             key={kind}
@@ -126,7 +133,33 @@ export function DirectoryPage() {
             <Empty>
               <EmptyHeader>
                 <EmptyTitle>Belum ada data yang sesuai</EmptyTitle>
+                <EmptyDescription>
+                  {search.kind === "stock-reports"
+                    ? "Laporan akan tampil setelah tim mencatat stok melalui Telegram Bot."
+                    : search.q
+                      ? "Ubah pencarian untuk melihat data lainnya."
+                      : search.kind === "sales-force" &&
+                          account?.role === "admin"
+                        ? "Tambahkan master melalui Kelola Sales Force."
+                        : "Data referensi yang tersedia akan tampil di sini."}
+                </EmptyDescription>
               </EmptyHeader>
+              {search.kind === "sales-force" &&
+                account?.role === "admin" &&
+                !search.q && (
+                  <Button
+                    nativeButton={false}
+                    variant="outline"
+                    render={
+                      <Link
+                        to="/master/sales-force"
+                        search={{ q: "", after: "" }}
+                      />
+                    }
+                  >
+                    Kelola Sales Force
+                  </Button>
+                )}
             </Empty>
           )}
           {data.references && data.references.items.length > 0 && (

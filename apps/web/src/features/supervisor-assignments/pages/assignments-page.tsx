@@ -1,7 +1,23 @@
-import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import {
   Select,
   SelectContent,
@@ -58,6 +74,9 @@ function AssignmentRow({
 }) {
   const [selected, setSelected] = useState(row.supervisorUserId ?? "");
   const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    setSelected(row.supervisorUserId ?? "");
+  }, [row.supervisorUserId]);
   const changed = selected !== (row.supervisorUserId ?? "");
   const options = [
     { value: "", label: "Tanpa Supervisor" },
@@ -117,42 +136,65 @@ function AssignmentRow({
         </Select>
       </TableCell>
       <TableCell>
-        {confirming ? (
-          <div className="flex flex-col gap-2">
-            <p>
-              Ubah penugasan {row.salesForceName} ke{" "}
-              {options.find((o) => o.value === selected)?.label}? Akses riwayat
-              langsung berubah.
-            </p>
-            <div className="flex gap-2">
+        <Dialog
+          open={confirming}
+          onOpenChange={(open) => {
+            if (!busy) setConfirming(open);
+          }}
+        >
+          <DialogTrigger
+            render={<Button variant="outline" disabled={busy || !changed} />}
+          >
+            Simpan
+          </DialogTrigger>
+          <DialogContent showCloseButton={!busy}>
+            <DialogHeader>
+              <DialogTitle>Konfirmasi penugasan</DialogTitle>
+              <DialogDescription>
+                Akses pemantauan seluruh riwayat aktivitas berubah segera
+                setelah penugasan disimpan.
+              </DialogDescription>
+            </DialogHeader>
+            <dl className="grid gap-2 break-words">
+              <div>
+                <dt className="text-muted-foreground">Sales Force</dt>
+                <dd>{row.salesForceName}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Supervisor saat ini</dt>
+                <dd>
+                  {row.supervisorName ??
+                    row.supervisorUserId ??
+                    "Tanpa Supervisor"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Supervisor baru</dt>
+                <dd>
+                  {options.find((option) => option.value === selected)?.label}
+                </dd>
+              </div>
+            </dl>
+            <DialogFooter>
+              <DialogClose
+                render={<Button variant="outline" disabled={busy} />}
+                autoFocus
+              >
+                Batal
+              </DialogClose>
               <Button
-                disabled={busy}
+                disabled={busy || !changed}
                 onClick={() => {
                   void onSave(row, selected || null).finally(() =>
                     setConfirming(false)
                   );
                 }}
               >
-                Ya, simpan
+                {busy ? "Menyimpan…" : "Ya, simpan"}
               </Button>
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => setConfirming(false)}
-              >
-                Batal
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <Button
-            variant="outline"
-            disabled={busy || !changed}
-            onClick={() => setConfirming(true)}
-          >
-            Simpan
-          </Button>
-        )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </TableCell>
     </TableRow>
   );
@@ -168,6 +210,8 @@ export function AssignmentsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [needsReload, setNeedsReload] = useState(false);
+  const saving = useRef(false);
   useEffect(() => {
     if (account?.role !== "admin") return;
     let cancelled = false;
@@ -183,6 +227,7 @@ export function AssignmentsPage() {
         if (!cancelled) {
           setData(page);
           setSupervisors(options);
+          setNeedsReload(false);
         }
       })
       .catch((failure: unknown) => {
@@ -205,6 +250,13 @@ export function AssignmentsPage() {
       <p role="alert">Akses tidak diizinkan. Halaman ini hanya untuk Admin.</p>
     );
   const save = async (row: Assignment, supervisorUserId: string | null) => {
+    if (
+      saving.current ||
+      needsReload ||
+      supervisorUserId === row.supervisorUserId
+    )
+      return;
+    saving.current = true;
     setBusy(true);
     setError("");
     setMessage("");
@@ -226,13 +278,13 @@ export function AssignmentsPage() {
           }
       );
       setMessage(`Penugasan ${row.salesForceName} berhasil disimpan.`);
-    } catch (failure) {
+    } catch {
+      setNeedsReload(true);
       setError(
-        failure instanceof Error
-          ? failure.message
-          : "Gagal menyimpan penugasan. Muat ulang sebelum mencoba lagi."
+        "Hasil penyimpanan belum dapat dipastikan. Muat ulang untuk memeriksa penugasan sebelum melakukan perubahan lagi."
       );
     } finally {
+      saving.current = false;
       setBusy(false);
     }
   };
@@ -269,7 +321,22 @@ export function AssignmentsPage() {
               <Empty>
                 <EmptyHeader>
                   <EmptyTitle>Belum ada Sales Force</EmptyTitle>
+                  <EmptyDescription>
+                    Tambahkan master Sales Force sebelum mengatur penugasan.
+                  </EmptyDescription>
                 </EmptyHeader>
+                <Button
+                  nativeButton={false}
+                  variant="outline"
+                  render={
+                    <Link
+                      to="/master/sales-force"
+                      search={{ q: "", after: "" }}
+                    />
+                  }
+                >
+                  Kelola Sales Force
+                </Button>
               </Empty>
             ) : (
               <Table>
@@ -284,10 +351,10 @@ export function AssignmentsPage() {
                 <TableBody>
                   {data.items.map((row) => (
                     <AssignmentRow
-                      key={`${revision}:${row.salesForceId}:${row.supervisorUserId}`}
+                      key={`${revision}:${row.salesForceId}`}
                       row={row}
                       supervisors={supervisors}
-                      busy={busy}
+                      busy={busy || needsReload}
                       onSave={save}
                     />
                   ))}
@@ -295,10 +362,28 @@ export function AssignmentsPage() {
               </Table>
             )}
             {!supervisors.length && (
-              <p>
-                Tidak ada Supervisor aktif. Penugasan yang ada tetap dapat
-                dihapus.
-              </p>
+              <Empty>
+                <EmptyHeader>
+                  <EmptyTitle>Belum ada Supervisor aktif</EmptyTitle>
+                  <EmptyDescription>
+                    Minta anggota tim mendaftar melalui Telegram, lalu setujui
+                    akun dengan peran Supervisor di Pengguna & Akses. Penugasan
+                    yang ada tetap dapat dihapus.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <Button
+                  nativeButton={false}
+                  variant="outline"
+                  render={
+                    <Link
+                      to="/users"
+                      search={{ after: "", pendingAfter: "", status: "" }}
+                    />
+                  }
+                >
+                  Pengguna & Akses
+                </Button>
+              </Empty>
             )}
             <div className="flex gap-2">
               <Button

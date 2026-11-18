@@ -16,6 +16,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useAccount } from "@/features/auth/session";
+import { AdminGettingStarted } from "@/features/overview/components/admin-getting-started";
 import { RecentVisits } from "@/features/overview/components/recent-visits";
 import { VisitActivity } from "@/features/overview/components/visit-activity";
 
@@ -25,6 +27,7 @@ const percentage = new Intl.NumberFormat("id-ID", {
 });
 
 export function OverviewPage() {
+  const account = useAccount();
   const data = useLoaderData({ from: "/dashboard/overview" });
   const metrics = [
     {
@@ -83,6 +86,9 @@ export function OverviewPage() {
           Lihat Outlet
         </Button>
       </nav>
+      {account?.role === "admin" && data.metrics.visits === 0 && (
+        <AdminGettingStarted />
+      )}
       <section
         aria-label="Ringkasan periode pelaporan"
         className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"

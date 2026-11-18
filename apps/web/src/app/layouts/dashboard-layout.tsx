@@ -1,23 +1,10 @@
 import { MoonIcon, SunIcon } from "@phosphor-icons/react";
-import {
-  Link,
-  Outlet,
-  useRouter,
-  useRouterState,
-} from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { Outlet } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import { AppSidebar } from "@/app/components/app-sidebar";
+import { DashboardBreadcrumbs } from "@/app/components/dashboard-breadcrumbs";
 import { useTheme } from "@/app/providers/theme-provider";
-import { Badge } from "@/components/ui/badge";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -26,38 +13,14 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { logout, useAccount, roleLabel } from "@/features/auth/session";
+import { useAccount } from "@/features/auth/session";
 
 export function DashboardLayout() {
   const account = useAccount();
-  const router = useRouter();
   useEffect(() => {
     if (!account) location.replace("/login");
   }, [account]);
-  const [logoutError, setLogoutError] = useState("");
-  const [loggingOut, setLoggingOut] = useState(false);
-  useEffect(() => {
-    const check = () => {
-      if (document.visibilityState !== "visible") return;
-      void router.invalidate();
-    };
-    const timer = window.setInterval(check, 60000);
-    window.addEventListener("focus", check);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener("focus", check);
-    };
-  }, [router]);
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
   const { theme, setTheme } = useTheme();
-  const isAssignment =
-    pathname.replace(/\/+$/, "") === "/supervisor-assignments";
-  const isOutlet = pathname === "/outlets" || pathname.startsWith("/outlets/");
-  const isDetail =
-    pathname.startsWith("/visits/") || pathname.startsWith("/outlets/");
-  const isNewVisit = pathname === "/visits/new";
   return (
     <TooltipProvider>
       <SidebarProvider>
@@ -72,83 +35,8 @@ export function DashboardLayout() {
           <header className="flex h-16 shrink-0 items-center gap-3 border-b px-4 md:px-6">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  {isDetail ? (
-                    <BreadcrumbLink
-                      render={
-                        <Link
-                          to={isOutlet ? "/outlets" : "/visits"}
-                          search={{}}
-                        />
-                      }
-                    >
-                      {isOutlet ? "Outlet" : "Kunjungan"}
-                    </BreadcrumbLink>
-                  ) : (
-                    <BreadcrumbPage>
-                      {pathname === "/master/sales-force"
-                        ? "Kelola Sales Force"
-                        : pathname === "/users"
-                          ? "Pengguna & Akses"
-                          : isAssignment
-                            ? "Penugasan Supervisor"
-                            : pathname === "/overview"
-                              ? "Ringkasan"
-                              : pathname === "/workspace"
-                                ? "Ruang kerja"
-                                : pathname === "/directory"
-                                  ? "Data referensi"
-                                  : isOutlet
-                                    ? "Outlet"
-                                    : "Kunjungan"}
-                    </BreadcrumbPage>
-                  )}
-                </BreadcrumbItem>
-                {isDetail && (
-                  <>
-                    <BreadcrumbSeparator />
-                    <BreadcrumbItem>
-                      <BreadcrumbPage>
-                        {isNewVisit
-                          ? "Pelaporan Web belum tersedia"
-                          : isOutlet
-                            ? "Detail Outlet"
-                            : "Detail kunjungan"}
-                      </BreadcrumbPage>
-                    </BreadcrumbItem>
-                  </>
-                )}
-              </BreadcrumbList>
-            </Breadcrumb>
-            <div className="ml-auto flex items-center gap-2">
-              <Badge variant="outline">
-                {account?.role === "sales_force"
-                  ? "Web segera hadir"
-                  : "Data operasional"}
-              </Badge>
-              <span className="text-sm">
-                {account?.name} · {account && roleLabel(account.role)}
-              </span>
-              <Button
-                variant="outline"
-                disabled={loggingOut}
-                onClick={() => {
-                  setLoggingOut(true);
-                  setLogoutError("");
-                  void logout()
-                    .then(() => location.replace("/login"))
-                    .catch(() => {
-                      setLoggingOut(false);
-                      setLogoutError(
-                        "Gagal keluar. Periksa koneksi lalu coba lagi."
-                      );
-                    });
-                }}
-              >
-                Keluar
-              </Button>
+            <DashboardBreadcrumbs />
+            <div className="ml-auto flex shrink-0 items-center gap-2">
               <Button
                 variant="ghost"
                 size="icon"
@@ -165,13 +53,10 @@ export function DashboardLayout() {
             tabIndex={-1}
             className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 outline-none md:p-6 lg:p-8"
           >
-            {logoutError && <p role="alert">{logoutError}</p>}
             <Outlet />
           </div>
           <footer className="text-muted-foreground px-4 py-4 text-xs md:px-8">
-            Sales Visit · Data sesuai hak akses · Waktu dalam WIB. Diperbarui
-            setiap 60 detik saat halaman aktif, saat kembali ke jendela, atau
-            melalui Perbarui data.
+            Sales Visit · Data sesuai hak akses · Waktu dalam WIB.
           </footer>
         </SidebarInset>
       </SidebarProvider>
