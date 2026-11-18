@@ -72,7 +72,7 @@ Wrangler tracks applied migrations; running local migration apply again is safe.
 are inserted. Supervisor assignments are **4 / 5 / 5 / 0**. There are 35 Outlets,
 4 Products, 156 Visits, 78 Stock Reports (312 items), and 98 weekly schedules.
 Activity varies from 2 to 24 Visits per SF; SF 13/14 have none. Visits span
-**2–25 November 2026 (WIB)**, multiple Outlets and reporters. Use these dates for
+**3–26 November 2026 (WIB)**, multiple Outlets and reporters. Use these dates for
 filters when the current dashboard period no longer intersects the fixtures.
 Catalogs/operational lists exceed UI page sizes; the 20-persona account list fits
 one page initially. Additional accounts appear immediately through the API.
