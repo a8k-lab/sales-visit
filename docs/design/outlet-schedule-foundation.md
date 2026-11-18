@@ -2,7 +2,8 @@
 
 Implemented backend scope, now consumed by the Telegram integration described in
 [Bot commands and grammar](../telegram-bot-reference.md#outlet--schedule-command-grammar).
-No dashboard integration yet.
+Web Outlet master management is now documented in [A4](../outlet-management.md);
+schedule management remains Bot/RPC-only.
 Behavioral reference: [rtrivaldo/telegram_bot](https://github.com/rtrivaldo/telegram_bot/tree/e7de4a9965b2a815160bd389a89be5fa6b1b73a7),
 particularly `src/services/{outlet,schedule}.service.ts` and
 `src/repositories/schedule.repository.ts`. Credit to its original contributors

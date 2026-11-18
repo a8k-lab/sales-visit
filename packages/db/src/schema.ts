@@ -315,6 +315,36 @@ export const salesForceMasterAudit = sqliteTable(
   ]
 );
 
+// Web master-data history; no Outlet FK so permitted deletion retains evidence.
+export const outletMasterAudit = sqliteTable(
+  "outlet_master_audit",
+  {
+    id: id(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+        onUpdate: "restrict",
+      }),
+    outletId: text("outlet_id").notNull(),
+    action: text("action", { enum: ["create", "update", "delete"] }).notNull(),
+    before: text("before", { mode: "json" }),
+    after: text("after", { mode: "json" }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index("outlet_master_audit_outlet_idx").on(table.outletId),
+    check(
+      "outlet_master_audit_transition",
+      sql`(${table.action} = 'create' and ${table.before} is null and ${table.after} is not null) or (${table.action} = 'update' and ${table.before} is not null and ${table.after} is not null) or (${table.action} = 'delete' and ${table.before} is not null and ${table.after} is null)`
+    ),
+    check(
+      "outlet_master_audit_json",
+      sql`(${table.before} is null or json_valid(${table.before})) and (${table.after} is null or json_valid(${table.after}))`
+    ),
+  ]
+);
+
 export const usersRelations = relations(users, ({ one, many }) => ({
   supervisedSalesForce: many(salesForceSupervisors),
   assignmentActions: many(supervisorAssignmentAudit, {

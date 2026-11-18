@@ -4,6 +4,7 @@ import {
   useNavigate,
   useSearch,
 } from "@tanstack/react-router";
+import { useState } from "react";
 
 import { ChannelBadge } from "@/components/channel-badge";
 import { OperationalRefresh } from "@/components/operational-state";
@@ -17,11 +18,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { useAccount } from "@/features/auth/session";
 import { StockReportCard } from "@/features/stock-reports/components/stock-report-card";
 import { formatTime } from "@/lib/formatters";
 
+import { OutletDelete } from "../management/delete-dialog";
+import { OutletEditor } from "../management/editor";
+import { OutletOutcome } from "../management/mutation";
+
 export function OutletDetailPage() {
-  const { outlet, visits, stockReports } = useLoaderData({
+  const account = useAccount();
+  const [message, setMessage] = useState("");
+  const { outlet, managed, visits, stockReports } = useLoaderData({
     from: "/dashboard/outlets/$outletId",
   });
   const search = useSearch({ from: "/dashboard/outlets/$outletId" });
@@ -44,10 +52,26 @@ export function OutletDetailPage() {
         <p className="text-muted-foreground text-xs break-all">
           Detail Outlet · {outlet.id}
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+        <h1
+          id="outlet-title"
+          tabIndex={-1}
+          className="text-2xl font-semibold tracking-tight md:text-3xl"
+        >
           {outlet.name}
         </h1>
       </div>
+      {account?.role === "admin" && managed && (
+        <>
+          <div className="flex flex-wrap items-start gap-2">
+            <OutletEditor row={managed} onMessage={setMessage} />
+            <OutletDelete row={managed} onMessage={setMessage} />
+          </div>
+          <p role="status" aria-live="polite">
+            {message}
+          </p>
+          <OutletOutcome onMessage={setMessage} />
+        </>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Informasi Outlet</CardTitle>

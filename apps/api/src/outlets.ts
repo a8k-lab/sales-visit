@@ -21,16 +21,19 @@ function key(input: { id: string } | { businessId: string }) {
 }
 // D1 stores signed 64-bit integers; validate before conversion to JS numbers.
 // Reject rather than implicitly repair either timestamp during a mutation.
-const reportableTimestamps = `typeof(created_at) = 'integer'
+export const reportableOutletTimestamps = `typeof(created_at) = 'integer'
   AND created_at BETWEEN -9007199254740991 AND 9007199254740991
   AND (updated_at IS NULL OR (typeof(updated_at) = 'integer'
     AND updated_at BETWEEN -9007199254740991 AND 9007199254740991))`;
-const unreferenced = `NOT EXISTS (SELECT 1 FROM visits WHERE outlet_id = outlets.id)
+export const unreferencedOutlet = `NOT EXISTS (SELECT 1 FROM visits WHERE outlet_id = outlets.id)
   AND NOT EXISTS (SELECT 1 FROM stock_reports WHERE outlet_id = outlets.id)
   AND NOT EXISTS (SELECT 1 FROM visit_schedules WHERE outlet_id = outlets.id)`;
 
 export class OutletOperations {
-  constructor(private db: D1Database) {}
+  private db: D1Database;
+  constructor(db: D1Database) {
+    this.db = db;
+  }
 
   async list(
     actor: BotActor,
@@ -118,7 +121,7 @@ export class OutletOperations {
     const selected = key(parsed.data);
     const result = await planningBatch(this.db, actor, "admin", (guard) => [
       {
-        sql: `UPDATE outlets SET name = ?, no_rs = COALESCE(?, no_rs), updated_at = unixepoch() * 1000 WHERE ${selected.column} = ? AND ${guard} AND ${reportableTimestamps} RETURNING ${fields}`,
+        sql: `UPDATE outlets SET name = ?, no_rs = COALESCE(?, no_rs), updated_at = unixepoch() * 1000 WHERE ${selected.column} = ? AND ${guard} AND ${reportableOutletTimestamps} RETURNING ${fields}`,
         values: [parsed.data.name, parsed.data.noRs ?? null, selected.value],
       },
       {
@@ -144,11 +147,11 @@ export class OutletOperations {
     const selected = key(parsed.data);
     const result = await planningBatch(this.db, actor, "admin", (guard) => [
       {
-        sql: `DELETE FROM outlets WHERE ${selected.column} = ? AND ${guard} AND ${reportableTimestamps} AND ${unreferenced} RETURNING ${fields}`,
+        sql: `DELETE FROM outlets WHERE ${selected.column} = ? AND ${guard} AND ${reportableOutletTimestamps} AND ${unreferencedOutlet} RETURNING ${fields}`,
         values: [selected.value],
       },
       {
-        sql: `SELECT (${reportableTimestamps}) AS reportable FROM outlets WHERE ${selected.column} = ? AND ${guard}`,
+        sql: `SELECT (${reportableOutletTimestamps}) AS reportable FROM outlets WHERE ${selected.column} = ? AND ${guard}`,
         values: [selected.value],
       },
     ]);
