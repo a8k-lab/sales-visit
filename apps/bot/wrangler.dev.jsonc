@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "sales-visit-bot-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-02",
+  "services": [
+    {
+      "binding": "IDENTITY",
+      "service": "sales-visit-api-dev",
+      "entrypoint": "BotIdentity",
+    },
+  ],
+  "workers_dev": true,
+  "secrets": {
+    "required": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"],
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
+}
