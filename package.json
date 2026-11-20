@@ -24,7 +24,11 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "check": "pnpm lint && pnpm format:check",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install",
+    "build:web:dev": "node scripts/build-web-dev.mjs",
+    "preview:web:dev": "pnpm build:web:dev && pnpm --filter @sales-visit/web exec wrangler dev --config wrangler.dev.jsonc",
+    "build:web:local": "VITE_API_URL=http://localhost:8788 node scripts/build-web-dev.mjs",
+    "preview:web:local": "pnpm build:web:local && pnpm --filter @sales-visit/web exec wrangler dev --config wrangler.dev.jsonc --port 8787"
   },
   "devDependencies": {
     "jsonc-parser": "3.3.1",
