@@ -18,7 +18,7 @@ const adminGuard = `EXISTS (SELECT 1 FROM web_sessions session JOIN users actor 
     AND actor.status = 'active' AND actor.role = 'admin')`;
 const assignmentFields = `sf.id AS salesForceId, sf.name AS salesForceName,
   assignment.supervisor_user_id AS supervisorUserId,
-  coalesce(identity.first_name, supervisor.id) AS supervisorName,
+  coalesce(identity.first_name, supervisor.display_name, supervisor.id) AS supervisorName,
   supervisor.status AS supervisorStatus, supervisor.role AS supervisorRole`;
 const assignmentFrom = `FROM sales_force sf
   LEFT JOIN sales_force_supervisors assignment ON assignment.sales_force_id = sf.id
@@ -52,7 +52,7 @@ export function supervisorAssignmentRoutes() {
     const now = Date.now();
     const [permission, rows] = await c.env.DB.batch([
       c.env.DB.prepare(`SELECT 1 WHERE ${adminGuard}`).bind(hash, now),
-      c.env.DB.prepare(`SELECT u.id, coalesce(t.first_name, u.id) AS name FROM users u
+      c.env.DB.prepare(`SELECT u.id, coalesce(t.first_name, u.display_name, u.id) AS name FROM users u
         LEFT JOIN telegram_identities t ON t.user_id = u.id
         WHERE u.status = 'active' AND u.role = 'supervisor' AND u.id > ? AND ${adminGuard}
         ORDER BY u.id LIMIT 101`).bind(after, hash, now),

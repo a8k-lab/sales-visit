@@ -19,6 +19,12 @@ export const accountQuery = `SELECT u.id, t.telegram_user_id AS telegramUserId, 
   u.sales_force_id AS salesForceId, t.username, t.first_name AS firstName,
   t.last_name AS lastName, u.created_at AS createdAt
   FROM users u JOIN telegram_identities t ON t.user_id = u.id`;
+// Web accounts may have no Telegram identity. Bot projections remain unchanged.
+export const webAccountQuery = `SELECT u.id, u.display_name AS displayName,
+  t.telegram_user_id AS telegramUserId, u.status, u.role,
+  u.sales_force_id AS salesForceId, t.username, t.first_name AS firstName,
+  t.last_name AS lastName, u.created_at AS createdAt
+  FROM users u LEFT JOIN telegram_identities t ON t.user_id = u.id`;
 const adminGuard = `EXISTS (SELECT 1 FROM users a JOIN telegram_identities ai ON ai.user_id = a.id
   WHERE ai.telegram_user_id = ? AND a.status = 'active' AND a.role = 'admin')`;
 export const webAdminGuard = `EXISTS (SELECT 1 FROM web_sessions session JOIN users a ON a.id = session.user_id
@@ -38,6 +44,8 @@ function authority(actor: Authority) {
       ],
       eventId: actor.operationId + ":" + crypto.randomUUID(),
       target: "u.id",
+      join: "LEFT JOIN",
+      query: webAccountQuery,
       actorId: "(SELECT user_id FROM web_sessions WHERE token_hash = ?)",
     };
   }
@@ -49,6 +57,8 @@ function authority(actor: Authority) {
     writeBindings: [actor.telegramUserId],
     eventId: crypto.randomUUID(),
     target: "t.telegram_user_id",
+    join: "JOIN",
+    query: accountQuery,
     actorId:
       "(SELECT user_id FROM telegram_identities WHERE telegram_user_id = ?)",
   };
@@ -251,7 +261,7 @@ export class IdentityOperations {
             CASE WHEN d.action = 'disable' THEN 'disabled' ELSE 'active' END AS next_status,
             CASE WHEN d.action = 'setrole' THEN d.role ELSE u.role END AS next_role,
             CASE WHEN d.action = 'setrole' AND d.role = 'sales_force' THEN d.sf ELSE u.sales_force_id END AS next_sf
-          FROM users u JOIN telegram_identities t ON t.user_id = u.id CROSS JOIN desired d
+          FROM users u ${auth.join} telegram_identities t ON t.user_id = u.id CROSS JOIN desired d
           WHERE ${auth.target} = ?
             AND ${auth.writeGuard}
             AND u.status = ?
@@ -288,7 +298,7 @@ export class IdentityOperations {
         WHERE id = (SELECT target_user_id FROM access_audit WHERE id = ?)`)
         .bind(eventId, eventId, eventId, eventId),
       this.db
-        .prepare(accountQuery + ` WHERE ${auth.target} = ? AND ` + auth.guard)
+        .prepare(auth.query + ` WHERE ${auth.target} = ? AND ` + auth.guard)
         .bind(target, auth.key),
       this.db.prepare(
         "SELECT count(*) AS n FROM users WHERE status = 'active' AND role = 'admin'"

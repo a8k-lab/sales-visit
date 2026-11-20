@@ -95,7 +95,9 @@ export function validateConfig(worker, config, account, overrides = []) {
     const vars = config.vars;
     if (
       !vars ||
-      Object.keys(vars).length !== 2 ||
+      Object.keys(vars).length !== 4 ||
+      vars.APP_ENV !== "production" ||
+      vars.DEMO_AUTH_ENABLED !== "false" ||
       typeof vars.TELEGRAM_CLIENT_ID !== "string" ||
       (vars.TELEGRAM_CLIENT_ID !== "" &&
         (!/^[1-9][0-9]*$/.test(vars.TELEGRAM_CLIENT_ID) ||

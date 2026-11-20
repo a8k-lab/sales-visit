@@ -21,8 +21,10 @@ curl --fail http://localhost:8787/health
 ```
 
 The example sets `WEB_ORIGINS=http://localhost:5173` for local Web CORS only.
-Set `TELEGRAM_CLIENT_ID` to your separate test bot's BotFather OIDC Client ID if
-testing Web login; otherwise leave it empty (Web login fails closed). Restart
+The example enables Demo Login with `APP_ENV=local` and `DEMO_AUTH_ENABLED=true`.
+Run `pnpm db:migrate:local` and `pnpm db:seed:demo:local`, then start Web; no Bot
+or Telegram configuration is needed. Set `TELEGRAM_CLIENT_ID` only if testing
+Telegram Login; otherwise leave it empty (only Telegram Login fails closed). Restart
 Wrangler after changing local vars. Do not edit production `wrangler.jsonc` for
 local setup or broaden the allowlist to `*`.
 
@@ -34,7 +36,9 @@ Never add `--remote` to local commands.
 
 `/health` is liveness only. Business reads require a valid Web session; public
 HTTP Visit/Stock Report writes remain denied. Local development does not bypass
-authentication. See [local Admin setup](../bot/README.md#local-accounts).
+authentication. Demo accounts use the same D1 sessions and authorization.
+See [demo/staging setup](../../docs/demo-environment.md) or
+[Telegram Admin setup](../bot/README.md#local-accounts).
 
 ## Common commands
 
