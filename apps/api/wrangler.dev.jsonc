@@ -7,6 +7,8 @@
   "vars": {
     "TELEGRAM_CLIENT_ID": "9096219015",
     "WEB_ORIGINS": "http://localhost:8787,https://sales-visit-dev.rtrivaldo05.workers.dev",
+    "APP_ENV": "staging",
+    "DEMO_AUTH_ENABLED": "true",
   },
   "ratelimits": [
     {

@@ -31,7 +31,8 @@
     "build:web:dev": "node scripts/build-web-dev.mjs",
     "preview:web:dev": "pnpm build:web:dev && pnpm --filter @sales-visit/web exec wrangler dev --config wrangler.dev.jsonc",
     "build:web:local": "VITE_API_URL=http://localhost:8788 node scripts/build-web-dev.mjs",
-    "preview:web:local": "pnpm build:web:local && pnpm --filter @sales-visit/web exec wrangler dev --config wrangler.dev.jsonc --port 8787"
+    "preview:web:local": "pnpm build:web:local && pnpm --filter @sales-visit/web exec wrangler dev --config wrangler.dev.jsonc --port 8787",
+    "deploy:web:dev": "pnpm build:web:dev && cd apps/web && pnpm exec wrangler deploy --config wrangler.dev.jsonc"
   },
   "devDependencies": {
     "jsonc-parser": "3.3.1",
