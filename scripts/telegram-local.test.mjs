@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { main, run, tunnelUrl } from "./telegram-local.mjs";
 
@@ -349,7 +350,7 @@ test("failures are concise and never expose secrets or raw responses", async () 
 test("CLI help works without credentials or network", () => {
   const result = spawnSync(
     process.execPath,
-    [new URL("./telegram-local.mjs", import.meta.url).pathname, "--help"],
+    [fileURLToPath(new URL("./telegram-local.mjs", import.meta.url)), "--help"],
     { encoding: "utf8" }
   );
   assert.equal(result.status, 0);
