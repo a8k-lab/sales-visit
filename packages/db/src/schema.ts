@@ -12,6 +12,7 @@ import {
 
 // IDs are supplied by the caller (for example crypto.randomUUID()).
 const id = () => text("id").primaryKey().notNull();
+const demoOnly = () => integer("demo_only").notNull().default(0);
 const createdAt = () =>
   integer("created_at", { mode: "timestamp_ms" })
     .notNull()
@@ -22,9 +23,11 @@ export const salesForce = sqliteTable(
   {
     id: id(),
     name: text("name").notNull(),
+    demoOnly: demoOnly(),
     createdAt: createdAt(),
   },
   (table) => [
+    check("sales_force_demo_only", sql`${table.demoOnly} IN (0,1)`),
     check("sales_force_id_nonblank", sql`length(trim(${table.id})) > 0`),
     check("sales_force_name_nonblank", sql`length(trim(${table.name})) > 0`),
   ]
@@ -69,6 +72,41 @@ export const users = sqliteTable(
       sql`typeof(${table.createdAt}) = 'integer' and typeof(${table.updatedAt}) = 'integer'`
     ),
     index("users_sales_force_idx").on(table.salesForceId),
+  ]
+);
+
+// Demo credentials never create or replace Telegram identity associations.
+export const telegramDemoSessions = sqliteTable(
+  "telegram_demo_sessions",
+  {
+    telegramUserId: text("telegram_user_id").primaryKey().notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (table) => [
+    check(
+      "telegram_demo_session_duration",
+      sql`${table.expiresAt} = ${table.createdAt} + 3600000`
+    ),
+  ]
+);
+
+export const telegramDemoChoices = sqliteTable(
+  "telegram_demo_choices",
+  {
+    token: text("token").primaryKey().notNull(),
+    telegramUserId: text("telegram_user_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (table) => [
+    index("telegram_demo_choices_owner").on(table.telegramUserId),
+    index("telegram_demo_choices_expiry").on(table.expiresAt),
   ]
 );
 
@@ -380,12 +418,14 @@ export const outlets = sqliteTable(
     id: id(),
     name: text("name").notNull(),
     createdAt: createdAt(),
+    demoOnly: demoOnly(),
     businessId: text("business_id"),
     noRs: text("no_rs"),
     // Null for legacy rows whose last modification time is unknown.
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
   },
   (table) => [
+    check("outlets_demo_only", sql`${table.demoOnly} IN (0,1)`),
     unique("outlets_business_id_unique").on(table.businessId),
     check("outlets_id_nonblank", sql`length(trim(${table.id})) > 0`),
     check("outlets_name_nonblank", sql`length(trim(${table.name})) > 0`),
@@ -410,12 +450,14 @@ export const visitSchedules = sqliteTable(
         onUpdate: "restrict",
       }),
     weekday: integer("weekday").notNull(),
+    demoOnly: demoOnly(),
     createdAt: createdAt(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
   },
   (table) => [
+    check("visit_schedules_demo_only", sql`${table.demoOnly} IN (0,1)`),
     check("visit_schedules_id_nonblank", sql`length(trim(${table.id})) > 0`),
     check(
       "visit_schedules_weekday_valid",

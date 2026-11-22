@@ -25,7 +25,10 @@ const verifiedLinks = `SELECT t.telegram_user_id, u.sales_force_id
     AND (SELECT count(*) FROM users claimant WHERE claimant.sales_force_id = u.sales_force_id) = 1`;
 
 export class ScheduleOperations {
-  constructor(private db: D1Database) {}
+  constructor(
+    private db: D1Database,
+    private demo = false
+  ) {}
 
   own(
     actor: BotActor,
@@ -52,6 +55,13 @@ export class ScheduleOperations {
     ).safeParse(input);
     if (!parsed.success) return { ok: false, code: "invalid" };
     const filter = parsed.data;
+    // Demo accounts have no Telegram identities; never resolve a real target.
+    if (
+      this.demo &&
+      "telegramUserId" in filter &&
+      filter.telegramUserId !== undefined
+    )
+      return { ok: false, code: "association_unavailable" };
     const salesForceId =
       "salesForceId" in filter && typeof filter.salesForceId === "string"
         ? filter.salesForceId
@@ -85,10 +95,11 @@ export class ScheduleOperations {
         s.weekday, s.created_at AS createdAt, s.updated_at AS updatedAt,
         o.name AS outletName, sf.name AS salesForceName,
         o.business_id AS outletBusinessId, o.no_rs AS outletNoRs,
-        (SELECT telegram_user_id FROM (${verifiedLinks}) WHERE sales_force_id = s.sales_force_id) AS telegramUserId
+        ${this.demo ? "NULL" : `(SELECT telegram_user_id FROM (${verifiedLinks}) WHERE sales_force_id = s.sales_force_id)`} AS telegramUserId
         FROM visit_schedules s JOIN outlets o ON o.id = s.outlet_id
         JOIN sales_force sf ON sf.id = s.sales_force_id
-        WHERE ${guard} AND ${scope} AND (? IS NULL OR s.weekday = ?) AND s.id > ?
+        WHERE ${this.demo ? "s.demo_only = 1 AND o.demo_only = 1 AND sf.demo_only = 1 AND" : ""}
+          ${guard} AND ${scope} AND (? IS NULL OR s.weekday = ?) AND s.id > ?
         ORDER BY s.id LIMIT 51`,
           values: [
             ...(own
@@ -103,7 +114,8 @@ export class ScheduleOperations {
           sql: `SELECT 1 AS linked WHERE ${guard} AND (? IS NULL OR EXISTS (${target}))`,
           values: [telegramUserId, telegramUserId],
         },
-      ]
+      ],
+      this.demo
     );
     if (!result.ok) return result;
     if (!result.data[1]!.results.length)

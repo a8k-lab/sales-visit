@@ -1,71 +1,82 @@
 import type { BotActor, BotIdentityService } from "@sales-visit/contracts";
 import { WorkerEntrypoint } from "cloudflare:workers";
 
-import { IdentityOperations } from "./identity.ts";
+import { botService } from "./bot-service.ts";
 import app from "./index.ts";
-import { OutletOperations } from "./outlets.ts";
-import { ScheduleOperations } from "./schedules.ts";
-import { VisitWizard } from "./visits/wizard.ts";
 
-// Only Workers explicitly bound to this named entrypoint can invoke these methods.
-// No fetch handler, HTTP router, header-based actor, or public RPC dispatcher.
+// Only the privately bound bot Worker can supply a verified Telegram sender.
 export class BotIdentity
   extends WorkerEntrypoint<ApiBindings>
   implements BotIdentityService
 {
+  private service() {
+    return botService(this.env);
+  }
+  demoAccounts(actor: BotActor) {
+    return this.service().demoAccounts(actor);
+  }
+  demoSelect(actor: BotActor, token: unknown) {
+    return this.service().demoSelect(actor, token);
+  }
+  demoStatus(actor: BotActor) {
+    return this.service().demoStatus(actor);
+  }
+  demoLogout(actor: BotActor) {
+    return this.service().demoLogout(actor);
+  }
   visitWizard(actor: BotActor, input: unknown) {
-    return new VisitWizard(this.env.DB).handle(actor, input);
+    return this.service().visitWizard(actor, input);
   }
   ownSchedule(actor: BotActor, input?: unknown) {
-    return new ScheduleOperations(this.env.DB).own(actor, input);
+    return this.service().ownSchedule(actor, input);
   }
   listSchedules(actor: BotActor, input?: unknown) {
-    return new ScheduleOperations(this.env.DB).list(actor, input);
+    return this.service().listSchedules(actor, input);
   }
   createSchedule(actor: BotActor, input: unknown) {
-    return new ScheduleOperations(this.env.DB).create(actor, input);
+    return this.service().createSchedule(actor, input);
   }
   listOutlets(actor: BotActor, input?: unknown) {
-    return new OutletOperations(this.env.DB).list(actor, input);
+    return this.service().listOutlets(actor, input);
   }
   getOutlet(actor: BotActor, input: unknown) {
-    return new OutletOperations(this.env.DB).get(actor, input);
+    return this.service().getOutlet(actor, input);
   }
   createOutlet(actor: BotActor, input: unknown) {
-    return new OutletOperations(this.env.DB).create(actor, input);
+    return this.service().createOutlet(actor, input);
   }
   updateOutlet(actor: BotActor, input: unknown) {
-    return new OutletOperations(this.env.DB).update(actor, input);
+    return this.service().updateOutlet(actor, input);
   }
   deleteOutlet(actor: BotActor, input: unknown) {
-    return new OutletOperations(this.env.DB).delete(actor, input);
+    return this.service().deleteOutlet(actor, input);
   }
   register(actor: BotActor) {
-    return new IdentityOperations(this.env.DB).register(actor);
+    return this.service().register(actor);
   }
   me(actor: BotActor) {
-    return new IdentityOperations(this.env.DB).me(actor);
+    return this.service().me(actor);
   }
   users(actor: BotActor, after?: string) {
-    return new IdentityOperations(this.env.DB).users(actor, after);
+    return this.service().users(actor, after);
   }
   setRole(actor: BotActor, input: unknown) {
-    return new IdentityOperations(this.env.DB).setRole(actor, input);
+    return this.service().setRole(actor, input);
   }
   disable(actor: BotActor, input: unknown) {
-    return new IdentityOperations(this.env.DB).disable(actor, input);
+    return this.service().disable(actor, input);
   }
   enable(actor: BotActor, input: unknown) {
-    return new IdentityOperations(this.env.DB).enable(actor, input);
+    return this.service().enable(actor, input);
   }
   pending(actor: BotActor, after?: string) {
-    return new IdentityOperations(this.env.DB).pending(actor, after);
+    return this.service().pending(actor, after);
   }
   approve(actor: BotActor, input: unknown) {
-    return new IdentityOperations(this.env.DB).approve(actor, input);
+    return this.service().approve(actor, input);
   }
   reject(actor: BotActor, input: unknown) {
-    return new IdentityOperations(this.env.DB).reject(actor, input);
+    return this.service().reject(actor, input);
   }
 }
 export default app;

@@ -60,9 +60,9 @@ Wrangler tracks applied migrations; running local migration apply again is safe.
   (Admins cannot be demoted/disabled) and immutable SF ownership rules. Association
   survives non-SF roles and disabling. Re-enabling may restore an unexpired,
   unrevoked session, exactly as for Telegram accounts.
-- Web management has nullable Telegram fields plus `displayName`. Bot Account
-  contracts, INNER JOIN identity queries and Telegram-specific authority stay
-  unchanged. Demo Users cannot use the Bot without an identity; linking is out of scope.
+- Web management has nullable Telegram fields plus `displayName`. Telegram Bot
+  Demo Mode now selects the same eligible accounts through a separate D1 credential;
+  demo accounts never acquire a Telegram identity. See [Telegram Demo Mode](telegram-demo-mode.md).
 - Business write policy is unchanged: public Visit/Stock Report POSTs stay denied.
 
 ## Deterministic data

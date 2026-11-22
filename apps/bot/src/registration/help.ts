@@ -30,6 +30,10 @@ export function helpSections(account: Account | null): string[] {
       "/register — Mendaftarkan akun Telegram; menunggu persetujuan Admin.",
       "/me — Melihat profil, role, status, Telegram ID dan Sales Force ID.",
       "/help — Menampilkan panduan penggunaan bot.",
+      "/demo — Pilih/ganti akun demo Admin, Supervisor, atau Sales Force (local/staging saja).",
+      "/demo_status — Akun demo aktif dan sisa sesi 1 jam.",
+      "/demo_logout — Keluar demo; kembali ke autentikasi Telegram asli.",
+      "Demo hanya membaca data bertanda demo sesuai role; registrasi, administrasi pengguna, perubahan data dan input Visit ditolak. Pilihan tombol berlaku 5 menit.",
     ]),
     section(
       2,

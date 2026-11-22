@@ -1,6 +1,7 @@
 import type { BotIdentityService } from "@sales-visit/contracts";
 import { type Bot } from "grammy";
 
+import { demoCommands } from "./demo/commands.ts";
 import { outletCommands } from "./outlets/commands.ts";
 import { registerCommands } from "./registration/commands.ts";
 import { scheduleCommands } from "./schedules/commands.ts";
@@ -9,7 +10,7 @@ import { visitCommands } from "./visits/commands.ts";
 export function installCommands(bot: Bot, api: BotIdentityService) {
   bot.use(async (ctx, next) => {
     if (
-      !ctx.message ||
+      (!ctx.message && !ctx.callbackQuery?.message) ||
       !ctx.from ||
       ctx.from.is_bot ||
       !Number.isSafeInteger(ctx.from.id) ||
@@ -18,7 +19,7 @@ export function installCommands(bot: Bot, api: BotIdentityService) {
       return;
     if (ctx.chat?.type !== "private") {
       if (
-        ctx.message.entities?.some(
+        ctx.message?.entities?.some(
           (entity) => entity.type === "bot_command" && entity.offset === 0
         )
       ) {
@@ -28,8 +29,10 @@ export function installCommands(bot: Bot, api: BotIdentityService) {
       }
       return;
     }
+    if (ctx.callbackQuery && ctx.chat.id !== ctx.from.id) return;
     await next();
   });
+  demoCommands(bot, api);
   registerCommands(bot, api);
   visitCommands(bot, api);
   // Planning deliveries are acknowledged even if a reply fails: Telegram must

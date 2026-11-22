@@ -8,8 +8,8 @@ WITH personas(id,name) AS (VALUES
  ('demo-sf-09','Dimas Kurniawan'), ('demo-sf-10','Ratna Wulandari'),
  ('demo-sf-11','Ilham Maulana'), ('demo-sf-12','Ayu Puspita'),
  ('demo-sf-13','Yoga Firmansyah'), ('demo-sf-14','Intan Kartika'))
-INSERT INTO sales_force (id, name, created_at)
-SELECT id, name, 1793664000000 FROM personas WHERE true
+INSERT INTO sales_force (id, name, created_at, demo_only)
+SELECT id, name, 1793664000000, 1 FROM personas WHERE true
 ON CONFLICT (id) DO NOTHING;
 
 WITH personas(id,name,status,role) AS (VALUES
@@ -39,8 +39,8 @@ FROM users WHERE id LIKE 'demo-sf-%' AND status = 'active' AND role = 'sales_for
 ON CONFLICT (sales_force_id) DO NOTHING;
 
 WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<35)
-INSERT INTO outlets (id, name, business_id, no_rs, created_at, updated_at)
-SELECT printf('demo-out-%02d',i), printf('Konter Nusantara %02d',i), printf('DEMO-OUT-%02d',i), printf('DEMO-RS-%02d',i), 1793664000000, 1793664000000 FROM n WHERE true
+INSERT INTO outlets (id, name, business_id, no_rs, created_at, updated_at, demo_only)
+SELECT printf('demo-out-%02d',i), printf('Konter Nusantara %02d',i), printf('DEMO-OUT-%02d',i), printf('DEMO-RS-%02d',i), 1793664000000, 1793664000000, 1 FROM n WHERE true
 ON CONFLICT (id) DO NOTHING;
 
 WITH catalog(id,name) AS (VALUES
@@ -74,9 +74,9 @@ FROM stock_reports r CROSS JOIN products p WHERE r.id LIKE 'demo-stock-%' AND p.
 ON CONFLICT (stock_report_id, product_id) DO NOTHING;
 
 WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<7)
-INSERT INTO visit_schedules (id, sales_force_id, outlet_id, weekday, created_at, updated_at)
+INSERT INTO visit_schedules (id, sales_force_id, outlet_id, weekday, created_at, updated_at, demo_only)
 SELECT printf('demo-schedule-%s-%d',sf.id,i), sf.id,
- printf('demo-out-%02d',1+((cast(substr(sf.id,-2) AS INTEGER)*2+i)%35)), i, 1793664000000, 1793664000000
+ printf('demo-out-%02d',1+((cast(substr(sf.id,-2) AS INTEGER)*2+i)%35)), i, 1793664000000, 1793664000000, 1
 FROM sales_force sf CROSS JOIN n WHERE sf.id >= 'demo-sf-01' AND sf.id <= 'demo-sf-14'
 ON CONFLICT (id) DO NOTHING
 ON CONFLICT (sales_force_id, outlet_id, weekday) DO NOTHING;

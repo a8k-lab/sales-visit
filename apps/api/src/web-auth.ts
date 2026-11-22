@@ -2,6 +2,9 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 
+import { demoEnabled, demoEligibility, demoAccountQuery } from "./demo-auth.ts";
+export { demoEnabled, demoEligibility } from "./demo-auth.ts";
+
 const telegramKeys = createRemoteJWKSet(
   URL.parse("https://oauth.telegram.org/.well-known/jwks.json")!
 );
@@ -68,19 +71,6 @@ export async function verifyTelegram(
     throw new Error("Invalid proof");
   return { telegramId: String(id), nonce: payload.nonce };
 }
-
-export const demoEnabled = (env: ApiBindings) =>
-  env.DEMO_AUTH_ENABLED === "true" &&
-  ["local", "staging"].includes(env.APP_ENV ?? "");
-
-export const demoEligibility = `u.status = 'active'
-  AND u.role IN ('admin','supervisor','sales_force')
-  AND length(trim(u.display_name)) BETWEEN 1 AND 256
-  AND instr(u.display_name, char(0)) = 0
-  AND u.display_name NOT GLOB ('*[' || char(1) || '-' || char(31) || char(127) || ']*')
-  AND (u.role <> 'sales_force' OR EXISTS (SELECT 1 FROM sales_force sf WHERE sf.id = u.sales_force_id
-    AND (SELECT count(*) FROM users WHERE sales_force_id = sf.id) = 1))
-  AND NOT EXISTS (SELECT 1 FROM telegram_identities WHERE user_id = u.id)`;
 
 async function issueSession(
   db: D1Database,
@@ -182,8 +172,7 @@ export function authRoutes(keys: JWTVerifyGetKey = telegramKeys) {
   });
   app.get("/demo/accounts", async (c) => {
     const rows =
-      await c.env.DB.prepare(`SELECT u.id, trim(u.display_name) AS name,
-      u.role, u.sales_force_id AS salesForceId FROM users u WHERE ${demoEligibility}
+      await c.env.DB.prepare(`${demoAccountQuery} WHERE ${demoEligibility}
       ORDER BY u.role, u.display_name, u.id`).all<WebAccount>();
     return c.json({ environment: c.env.APP_ENV, items: rows.results });
   });

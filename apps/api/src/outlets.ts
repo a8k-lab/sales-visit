@@ -31,8 +31,10 @@ export const unreferencedOutlet = `NOT EXISTS (SELECT 1 FROM visits WHERE outlet
 
 export class OutletOperations {
   private db: D1Database;
-  constructor(db: D1Database) {
+  private demo: boolean;
+  constructor(db: D1Database, demo = false) {
     this.db = db;
+    this.demo = demo;
   }
 
   async list(
@@ -47,10 +49,11 @@ export class OutletOperations {
       "monitoring",
       (guard) => [
         {
-          sql: `SELECT ${fields} FROM outlets WHERE id > ? AND ${guard} ORDER BY id LIMIT 51`,
+          sql: `SELECT ${fields} FROM outlets WHERE id > ? AND ${this.demo ? "demo_only = 1 AND" : ""} ${guard} ORDER BY id LIMIT 51`,
           values: [parsed.data.after ?? ""],
         },
-      ]
+      ],
+      this.demo
     );
     if (!result.ok) return result;
     const rows = result.data[0]!.results.map((row) =>
@@ -76,10 +79,11 @@ export class OutletOperations {
       "monitoring",
       (guard) => [
         {
-          sql: `SELECT ${fields} FROM outlets WHERE ${selected.column} = ? AND ${guard}`,
+          sql: `SELECT ${fields} FROM outlets WHERE ${selected.column} = ? AND ${this.demo ? "demo_only = 1 AND" : ""} ${guard}`,
           values: [selected.value],
         },
-      ]
+      ],
+      this.demo
     );
     if (!result.ok) return result;
     const row = outletDetailSchema.optional().parse(result.data[0]!.results[0]);

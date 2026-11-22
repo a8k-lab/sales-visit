@@ -8,6 +8,11 @@ planning changes or releases.
 
 ## Commands (private chat only)
 
+- `/demo`: choose or switch an eligible demo account by Admin/Supervisor/Sales Force
+  inline keyboard; `/demo_status`: account and remaining hour; `/demo_logout`:
+  restore normal authentication. Local/staging opt-in only, read-only marked
+  synthetic data and existing role scopes. See [Telegram Demo Mode](telegram-demo-mode.md).
+
 - `/start`, `/help`: Indonesian welcome and nine-section role-aware guide; safely
   packed replies and explicit differences from the original bot. See the
   [current command parity matrix and handoff](./design/telegram-bot-parity.md).

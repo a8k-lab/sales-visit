@@ -4,6 +4,8 @@ import {
   type PlanningResult,
 } from "@sales-visit/contracts";
 
+import { demoActorCte } from "./telegram-demo.ts";
+
 const actorCte = `WITH actor AS (
   SELECT u.id AS userId, u.role, sf.id AS salesForceId FROM users u
   JOIN telegram_identities t ON t.user_id = u.id
@@ -29,7 +31,8 @@ export async function planningBatch(
   db: D1Database,
   actor: BotActor,
   policy: PlanningPolicy,
-  statements: (guard: string) => PlanningStatement[]
+  statements: (guard: string) => PlanningStatement[],
+  demo = false
 ): Promise<PlanningResult<D1Result[]>> {
   const parsed = botActorSchema.safeParse(actor);
   if (!parsed.success) return { ok: false, code: "invalid" };
@@ -42,7 +45,7 @@ export async function planningBatch(
     const [permission, ...results] = await db.batch(
       queries.map(({ sql, values = [] }) =>
         db
-          .prepare(`${actorCte} ${sql}`)
+          .prepare(`${demo ? demoActorCte : actorCte} ${sql}`)
           .bind(parsed.data.telegramUserId, ...values)
       )
     );

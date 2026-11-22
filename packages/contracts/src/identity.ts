@@ -39,8 +39,25 @@ export type IdentityResult<T> =
         | "last_admin"
         | "association_locked";
     };
+export interface DemoAccount {
+  id: string;
+  name: string;
+  role: "admin" | "supervisor" | "sales_force";
+  salesForceId: string | null;
+}
+export type BotDemoResult =
+  | { ok: false; code: "disabled" | "invalid" | "expired" }
+  | { ok: true; data: { account: DemoAccount; expiresAt: number } | null };
 export interface BotIdentityService
   extends BotPlanningService, BotVisitService {
+  demoAccounts(
+    actor: BotActor
+  ): Promise<
+    { ok: false } | { ok: true; items: (DemoAccount & { token: string })[] }
+  >;
+  demoSelect(actor: BotActor, token: unknown): Promise<BotDemoResult>;
+  demoStatus(actor: BotActor): Promise<BotDemoResult>;
+  demoLogout(actor: BotActor): Promise<BotDemoResult>;
   register(actor: BotActor): Promise<IdentityResult<Account>>;
   me(actor: BotActor): Promise<IdentityResult<Account | null>>;
   pending(
