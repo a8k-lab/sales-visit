@@ -273,7 +273,7 @@ test("authenticated text login reaches real D1; help follows demo role and old c
   await command("/demo_login demo-sf-01");
   assert.match(lastText(), /Rizky Pratama[\s\S]*Sales Force/);
   await command("/help");
-  assert.match(lastText(), /\/jadwal \[hari\] \[after=kursor\]/);
+  assert.match(lastText(), /\/jadwal —/);
   assert.doesNotMatch(
     lastText(),
     /\/jadwalsales|\/salesvisit|\/konfirmasi|\/batal/
@@ -309,7 +309,7 @@ test("authenticated text login reaches real D1; help follows demo role and old c
   await command("/demo_logout");
   assert.equal(await session(), null);
   await command("/help");
-  assert.match(lastText(), /\/approve telegram_id role/);
+  assert.match(lastText(), /\/approve —/);
   await command("/demo_login demo-sf-01");
   const expired = Date.now() - 1;
   await db
@@ -319,7 +319,7 @@ test("authenticated text login reaches real D1; help follows demo role and old c
   await command("/demo_status");
   assert.match(lastText(), /tidak aktif/);
   await command("/help");
-  assert.match(lastText(), /\/approve telegram_id role/);
+  assert.match(lastText(), /\/approve —/);
   assert.deepEqual(
     (await db.prepare("SELECT * FROM telegram_identities").all()).results,
     identities

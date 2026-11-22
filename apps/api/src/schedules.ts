@@ -11,7 +11,18 @@ import {
   type VisitSchedule,
 } from "@sales-visit/contracts";
 
-import { planningBatch } from "./planning-access.ts";
+import { demoSchedulePredicate } from "./demo-data.ts";
+import {
+  planningBatch,
+  webPlanningBatch,
+  type PlanningPolicy,
+  type PlanningStatement,
+} from "./planning-access.ts";
+
+type ScheduleBatch = (
+  policy: PlanningPolicy,
+  statements: (guard: string) => PlanningStatement[]
+) => Promise<PlanningResult<D1Result[]>>;
 
 const fields =
   "id, sales_force_id AS salesForceId, outlet_id AS outletId, weekday, created_at AS createdAt, updated_at AS updatedAt";
@@ -25,29 +36,42 @@ const verifiedLinks = `SELECT t.telegram_user_id, u.sales_force_id
     AND (SELECT count(*) FROM users claimant WHERE claimant.sales_force_id = u.sales_force_id) = 1`;
 
 export class ScheduleOperations {
-  constructor(
-    private db: D1Database,
-    private demo = false
-  ) {}
+  private db: D1Database;
+  private demo: boolean;
+  constructor(db: D1Database, demo = false) {
+    this.db = db;
+    this.demo = demo;
+  }
 
   own(
     actor: BotActor,
     input: unknown = {}
   ): Promise<PlanningResult<PlanningPage<ScheduleDetail>>> {
-    return this.query(actor, input, true);
+    return this.query(input, true, (policy, statements) =>
+      planningBatch(this.db, actor, policy, statements, this.demo)
+    );
   }
 
   list(
     actor: BotActor,
     input: unknown = {}
   ): Promise<PlanningResult<PlanningPage<ScheduleDetail>>> {
-    return this.query(actor, input, false);
+    return this.query(input, false, (policy, statements) =>
+      planningBatch(this.db, actor, policy, statements, this.demo)
+    );
+  }
+
+  // Internal authenticated Web adapter; no new Bot RPC authority is accepted.
+  web(userId: string, input: unknown, own: boolean) {
+    return this.query(input, own, (policy, statements) =>
+      webPlanningBatch(this.db, userId, policy, statements)
+    );
   }
 
   private async query(
-    actor: BotActor,
     input: unknown,
-    own: boolean
+    own: boolean,
+    batch: ScheduleBatch
   ): Promise<PlanningResult<PlanningPage<ScheduleDetail>>> {
     // Own filters cannot contain any selected SF/Telegram/User identity.
     const parsed = (
@@ -85,38 +109,32 @@ export class ScheduleOperations {
           SELECT 1 FROM sales_force_supervisors assignment JOIN actor ON actor.userId = assignment.supervisor_user_id
           WHERE actor.role = 'supervisor' AND assignment.sales_force_id = s.sales_force_id))
         AND (? IS NULL OR s.sales_force_id = ?) AND (? IS NULL OR s.sales_force_id = (${target}))`;
-    const result = await planningBatch(
-      this.db,
-      actor,
-      own ? "own" : "monitoring",
-      (guard) => [
-        {
-          sql: `SELECT s.id, s.sales_force_id AS salesForceId, s.outlet_id AS outletId,
+    const result = await batch(own ? "own" : "monitoring", (guard) => [
+      {
+        sql: `SELECT s.id, s.sales_force_id AS salesForceId, s.outlet_id AS outletId,
         s.weekday, s.created_at AS createdAt, s.updated_at AS updatedAt,
         o.name AS outletName, sf.name AS salesForceName,
         o.business_id AS outletBusinessId, o.no_rs AS outletNoRs,
         ${this.demo ? "NULL" : `(SELECT telegram_user_id FROM (${verifiedLinks}) WHERE sales_force_id = s.sales_force_id)`} AS telegramUserId
         FROM visit_schedules s JOIN outlets o ON o.id = s.outlet_id
         JOIN sales_force sf ON sf.id = s.sales_force_id
-        WHERE ${this.demo ? "s.demo_only = 1 AND o.demo_only = 1 AND sf.demo_only = 1 AND" : ""}
+        WHERE ${this.demo ? demoSchedulePredicate + " AND" : ""}
           ${guard} AND ${scope} AND (? IS NULL OR s.weekday = ?) AND s.id > ?
         ORDER BY s.id LIMIT 51`,
-          values: [
-            ...(own
-              ? []
-              : [salesForceId, salesForceId, telegramUserId, telegramUserId]),
-            filter.weekday ?? null,
-            filter.weekday ?? null,
-            filter.after ?? "",
-          ],
-        },
-        {
-          sql: `SELECT 1 AS linked WHERE ${guard} AND (? IS NULL OR EXISTS (${target}))`,
-          values: [telegramUserId, telegramUserId],
-        },
-      ],
-      this.demo
-    );
+        values: [
+          ...(own
+            ? []
+            : [salesForceId, salesForceId, telegramUserId, telegramUserId]),
+          filter.weekday ?? null,
+          filter.weekday ?? null,
+          filter.after ?? "",
+        ],
+      },
+      {
+        sql: `SELECT 1 AS linked WHERE ${guard} AND (? IS NULL OR EXISTS (${target}))`,
+        values: [telegramUserId, telegramUserId],
+      },
+    ]);
     if (!result.ok) return result;
     if (!result.data[1]!.results.length)
       return { ok: false, code: "association_unavailable" };

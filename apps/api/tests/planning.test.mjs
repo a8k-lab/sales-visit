@@ -1252,7 +1252,7 @@ test("authorized Outlet CRUD over named RPC with migrated local D1", async (t) =
             headers: { "X-Telegram-User-ID": "1", "X-Role": "admin" },
           })
         ).status,
-        404
+        path === "/schedules" && method === "GET" ? 401 : 404
       );
   }
   assert.equal((await api.fetch("https://api/outlets")).status, 401);

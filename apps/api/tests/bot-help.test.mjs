@@ -1,8 +1,36 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+
+import { build } from "esbuild";
 
 import { helpSections } from "../../bot/src/registration/help.ts";
 
+const bundle = await build({
+  entryPoints: [
+    fileURLToPath(new URL("../../bot/src/commands.ts", import.meta.url)),
+  ],
+  bundle: true,
+  write: false,
+  format: "esm",
+  platform: "browser",
+  target: "es2022",
+});
+const { installCommands } = await import(
+  "data:text/javascript;base64," +
+    Buffer.from(bundle.outputFiles[0].text).toString("base64")
+);
+const handlers = new Set();
+installCommands(
+  {
+    use() {},
+    on() {},
+    command(name) {
+      handlers.add(name);
+    },
+  },
+  {}
+);
 const general = ["start", "help", "me"];
 const monitoring = ["jadwalsales", "outlets", "outlet", "outletinternal"];
 const users = [
@@ -37,89 +65,44 @@ const account = (role, status = "active") => ({
 });
 function check(profile, demo, expected) {
   const text = helpSections(profile, demo).join("\n\n");
-  assert.ok(text.length > 0 && text.length < 4096);
-  assert.match(text, /^Sales Visit Bot —/);
-  assert.match(
-    text,
-    /Notasi: arg_name = wajib satu; \[arg_name\] = opsional satu; arg_name\.\.\. = wajib beberapa; \[arg_name\.\.\.\] = opsional beberapa/
-  );
-  const actual = [...text.matchAll(/^\/(\w+)(?: [^\n]*?)? — .+$/gm)].map(
-    (match) => match[1]
-  );
-  assert.deepEqual(actual.toSorted(), expected.toSorted());
+  assert.ok(text.length > 0 && text.length < 2400);
+  assert.match(text, /^👤 Umum\n/);
+  const matches = [...text.matchAll(/^\/(\w+)(?: account_id)? — .+$/gm)];
+  assert.deepEqual(matches.map((m) => m[1]).toSorted(), expected.toSorted());
+  for (const match of matches) assert.ok(handlers.has(match[1]), match[1]);
   assert.doesNotMatch(
     text,
-    /TELEGRAM_ID|KURSOR|IMPORTANT NOTES|--hari|\[options\]|APP_ENV|DEMO_AUTH_ENABLED/
+    /Notasi|default:|Alternatif:|Format:|Contoh:|APP_ENV|DEMO_AUTH_ENABLED|hari=|after=|\.\.\.|\[|TELEGRAM_ID|KURSOR/
   );
   return text;
 }
 
-test("compact help advertises only commands authorized for each normal role/status", () => {
+test("minimal help lists only real handlers authorized for each role/status", () => {
   check(null, undefined, [...general, "register"]);
   for (const status of ["pending", "disabled", "rejected"]) {
     check(account(null, status), undefined, general);
     check(account("admin", status), undefined, general);
   }
-  check(account("admin"), undefined, [
+  const admin = check(account("admin"), undefined, [
     ...general,
     ...monitoring,
     ...users,
     ...outlets,
   ]);
+  for (const heading of ["📅 Monitoring", "👥 Pengguna", "🏪 Outlet & Jadwal"])
+    assert.ok(admin.includes(heading));
   check(account("supervisor"), undefined, [...general, ...monitoring]);
-  check(account("sales_force"), undefined, [...general, "jadwal", ...visits]);
-});
-
-test("CLI usage matches actual parsers, conditionally required arguments, defaults and allowed values", () => {
-  const admin = helpSections(account("admin"), { ok: true, data: null }).join(
-    "\n\n"
-  );
-  for (const usage of [
-    "/outlets [kursor]",
-    "/outlet outlet_id",
-    "/outletinternal internal_id",
-    "/jadwalsales [hari=hari] [sf=sales_force_id] [after=kursor]",
-    "/pending [kursor]",
-    "/users [kursor]",
-    "/approve telegram_id role [sales_force_id]",
-    "/setrole telegram_id role [sales_force_id]",
-    "/reject telegram_id",
-    "/disable telegram_id",
-    "/enable telegram_id",
-    "/tambahoutlet outlet_id no_rs nama_outlet...",
-    "/editoutlet outlet_id no_rs nama_outlet...",
-    "/hapusoutlet outlet_id KONFIRMASI",
-    "/editoutletinternal internal_id no_rs nama_outlet...",
-    "/hapusoutletinternal internal_id KONFIRMASI",
-    "/tambahjadwal sales_force_id internal_id hari",
-    "/demo_login account_id",
-  ])
-    assert.ok(admin.includes(usage + " —"), usage);
-  assert.match(admin, /admin, supervisor, sales \(alias: sales_force\)/);
   assert.match(
-    admin,
-    /sales_force_id wajib untuk sales\/sales_force; dilarang untuk role lain/
+    check(account("sales_force"), undefined, [...general, "jadwal", ...visits]),
+    /📋 Kunjungan/
   );
-  assert.match(admin, /default: semua hari\/SF, halaman pertama/);
-  assert.match(admin, /\/jadwalsales telegram_id \[hari\] \[after=kursor\]/);
-  assert.match(admin, /KONFIRMASI adalah teks wajib persis/);
-  const sf = helpSections(account("sales_force")).join("\n\n");
-  assert.match(sf, /\/jadwal \[hari\] \[after=kursor\] —/);
-  assert.match(sf, /default: hari ini \(WIB\), halaman pertama/);
-  assert.match(sf, /senin, selasa, rabu, kamis, jumat, sabtu, minggu, semua/);
-  assert.match(sf, /after= harus didahului hari/);
-  assert.match(sf, /24 jam/);
-  assert.match(sf, /Detail: kirim perintah/);
-  const readonly = helpSections(null, {
-    ok: true,
-    data: { account: { role: "admin" } },
-  }).join("\n\n");
-  assert.doesNotMatch(readonly, /\/jadwalsales telegram_id/);
 });
 
-test("demo availability and effective selected role control help; all demo writes stay hidden", () => {
+test("demo availability and selected role control minimalist help; all demo writes stay hidden", () => {
   const enabled = { ok: true, data: null };
   check(null, enabled, [...general, "register", ...demoCommands]);
+  for (const status of ["pending", "disabled", "rejected"])
+    check(account("admin", status), enabled, [...general, ...demoCommands]);
   check(account("admin"), enabled, [
     ...general,
     ...monitoring,
@@ -140,16 +123,13 @@ test("demo availability and effective selected role control help; all demo write
       ...demoCommands,
       ...(role === "sales_force" ? ["jadwal"] : monitoring),
     ];
-    // The selected demo role wins even if normal authentication was an Admin.
-    assert.match(check(account("admin"), selected, expected), /Hanya baca/);
+    assert.match(check(account("admin"), selected, expected), /🧪 Demo Mode/);
     check(null, selected, expected);
   }
-  // An ineligible unexpired demo credential must not reveal underlying Admin commands.
   check(account("admin"), { ok: false, code: "expired" }, [
     ...general,
     ...demoCommands,
   ]);
-  // Gate off / expiration / logout restores ordinary help without demo-only restrictions.
   check(account("sales_force"), { ok: false, code: "disabled" }, [
     ...general,
     "jadwal",

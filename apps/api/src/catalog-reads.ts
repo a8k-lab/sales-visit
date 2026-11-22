@@ -1,6 +1,7 @@
 import { createDb, sql, salesForce, outlets, products } from "@sales-visit/db";
 import type { Context } from "hono";
 
+import { demoOutletPredicate, webDemoCatalogScope } from "./demo-data.ts";
 import { operationalScope } from "./read-scope.ts";
 import type { WebEnv } from "./web-auth.ts";
 
@@ -13,8 +14,10 @@ export async function catalogPage(
   const q = c.req.query("q");
   const scope =
     kind === "salesForce"
-      ? operationalScope(c.get("account").id, salesForce.id)
-      : sql`1 = 1`;
+      ? sql`${operationalScope(c.get("account").id, salesForce.id)} and ${webDemoCatalogScope(c.get("account").id, "sales_force.demo_only = 1")}`
+      : kind === "outlets"
+        ? webDemoCatalogScope(c.get("account").id, demoOutletPredicate())
+        : sql`1 = 1`;
   const where = q
     ? sql`${scope} and instr(lower(${table.name} || ' ' || ${table.id}), lower(${q.trim()})) > 0`
     : scope;
@@ -37,7 +40,11 @@ export async function catalogPage(
 export async function outletDetail(c: Context<WebEnv>) {
   const outlet = await createDb(c.env.DB).query.outlets.findFirst({
     columns: { id: true, name: true, businessId: true, noRs: true },
-    where: (t, { eq }) => eq(t.id, c.req.param("id")!),
+    where: (t, { eq, and }) =>
+      and(
+        eq(t.id, c.req.param("id")!),
+        webDemoCatalogScope(c.get("account").id, demoOutletPredicate())
+      ),
   });
   if (!outlet) return c.json({ error: "Outlet not found" }, 404);
   return c.json(outlet);

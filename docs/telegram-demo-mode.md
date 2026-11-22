@@ -98,21 +98,87 @@ appear only when the API reports Demo Mode enabled. Normal non-demo commands are
   Schedule reads require **all three** rows marked; real Telegram target filters
   are rejected and Telegram identities are never projected. Existing planning
   policy guards, pagination, own-SF and Supervisor team scope are reused.
-- The local/staging synthetic seed marks only rows it **newly inserts**. Conflicts
-  never mark/overwrite existing records. Already seeded pre-0012 data therefore
-  remains hidden until an operator has verified and explicitly marked those rows
-  in a disposable local database, or uses a fresh local database. Do not blanket
-  mark records by ID prefix and do not mark real data. New demo accounts may have
-  empty schedules; demo eligibility does not itself establish data provenance.
+- The shared `apps/api/seeds/demo.sql` now also repairs provenance on unchanged
+  pre-0012 synthetic rows. Recovery requires exact deterministic IDs, original
+  seed timestamps, names and business fields; SF ownership must not belong to a
+  different/Telegram-linked account. Schedule recovery additionally requires both
+  marked parents and the exact original assignment/timestamps. Only `demo_only`
+  changes on conflict, never business fields. Edited/ambiguous collisions remain
+  unmarked for manual review. Reruns are idempotent; missing canonical rows may
+  be inserted, but conflicting real assignments are never overwritten. No new
+  migration or database reset is needed. New demo accounts may have no schedules.
 - Web authentication behavior is otherwise unchanged; this feature's read-only
   restriction applies to the Telegram demo credential, not ordinary Web sessions.
+
+## Shared data, missing records and Development bindings
+
+The previous discrepancy was in data classification, not separate Bot storage:
+Web catalog reads ignored `demo_only`, while Bot reads required it. Existing rows
+received `0` during migration 0012; the old seed's conflict no-ops never repaired
+that marker. Removing Bot isolation would expose real records and is not a fix.
+The revised seed recovers only exact, unchanged synthetic fingerprints.
+
+`demo-data.ts` supplies the common catalog/schedule provenance predicates. Web
+outlet list/page/detail reads now apply them to demo accounts, keeping linked
+normal users' existing access and response shapes. `ScheduleOperations` and the
+same D1 policies/query builder serve both the Bot and additive authenticated
+`GET /schedules` (there was no Web schedules endpoint/UI in this repository).
+No Web UI rewrite or copied schedule dataset is introduced. Web reporting and
+management features are otherwise unchanged.
+
+Equivalent reads for the same account:
+
+| Telegram                        | Authenticated Web API                      |
+| ------------------------------- | ------------------------------------------ |
+| SF `/jadwal semua`              | `GET /schedules`                           |
+| SF `/jadwal senin`              | `GET /schedules?weekday=1`                 |
+| Admin/Supervisor `/jadwalsales` | `GET /schedules`                           |
+| `/jadwalsales sf=demo-sf-01`    | `GET /schedules?salesForceId=demo-sf-01`   |
+| `/outlets`                      | `GET /outlets` or `GET /outlets?view=page` |
+| `/outletinternal demo-out-01`   | `GET /outlets/demo-out-01`                 |
+
+`/schedules` returns `{items,next}`, at most 50 rows per page; use `after=ID` to
+continue. No weekday filter means all days; `/jadwal` alone defaults to today WIB.
+SF cannot select another owner. Supervisor plans remain limited to current team
+assignments. SF's existing permitted `/jadwal` already contains Outlet names,
+business IDs, No. RS and internal IDs for its own plans; monitoring-only Bot
+Outlet commands remain monitoring-only. Missing/unclassified rows yield empty
+lists/404, never fabricated data or a fallback to real records.
+
+Default local API/Bot configs share `sales-visit-api` and API-local `sales-visit` D1.
+Development configs instead pair `sales-visit-bot-dev`'s `IDENTITY` service with
+`sales-visit-api-dev`, whose only D1 binding is `sales-visit-dev`. The Bot has no
+D1 binding. Root local seed/migration commands select the default config, **not**
+the dev database. Web must use the same API (VITE_API_URL), not staging/default.
+
+For local work using the dev configs, explicitly target that config in both steps:
+
+```sh
+pnpm --filter @sales-visit/api exec wrangler d1 migrations apply DB --local --config wrangler.dev.jsonc
+pnpm --filter @sales-visit/api exec wrangler d1 execute DB --local --config wrangler.dev.jsonc --file seeds/demo.sql
+```
+
+For a later operator-approved Cloudflare Development rollout (not executed here):
+
+1. Verify API config says `sales-visit-api-dev`, DB `sales-visit-dev` (not Production),
+   Bot `IDENTITY` targets that API, and Web targets its HTTPS URL. Back up dev data.
+2. Inspect pending migrations with `wrangler d1 migrations list DB --remote --config
+   wrangler.dev.jsonc` from `apps/api`. No migration is added by this fix; the
+   existing `demo_only` migration 0012 must already be applied.
+3. Review conflicts, then rerun the **same shared** seed against that verified dev
+   binding: `pnpm exec wrangler d1 execute DB --remote --config wrangler.dev.jsonc
+   --file seeds/demo.sql` from `apps/api`. Do not use the Production config.
+4. Release API and Bot using their `wrangler.dev.jsonc` files via the approved
+   non-Production workflow; no Web UI or Telegram webhook change is required.
+5. Compare the equivalent queries above. If some legacy rows remain unmarked,
+   inspect edits/ownership instead of blanket marking IDs or deleting data.
 
 ## Automated local checks
 
 All D1 test writes are disposable Miniflare-local only. No Telegram network calls:
 
 ```sh
-pnpm --filter @sales-visit/api exec node --test tests/telegram-demo.test.mjs tests/bot-demo.test.mjs tests/bot-help.test.mjs tests/bot-callback-webhook.test.mjs tests/demo-auth.test.mjs
+pnpm --filter @sales-visit/api exec node --test tests/telegram-demo.test.mjs tests/bot-demo.test.mjs tests/bot-help.test.mjs tests/bot-callback-webhook.test.mjs tests/demo-auth.test.mjs tests/demo-data-sync.test.mjs
 pnpm --filter @sales-visit/api test
 pnpm --filter @sales-visit/db test
 pnpm typecheck

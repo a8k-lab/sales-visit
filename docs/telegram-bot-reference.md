@@ -16,11 +16,10 @@ planning changes or releases.
 
 - `/start`, `/help`: Indonesian welcome and compact single-message guide limited
   to the effective role. Demo commands appear only when enabled; active Demo Mode
-  hides all disabled write/user-management commands. Each line includes actual
-  usage syntax, short descriptions, relevant defaults and allowed values. Required
-  arguments use lowercase snake_case; optional arguments use brackets, repeated
-  arguments use `...`. Named filters remain `hari=`, `sf=`, `after=` (not flags).
-  Details and examples remain in each command's usage/error response. See the
+  hides all disabled write/user-management commands. Short emoji headings and
+  `/command — description` lines keep it readable; only `/demo_login account_id`
+  includes an essential argument. Detailed grammar, defaults and examples remain
+  in individual command usage/error responses. See the
   [current command parity matrix and handoff](./design/telegram-bot-parity.md).
 - `/register`: pending account from the verified update's `message.from.id`.
 - `/me`: own role, status, Telegram display snapshot and Sales Force link.

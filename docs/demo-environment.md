@@ -77,12 +77,16 @@ filters when the current dashboard period no longer intersects the fixtures.
 Catalogs/operational lists exceed UI page sizes; the 20-persona account list fits
 one page initially. Additional accounts appear immediately through the API.
 
-Conflicts are specific no-ops, never UPDATE/DELETE/REPLACE. Reruns preserve edits,
-assignments and unrelated business data. If a reserved ID or master is already
-claimed, the seed preserves it rather than repairing/overwriting it; inspect
-conflicts privately. Only a pristine namespace guarantees the initial counts.
-Use only the guarded `db:seed:demo:local` / `db:seed:demo:staging` commands;
-never run the SQL against production. Original local seeds remain available.
+Reruns preserve business fields, edits, assignments and unrelated data; there are
+no deletes/replacements. The sole conflict UPDATE recovers `demo_only=1` on exact,
+unchanged pre-0012 seed fingerprints, with ownership/parent guards. Edited or
+ambiguous records remain unmarked for operator review. Only a pristine namespace
+guarantees the initial counts. Shared Web/Bot catalog visibility and the read-only
+Web schedules endpoint use those same markers and role scopes; see
+[Telegram data synchronization and Development bindings](telegram-demo-mode.md#shared-data-missing-records-and-development-bindings).
+Use the guarded `db:seed:demo:local` / `db:seed:demo:staging` commands, or the
+explicitly reviewed Development-config commands in that guide. Never run the SQL
+against production. Original local seeds remain available.
 
 ## Staging operator prerequisites (not performed by this change)
 

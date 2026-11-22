@@ -10,6 +10,7 @@ import {
   type PlanningPage,
 } from "@sales-visit/contracts";
 
+import { demoOutletPredicate } from "./demo-data.ts";
 import { planningBatch } from "./planning-access.ts";
 
 const fields =
@@ -49,7 +50,7 @@ export class OutletOperations {
       "monitoring",
       (guard) => [
         {
-          sql: `SELECT ${fields} FROM outlets WHERE id > ? AND ${this.demo ? "demo_only = 1 AND" : ""} ${guard} ORDER BY id LIMIT 51`,
+          sql: `SELECT ${fields} FROM outlets WHERE id > ? AND ${this.demo ? demoOutletPredicate() + " AND" : ""} ${guard} ORDER BY id LIMIT 51`,
           values: [parsed.data.after ?? ""],
         },
       ],
@@ -79,7 +80,7 @@ export class OutletOperations {
       "monitoring",
       (guard) => [
         {
-          sql: `SELECT ${fields} FROM outlets WHERE ${selected.column} = ? AND ${this.demo ? "demo_only = 1 AND" : ""} ${guard}`,
+          sql: `SELECT ${fields} FROM outlets WHERE ${selected.column} = ? AND ${this.demo ? demoOutletPredicate() + " AND" : ""} ${guard}`,
           values: [selected.value],
         },
       ],

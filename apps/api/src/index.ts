@@ -10,6 +10,7 @@ import type { JWTVerifyGetKey } from "jose";
 import { adminUserRoutes } from "./admin-users.ts";
 import { catalogPage, outletDetail } from "./catalog-reads.ts";
 import { dashboardOverview } from "./dashboard.ts";
+import { demoOutletPredicate, webDemoCatalogScope } from "./demo-data.ts";
 import {
   createVisit,
   createStockReport,
@@ -23,6 +24,7 @@ import { salesForceManagementRoutes } from "./sales-force-management.ts";
 import { supervisorAssignmentRoutes } from "./supervisor-assignments.ts";
 import { listVisits, validReadQuery, visitDetail } from "./visit-reads.ts";
 import { authRoutes, sessionAccount, type WebEnv } from "./web-auth.ts";
+import { webSchedules } from "./web-schedules.ts";
 
 // No header, secret, environment switch, or development bypass supplies identity.
 // Tests explicitly inject a resolver in-process; the deployed default denies writes.
@@ -106,7 +108,7 @@ export function createApp(
   app.use("*", async (c, next) => {
     if (
       !["GET", "HEAD"].includes(c.req.method) ||
-      !/^\/(dashboard|sales-force|outlets|products|visits|stock-reports)(\/|$)/.test(
+      !/^\/(dashboard|sales-force|outlets|products|visits|stock-reports|schedules)(\/|$)/.test(
         c.req.path
       )
     )
@@ -144,7 +146,8 @@ export function createApp(
     const rows = await createDb(c.env.DB).query.salesForce.findMany({
       ...page(c),
       columns: { id: true, name: true },
-      where: (table) => operationalScope(c.get("account").id, table.id),
+      where: (table) =>
+        sql`${operationalScope(c.get("account").id, table.id)} and ${webDemoCatalogScope(c.get("account").id, "salesForce.demo_only = 1")}`,
       orderBy: (table, { asc }) => [asc(table.id)],
     });
     return c.json(rows);
@@ -155,11 +158,14 @@ export function createApp(
     const rows = await createDb(c.env.DB).query.outlets.findMany({
       ...page(c),
       columns: { id: true, name: true },
+      where: () =>
+        webDemoCatalogScope(c.get("account").id, demoOutletPredicate()),
       orderBy: (table, { asc }) => [asc(table.id)],
     });
     return c.json(rows);
   });
 
+  app.get("/schedules", webSchedules);
   app.get("/outlets/:id", outletDetail);
   app.get("/products", async (c) => {
     if (c.req.query("view") === "page") return catalogPage(c, "products");
