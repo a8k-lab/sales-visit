@@ -41,8 +41,9 @@ With an already configured **dedicated test bot**, in private chat:
 Demo Mode is intentionally **read-only**: `/register`, user enumeration and
 administration, Outlet/schedule mutations, and the complete Visit wizard (including
 drafts) are forbidden. It cannot submit reports, notify real target users, or alter
-operational data. `/help` describes normal role capabilities as well as this
-additional restriction. Normal non-demo Bot commands are unchanged.
+operational data. `/help` is a compact single-message guide showing only commands
+permitted for the selected role, with all disabled writes hidden. Demo commands
+appear only when the API reports Demo Mode enabled. Normal non-demo commands are unchanged.
 
 ## Architecture and security
 
@@ -67,6 +68,17 @@ additional restriction. Normal non-demo Bot commands are unchanged.
   `/demo` invalidate existing choices. Expired choices are cleaned in bounded
   batches during picker creation; expired sessions are inert and overwritten on
   the next selection (at most one stored credential per sender).
+- Test/local webhook helpers request `allowed_updates=["message","callback_query"]`.
+  An existing Telegram registration restricted to `message` must be refreshed by
+  its operator before Telegram can deliver button clicks. Updating code does not
+  change a live webhook subscription; never take over a Production/shared bot.
+- The authenticated, bounded webhook parser accepts both text `message` and
+  `callback_query` updates. It validates the callback's own sender separately from
+  the original keyboard message (which is normally sent by the bot), query ID,
+  chat, and 1–64-byte callback data. Ambiguous/malformed updates are ignored.
+  Callbacks are acknowledged before RPC work; stale acknowledgements or failed
+  keyboard cleanup never mask a successfully activated session. Unknown, group,
+  mismatched-chat and inline-message callbacks are acknowledged without RPC.
 - Both commands and callbacks require a non-bot, positive safe Telegram sender ID
   and a private chat. Callbacks also require the chat ID to match that sender. Inline-message/group callbacks
   cannot reach RPC. The existing authenticated webhook boundary remains unchanged.

@@ -10,13 +10,24 @@ import { visitCommands } from "./visits/commands.ts";
 export function installCommands(bot: Bot, api: BotIdentityService) {
   bot.use(async (ctx, next) => {
     if (
-      (!ctx.message && !ctx.callbackQuery?.message) ||
       !ctx.from ||
       ctx.from.is_bot ||
       !Number.isSafeInteger(ctx.from.id) ||
       ctx.from.id <= 0
     )
       return;
+    if (
+      ctx.callbackQuery &&
+      (ctx.chat?.type !== "private" || ctx.chat.id !== ctx.from.id)
+    ) {
+      await ctx
+        .answerCallbackQuery({
+          text: "Gunakan tombol di chat pribadi milikmu.",
+        })
+        .catch(() => {});
+      return;
+    }
+    if (!ctx.message && !ctx.callbackQuery?.message) return;
     if (ctx.chat?.type !== "private") {
       if (
         ctx.message?.entities?.some(
@@ -29,10 +40,16 @@ export function installCommands(bot: Bot, api: BotIdentityService) {
       }
       return;
     }
-    if (ctx.callbackQuery && ctx.chat.id !== ctx.from.id) return;
     await next();
   });
   demoCommands(bot, api);
+  bot.on("callback_query", async (ctx) => {
+    await ctx
+      .answerCallbackQuery({
+        text: "Tombol tidak tersedia. Ketik /demo untuk pilihan baru.",
+      })
+      .catch(() => {});
+  });
   registerCommands(bot, api);
   visitCommands(bot, api);
   // Planning deliveries are acknowledged even if a reply fails: Telegram must

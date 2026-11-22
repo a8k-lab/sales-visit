@@ -19,27 +19,33 @@ function status(result: BotDemoResult) {
   return `Demo Mode: ${account.name}\nRole: ${account.role}\nUser ID: ${account.id}\nSisa sesi: ${Math.max(0, Math.ceil((expiresAt - Date.now()) / 60000))} menit.\nHanya baca data demo; perubahan data, registrasi, dan input Visit dinonaktifkan. /demo untuk ganti akun; /demo_logout untuk keluar.`;
 }
 export function demoCommands(bot: Bot, api: BotIdentityService) {
-  // Acknowledge every matching callback, including malformed/expired choices.
+  // Stop the spinner before D1/RPC work. A stale query can no longer be answered,
+  // but must not prevent an otherwise valid selection or its success message.
   bot.callbackQuery(/^demo:/, async (ctx) => {
+    await ctx
+      .answerCallbackQuery({ text: "Memproses pilihan demo…" })
+      .catch(() => {});
+    let result: BotDemoResult;
     try {
-      const result = await api.demoSelect(
+      // API atomically validates the opaque token, sender ownership, selected
+      // account eligibility and expiry, then consumes all of this owner's choices.
+      result = await api.demoSelect(
         actor(ctx),
         ctx.callbackQuery.data.slice(5)
       );
-      await ctx.answerCallbackQuery({
-        text: result.ok
-          ? "Demo Mode aktif"
-          : "Pilihan tidak tersedia; gunakan /demo.",
-      });
-      if (result.ok)
-        await ctx.editMessageReplyMarkup({
-          reply_markup: new InlineKeyboard(),
-        });
-      await ctx.reply(status(result));
     } catch {
-      await ctx.answerCallbackQuery({
-        text: "Demo tidak tersedia. Coba /demo lagi.",
-      });
+      await ctx.reply("Demo tidak tersedia. Coba /demo lagi.");
+      return;
+    }
+    if (result.ok && result.data) {
+      // Cosmetic cleanup only: old/inaccessible messages may not be editable.
+      // Failure here must never hide a successfully persisted session.
+      await ctx
+        .editMessageReplyMarkup({ reply_markup: new InlineKeyboard() })
+        .catch(() => {});
+      await ctx.reply(`Demo Mode aktif (durasi 1 jam).\n${status(result)}`);
+    } else {
+      await ctx.reply(status(result));
     }
   });
   bot.command("demo", async (ctx) => {

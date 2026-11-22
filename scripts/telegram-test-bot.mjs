@@ -402,7 +402,7 @@ export async function operate(action, url, dependencies = {}) {
     await telegram(token, "setWebhook", {
       url,
       secret_token: secret,
-      allowed_updates: ["message"],
+      allowed_updates: ["message", "callback_query"],
       drop_pending_updates: false,
     });
     log(

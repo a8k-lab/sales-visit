@@ -97,7 +97,10 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
       await result(ctx, response);
       return;
     }
-    await replyBlocks(ctx, helpSections(response.data));
+    // Read-only status lookup: never call demoAccounts here (it invalidates
+    // outstanding picker buttons). me() already resolves demo before real auth.
+    const demo = await api.demoStatus(actor(ctx));
+    await ctx.reply(helpSections(response.data, demo).join("\n\n"));
   });
   bot.command("me", async (ctx) => {
     const response = await api.me(actor(ctx));

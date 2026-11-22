@@ -83,7 +83,7 @@ function fixture(t, options = {}) {
         assert.deepEqual(payload, {
           url: URL,
           secret_token: state.uploaded.TELEGRAM_WEBHOOK_SECRET,
-          allowed_updates: ["message"],
+          allowed_updates: ["message", "callback_query"],
           drop_pending_updates: false,
         });
         state.current = URL;

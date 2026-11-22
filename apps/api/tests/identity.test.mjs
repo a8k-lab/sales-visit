@@ -949,55 +949,38 @@ test("registration, authorization and verified webhook across real Worker RPC + 
     );
 
     await t.test(
-      "nine-section help, real grammar, role-aware UX and Telegram bounds",
+      "compact help, role-aware UX and Telegram bounds",
       async () => {
-        const titles = [
-          "USER COMMANDS",
-          "SALES COMMANDS",
-          "ADMIN & SUPERVISOR COMMANDS",
-          "OUTLET COMMANDS",
-          "ADMIN COMMANDS",
-          "OUTLET ADMIN COMMANDS",
-          "AVAILABLE ROLES",
-          "SALES VISIT INPUT FORMAT",
-          "IMPORTANT NOTES",
-        ];
         for (const id of [900, 901, 902, 903, 904, 999]) {
           const start = sent.length;
           await webhook(id, "/help");
           const messages = sent.slice(start);
-          assert.ok(messages.length >= 1 && messages.length <= 4);
+          assert.equal(messages.length, 1);
           for (const message of messages) {
             assert.ok(message.text.length > 0 && message.text.length <= 4096);
             assert.equal(message.parse_mode, undefined);
           }
           const guide = messages.map((m) => m.text).join("\n");
-          titles.forEach((title, i) =>
-            assert.ok(guide.includes(`${i + 1}. ${title}`))
-          );
-          assert.match(guide, /belum ada Periode/);
-          assert.match(guide, /Stock Report belum dikumpulkan/);
+          assert.match(guide, /^Umum\n/);
+          assert.doesNotMatch(guide, /\/demo\b/); // API defaults to demo disabled.
+          assert.doesNotMatch(guide, /Contoh:|Format:|IMPORTANT NOTES/);
           assert.doesNotMatch(guide, /\/test\b/);
           if (id === 900) {
-            for (const example of [
-              "/setrole 123456789 sales sf-01",
-              "/approve 123456789 sales sf-01",
-              "/jadwalsales sf=sf-01 hari=jumat",
-              "/users [KURSOR]",
-              "/disable TELEGRAM_ID",
-              "/enable TELEGRAM_ID",
-              "/tambahoutlet BUSINESS_ID NO_RS NAMA_OUTLET",
-              "/editoutlet BUSINESS_ID NO_RS_BARU NAMA_OUTLET_BARU",
-              "/hapusoutlet BUSINESS_ID KONFIRMASI",
-              "/outletinternal INTERNAL_ID",
-              "/jadwalsales TELEGRAM_ID [HARI]",
-              "/jadwalsales 123456789 JuMaT",
+            for (const command of [
+              "/setrole",
+              "/approve",
+              "/jadwalsales",
+              "/users",
+              "/disable",
+              "/enable",
+              "/tambahoutlet",
+              "/editoutlet",
+              "/hapusoutlet",
+              "/outletinternal",
+              "/tambahjadwal",
             ])
-              assert.ok(guide.includes(example));
-            assert.doesNotMatch(
-              guide,
-              /No\. RS dan ID bisnis Outlet belum didukung|bukan Telegram ID posisi pertama/
-            );
+              assert.ok(guide.includes(command + " —"));
+            assert.doesNotMatch(guide, /\/salesvisit|\/konfirmasi|\/batal/);
           }
         }
         await webhook(900, "/start");

@@ -169,8 +169,12 @@ export async function run(args, dependencies = {}) {
     (!owned.includes(info.url) ||
       info.has_custom_certificate !== false ||
       !Array.isArray(info.allowed_updates) ||
-      info.allowed_updates.length !== 1 ||
-      info.allowed_updates[0] !== "message")
+      !info.allowed_updates.includes("message") ||
+      info.allowed_updates.length > 2 ||
+      new Set(info.allowed_updates).size !== info.allowed_updates.length ||
+      info.allowed_updates.some(
+        (type) => !["message", "callback_query"].includes(type)
+      ))
   )
     throw new LocalError(
       "Unexpected existing webhook; refusing changes. Use a separate test bot with an unset webhook."
@@ -192,7 +196,7 @@ export async function run(args, dependencies = {}) {
     (await telegram("setWebhook", {
       url: target,
       secret_token: vars.TELEGRAM_WEBHOOK_SECRET,
-      allowed_updates: ["message"],
+      allowed_updates: ["message", "callback_query"],
       drop_pending_updates: false,
     })) !== true
   )

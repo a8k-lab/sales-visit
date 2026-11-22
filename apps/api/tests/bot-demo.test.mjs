@@ -56,6 +56,7 @@ test("private keyboards group dynamic accounts; callbacks verify sender/chat and
     role: "sales_force",
     salesForceId: "sf",
   };
+  let unavailable = false;
   const api = {
     demoAccounts: async (actor) => {
       calls.push(["accounts", actor]);
@@ -70,7 +71,9 @@ test("private keyboards group dynamic accounts; callbacks verify sender/chat and
       };
     },
     demoSelect: async (actor, token) => {
+      assert.equal(deliveries.at(-1).method, "answerCallbackQuery");
       calls.push(["select", actor, token]);
+      if (unavailable) throw new Error("Synthetic unavailable RPC");
       return token === "2".repeat(32)
         ? { ok: true, data: { account, expiresAt: Date.now() + 3600000 } }
         : { ok: false, code: "expired" };
@@ -155,4 +158,13 @@ test("private keyboards group dynamic accounts; callbacks verify sender/chat and
   await message("/demo_logout");
   assert.equal(calls.at(-1)[0], "logout");
   assert.ok(deliveries.at(-1).payload.text.includes("normal"));
+  unavailable = true;
+  const start = deliveries.length;
+  await callback("demo:" + "2".repeat(32));
+  assert.equal(
+    deliveries.slice(start).filter((d) => d.method === "answerCallbackQuery")
+      .length,
+    1
+  );
+  assert.match(deliveries.at(-1).payload.text, /Demo tidak tersedia/);
 });
