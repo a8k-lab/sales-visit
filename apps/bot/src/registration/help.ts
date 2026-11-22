@@ -2,15 +2,15 @@ import type { Account, BotDemoResult } from "@sales-visit/contracts";
 
 const section = (title: string, lines: string[]) =>
   [title, ...lines].join("\n");
+const days = "senin, selasa, rabu, kamis, jumat, sabtu, minggu";
 
-// Only advertise commands permitted by the current role and demo restrictions.
-// Detailed argument grammar belongs in each command's usage/error response.
+// Usage mirrors the command parsers. No invented flags or privileges: the
+// server's live demo status determines both effective role and read-only scope.
 export function helpSections(
   account: Account | null,
   demo: BotDemoResult = { ok: false, code: "disabled" }
 ): string[] {
   const demoEnabled = demo.ok || demo.code !== "disabled";
-  // An ineligible but unexpired demo credential also fails closed in the API.
   const readOnly = demoEnabled && (!demo.ok || demo.data !== null);
   const role = readOnly
     ? demo.ok
@@ -20,56 +20,67 @@ export function helpSections(
       ? account.role
       : null;
   const sections = [
+    "Sales Visit Bot — lihat jadwal dan Outlet, kelola akses, serta catat kunjungan sesuai role. Gunakan chat pribadi.",
     section("Umum", [
       "/start — Mulai bot.",
-      "/help — Lihat perintah yang tersedia.",
-      "/me — Lihat profil dan status akun.",
+      "/help — Panduan perintah sesuai akses.",
+      "/me — Profil dan status akun.",
       ...(!account && !readOnly
-        ? ["/register — Daftar dan tunggu persetujuan Admin."]
+        ? ["/register — Daftar; tunggu persetujuan Admin."]
         : []),
     ]),
   ];
-  if (role === "admin" || role === "supervisor") {
+  if (role === "admin" || role === "supervisor")
     sections.push(
       section("Monitoring", [
-        "/jadwalsales — Lihat jadwal Sales Force sesuai akses.",
-        "/outlets — Daftar Outlet.",
-        "/outlet — Detail Outlet berdasarkan ID bisnis.",
-        "/outletinternal — Detail Outlet berdasarkan ID internal.",
+        "/outlets [kursor] — Daftar Outlet; default: halaman pertama.",
+        "/outlet outlet_id — Detail berdasarkan ID bisnis Outlet.",
+        "/outletinternal internal_id — Detail berdasarkan ID internal Outlet.",
+        "/jadwalsales [hari=hari] [sf=sales_force_id] [after=kursor] — Jadwal sesuai akses; default: semua hari/SF, halaman pertama.",
+        `hari: ${days}. Jangan campur filter bernama dan posisi.`,
+        readOnly
+          ? "Alternatif: /jadwalsales hari [after=kursor]."
+          : "Alternatif: /jadwalsales hari [after=kursor] atau /jadwalsales telegram_id [hari] [after=kursor]. Telegram ID wajib terkait SF aktif unik.",
       ])
     );
-  }
   if (role === "admin" && !readOnly) {
     sections.push(
       section("Pengelolaan Pengguna", [
-        "/pending — Lihat permintaan registrasi.",
-        "/users — Daftar pengguna.",
-        "/approve — Setujui registrasi dan tetapkan role.",
-        "/reject — Tolak registrasi.",
-        "/setrole — Ubah role pengguna aktif.",
-        "/disable — Nonaktifkan pengguna.",
-        "/enable — Aktifkan kembali pengguna.",
+        "/pending [kursor] — Registrasi menunggu persetujuan; default: halaman pertama.",
+        "/users [kursor] — Daftar pengguna; default: halaman pertama.",
+        "/approve telegram_id role [sales_force_id] — Setujui registrasi.",
+        "/reject telegram_id — Tolak registrasi.",
+        "/setrole telegram_id role [sales_force_id] — Ubah role pengguna aktif.",
+        "role: admin, supervisor, sales (alias: sales_force). sales_force_id wajib untuk sales/sales_force; dilarang untuk role lain.",
+        "/disable telegram_id — Nonaktifkan pengguna non-Admin.",
+        "/enable telegram_id — Aktifkan kembali pengguna disabled.",
       ])
     );
     sections.push(
       section("Pengelolaan Outlet", [
-        "/tambahoutlet — Tambah Outlet.",
-        "/editoutlet — Ubah Outlet berdasarkan ID bisnis.",
-        "/hapusoutlet — Hapus Outlet yang belum dirujuk.",
-        "/editoutletinternal — Ubah Outlet berdasarkan ID internal.",
-        "/hapusoutletinternal — Hapus Outlet berdasarkan ID internal.",
-        "/tambahjadwal — Tambah rencana kunjungan mingguan.",
+        "/tambahoutlet outlet_id no_rs nama_outlet... — Tambah Outlet; outlet_id adalah ID bisnis.",
+        "/editoutlet outlet_id no_rs nama_outlet... — Ubah No. RS/nama berdasarkan ID bisnis.",
+        "/hapusoutlet outlet_id KONFIRMASI — Hapus berdasarkan ID bisnis jika belum dirujuk.",
+        "/editoutletinternal internal_id no_rs nama_outlet... — Ubah berdasarkan ID internal.",
+        "/hapusoutletinternal internal_id KONFIRMASI — Hapus berdasarkan ID internal jika belum dirujuk.",
+        "/tambahjadwal sales_force_id internal_id hari — Tambah jadwal; internal_id adalah Outlet, hari sama seperti Monitoring.",
+        "KONFIRMASI adalah teks wajib persis; nama_outlet... memuat seluruh kata nama.",
       ])
     );
   }
   if (role === "sales_force") {
-    sections.push(section("Jadwal", ["/jadwal — Lihat jadwal sendiri (WIB)."]));
+    sections.push(
+      section("Jadwal", [
+        "/jadwal [hari] [after=kursor] — Jadwal sendiri; default: hari ini (WIB), halaman pertama.",
+        `hari: ${days}, semua. after= harus didahului hari.`,
+      ])
+    );
     if (!readOnly)
       sections.push(
         section("Sales Visit", [
-          "/salesvisit — Mulai atau lanjutkan draf Visit.",
-          "/konfirmasi — Simpan Visit atau cek hasilnya.",
-          "/batal — Batalkan draf Visit.",
+          "/salesvisit — Mulai/lanjut draf Visit (24 jam); ikuti petunjuk jawaban bot.",
+          "/konfirmasi — Simpan pratinjau Visit atau cek hasil tersimpan.",
+          "/batal — Batalkan draf yang belum tersimpan.",
         ])
       );
   }
@@ -79,10 +90,14 @@ export function helpSections(
         ...(readOnly
           ? ["Hanya baca data demo; perubahan data dinonaktifkan."]
           : []),
-        "/demo — Pilih atau ganti akun demo (1 jam).",
-        "/demo_status — Lihat akun demo dan sisa sesi.",
-        "/demo_logout — Keluar demo dan pulihkan akses Telegram.",
+        "/demo — Daftar akun demo yang tersedia.",
+        "/demo_login account_id — Pilih/ganti akun demo; sesi 60 menit, hanya baca.",
+        "/demo_status — Akun demo aktif dan sisa sesi.",
+        "/demo_logout — Keluar demo; pulihkan autentikasi Telegram.",
       ])
     );
+  sections.push(
+    "Notasi: arg_name = wajib satu; [arg_name] = opsional satu; arg_name... = wajib beberapa; [arg_name...] = opsional beberapa. Tanda []/... bukan untuk diketik.\nDetail: kirim perintah yang memerlukan argumen tanpa argumen untuk format lengkap; ikuti petunjuk draf Visit. Salin ID/kursor persis dari balasan bot (termasuk token ~)."
+  );
   return sections;
 }

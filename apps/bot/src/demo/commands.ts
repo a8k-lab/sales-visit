@@ -1,73 +1,96 @@
 import type { BotDemoResult, BotIdentityService } from "@sales-visit/contracts";
-import { InlineKeyboard, type Bot } from "grammy";
+import type { Bot } from "grammy";
 
 import { actor } from "../actor.ts";
+import {
+  args,
+  decodeToken,
+  displayId,
+  label,
+  replyBlocks,
+} from "../planning/shared.ts";
 
 const roles = [
   ["admin", "Admin"],
   ["supervisor", "Supervisor"],
   ["sales_force", "Sales Force"],
 ] as const;
+const roleName = (role: string) =>
+  roles.find(([key]) => key === role)?.[1] ?? role;
 function status(result: BotDemoResult) {
-  if (!result.ok)
-    return result.code === "disabled"
-      ? "Demo Mode tidak tersedia. Hanya aktif di local/staging dengan DEMO_AUTH_ENABLED=true."
-      : "Pilihan demo tidak valid atau kedaluwarsa. Ketik /demo untuk memilih lagi.";
+  if (!result.ok) {
+    if (result.code === "disabled") return "Demo Mode tidak tersedia.";
+    if (result.code === "invalid")
+      return "ID akun tidak valid. Format: /demo_login account_id. Salin ID/token dari /demo.";
+    if (result.code === "expired")
+      return "Akun demo tidak lagi tersedia. Gunakan /demo_login account_id untuk memilih lagi atau /demo_logout untuk keluar.";
+    return "Akun demo tidak tersedia atau tidak memenuhi syarat. Ketik /demo untuk daftar akun.";
+  }
   if (!result.data)
-    return "Demo Mode tidak aktif. Autentikasi Telegram normal berlaku. Ketik /demo untuk memilih akun.";
+    return "Demo Mode tidak aktif. Autentikasi Telegram normal berlaku. Ketik /demo untuk daftar akun.";
   const { account, expiresAt } = result.data;
-  return `Demo Mode: ${account.name}\nRole: ${account.role}\nUser ID: ${account.id}\nSisa sesi: ${Math.max(0, Math.ceil((expiresAt - Date.now()) / 60000))} menit.\nHanya baca data demo; perubahan data, registrasi, dan input Visit dinonaktifkan. /demo untuk ganti akun; /demo_logout untuk keluar.`;
+  return `Akun: ${label(account.name)}\nRole: ${roleName(account.role)}\nID: ${displayId(account.id)}\nSisa sesi: ${Math.max(0, Math.ceil((expiresAt - Date.now()) / 60000))} menit.\nDemo Mode hanya baca. /demo_login account_id untuk ganti akun; /demo_logout untuk keluar.`;
 }
 export function demoCommands(bot: Bot, api: BotIdentityService) {
-  // Stop the spinner before D1/RPC work. A stale query can no longer be answered,
-  // but must not prevent an otherwise valid selection or its success message.
-  bot.callbackQuery(/^demo:/, async (ctx) => {
-    await ctx
-      .answerCallbackQuery({ text: "Memproses pilihan demo…" })
-      .catch(() => {});
-    let result: BotDemoResult;
+  bot.command("demo", async (ctx) => {
     try {
-      // API atomically validates the opaque token, sender ownership, selected
-      // account eligibility and expiry, then consumes all of this owner's choices.
-      result = await api.demoSelect(
-        actor(ctx),
-        ctx.callbackQuery.data.slice(5)
-      );
+      const result = await api.demoAccounts(actor(ctx));
+      if (!result.ok) {
+        await ctx.reply("Demo Mode tidak tersedia.");
+        return;
+      }
+      const blocks = [
+        "AKUN DEMO\nPilih dengan /demo_login account_id\nSesi: 60 menit. Demo Mode hanya baca. Salin ID/token persis.",
+      ];
+      if (!result.items.length)
+        blocks.push("Belum ada akun demo yang memenuhi syarat.");
+      for (const [role, title] of roles) {
+        let block = `${title}:`;
+        for (const account of result.items.filter(
+          (item) => item.role === role
+        )) {
+          const line = `\n${displayId(account.id)} — ${label(account.name)}`;
+          if (block.length + line.length > 3500) {
+            blocks.push(block);
+            block = `${title} (lanjutan):`;
+          }
+          block += line;
+        }
+        if (block !== `${title}:`) blocks.push(block);
+      }
+      await replyBlocks(ctx, blocks);
     } catch {
-      await ctx.reply("Demo tidak tersedia. Coba /demo lagi.");
-      return;
-    }
-    if (result.ok && result.data) {
-      // Cosmetic cleanup only: old/inaccessible messages may not be editable.
-      // Failure here must never hide a successfully persisted session.
-      await ctx
-        .editMessageReplyMarkup({ reply_markup: new InlineKeyboard() })
-        .catch(() => {});
-      await ctx.reply(`Demo Mode aktif (durasi 1 jam).\n${status(result)}`);
-    } else {
-      await ctx.reply(status(result));
+      await ctx.reply("Daftar demo belum tersedia. Coba /demo lagi.");
     }
   });
-  bot.command("demo", async (ctx) => {
-    const result = await api.demoAccounts(actor(ctx));
-    if (!result.ok) {
-      await ctx.reply("Demo Mode tidak tersedia.");
+  bot.command("demo_login", async (ctx) => {
+    let accountId: string;
+    try {
+      const input = args(ctx.match);
+      if (input.length !== 1) throw new Error("args");
+      accountId = decodeToken(input[0]!);
+    } catch {
+      await ctx.reply(
+        "Format: /demo_login account_id\nSalin satu ID/token dari /demo; tanpa role atau Telegram ID tambahan."
+      );
+      return;
+    }
+    let result: BotDemoResult;
+    try {
+      result = await api.demoLogin(actor(ctx), accountId);
+    } catch {
+      await ctx.reply(
+        "Demo belum tersedia. Periksa /demo_status sebelum mencoba lagi."
+      );
+      return;
+    }
+    if (!result.ok || !result.data) {
+      await ctx.reply(status(result));
       return;
     }
     await ctx.reply(
-      "Pilih akun Demo Mode (1 jam). Hanya baca data demo; tidak mengubah akun Telegram asli. Pilihan berlaku 5 menit."
+      `Demo Mode aktif.\n\nAkun: ${label(result.data.account.name)}\nRole: ${roleName(result.data.account.role)}\nSesi: 60 menit (hanya baca).\n\nGunakan /help untuk perintah yang tersedia.\n/demo_status untuk memeriksa sesi.\n/demo_logout untuk keluar.`
     );
-    if (!result.items.length)
-      await ctx.reply("Belum ada akun demo yang memenuhi syarat.");
-    for (const [role, label] of roles) {
-      const items = result.items.filter((item) => item.role === role);
-      for (let i = 0; i < items.length; i += 40) {
-        const keyboard = new InlineKeyboard();
-        for (const item of items.slice(i, i + 40))
-          keyboard.text(item.name, `demo:${item.token}`).row();
-        await ctx.reply(label, { reply_markup: keyboard });
-      }
-    }
   });
   bot.command("demo_status", async (ctx) => {
     await ctx.reply(status(await api.demoStatus(actor(ctx))));

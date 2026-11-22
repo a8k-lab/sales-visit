@@ -94,22 +94,6 @@ export const telegramDemoSessions = sqliteTable(
   ]
 );
 
-export const telegramDemoChoices = sqliteTable(
-  "telegram_demo_choices",
-  {
-    token: text("token").primaryKey().notNull(),
-    telegramUserId: text("telegram_user_id").notNull(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    expiresAt: integer("expires_at").notNull(),
-  },
-  (table) => [
-    index("telegram_demo_choices_owner").on(table.telegramUserId),
-    index("telegram_demo_choices_expiry").on(table.expiresAt),
-  ]
-);
-
 // Current monitoring responsibility, not a group or an identity association.
 export const salesForceSupervisors = sqliteTable(
   "sales_force_supervisors",

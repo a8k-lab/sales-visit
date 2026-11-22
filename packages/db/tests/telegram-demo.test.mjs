@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 
-test("0012 is additive over populated data, defaults to isolation and enforces demo credential constraints", (t) => {
+test("0012 isolates demo data; 0013 removes only obsolete choices and preserves sessions, identities and operational records", (t) => {
   const db = new DatabaseSync(":memory:");
   t.after(() => db.close());
   db.exec("PRAGMA foreign_keys = ON");
@@ -53,4 +53,16 @@ test("0012 is additive over populated data, defaults to isolation and enforces d
     db.prepare("SELECT * FROM telegram_identities").all(),
     before.telegram_identities
   );
+  db.exec(
+    "INSERT INTO telegram_demo_choices(token,telegram_user_id,user_id,expires_at) VALUES ('old','900','u',123)"
+  );
+  const tables = ["telegram_demo_sessions", ...Object.keys(before)];
+  const snapshots = tables.map((table) =>
+    db.prepare(`SELECT * FROM ${table}`).all()
+  );
+  db.exec(readFileSync(new URL("0013_remove_demo_choices.sql", dir), "utf8"));
+  assert.throws(() => db.prepare("SELECT * FROM telegram_demo_choices"));
+  for (const [i, table] of tables.entries())
+    assert.deepEqual(db.prepare(`SELECT * FROM ${table}`).all(), snapshots[i]);
+  assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 });

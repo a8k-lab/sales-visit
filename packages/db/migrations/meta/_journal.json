@@ -92,6 +92,13 @@
       "when": 1795354790354,
       "tag": "0012_telegram_demo",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1795357823649,
+      "tag": "0013_remove_demo_choices",
+      "breakpoints": true
     }
   ]
 }

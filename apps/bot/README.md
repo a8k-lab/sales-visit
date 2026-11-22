@@ -6,7 +6,8 @@ only API accesses D1. No Telegraf setup is needed.
 
 ## Demo Mode
 
-`/demo` lists live eligible Web demo accounts grouped by role. `/demo_status`
+`/demo` lists live eligible Web demo accounts grouped by role, without buttons.
+`/demo_login account_id` selects or switches accounts. `/demo_status`
 shows the selected account and remaining time; `/demo_logout` restores normal
 Telegram authentication. Sessions last one hour and survive Worker restarts.
 Only explicitly marked synthetic records are readable; all operational writes

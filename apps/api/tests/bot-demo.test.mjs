@@ -21,7 +21,7 @@ const { Bot, installCommands } = await import(
     Buffer.from(bundle.outputFiles[0].text).toString("base64")
 );
 
-test("private keyboards group dynamic accounts; callbacks verify sender/chat and acknowledge invalid choices", async () => {
+test("demo uses grouped text IDs and explicit login; malformed commands, old callbacks and groups cannot select", async () => {
   const calls = [],
     deliveries = [];
   const bot = new Bot("123:synthetic", {
@@ -57,26 +57,23 @@ test("private keyboards group dynamic accounts; callbacks verify sender/chat and
     salesForceId: "sf",
   };
   let unavailable = false;
+  let items = ["admin", "supervisor", "sales_force"].map((role, i) => ({
+    ...account,
+    role,
+    id: `dynamic-${i}`,
+    name: `Account ${role}`,
+  }));
   const api = {
     demoAccounts: async (actor) => {
       calls.push(["accounts", actor]);
-      return {
-        ok: true,
-        items: ["admin", "supervisor", "sales_force"].map((role, i) => ({
-          ...account,
-          role,
-          name: `Account ${role}`,
-          token: String(i).repeat(32),
-        })),
-      };
+      return { ok: true, items };
     },
-    demoSelect: async (actor, token) => {
-      assert.equal(deliveries.at(-1).method, "answerCallbackQuery");
-      calls.push(["select", actor, token]);
+    demoLogin: async (actor, id) => {
+      calls.push(["login", actor, id]);
       if (unavailable) throw new Error("Synthetic unavailable RPC");
-      return token === "2".repeat(32)
+      return id === "dynamic-2"
         ? { ok: true, data: { account, expiresAt: Date.now() + 3600000 } }
-        : { ok: false, code: "expired" };
+        : { ok: false, code: "unavailable" };
     },
     demoStatus: async (actor) => {
       calls.push(["status", actor]);
@@ -89,82 +86,93 @@ test("private keyboards group dynamic accounts; callbacks verify sender/chat and
   };
   installCommands(bot, api);
   let id = 0;
-  const message = (text, chat = { id: 900, type: "private" }) =>
+  const message = (text, type = "private") =>
     bot.handleUpdate({
       update_id: ++id,
       message: {
         message_id: id,
         date: 1,
         from: { id: 900, is_bot: false, first_name: "Sender" },
-        chat,
+        chat: { id: type === "private" ? 900 : -100, type },
         text,
-        entities: [{ type: "bot_command", offset: 0, length: text.length }],
+        entities: [
+          { type: "bot_command", offset: 0, length: text.split(" ")[0].length },
+        ],
       },
     });
-  const callback = (
-    data,
-    chat = { id: 900, type: "private" },
-    from = { id: 900, is_bot: false, first_name: "Sender" }
-  ) =>
-    bot.handleUpdate({
-      update_id: ++id,
-      callback_query: {
-        id: String(id),
-        chat_instance: "test",
-        from,
-        data,
-        message: { message_id: 7, date: 1, chat, text: "Sales Force" },
-      },
-    });
+  const last = () => deliveries.at(-1).payload.text;
   await message("/demo");
-  const keyboards = deliveries.filter(
-    (d) => d.payload.reply_markup?.inline_keyboard
+  assert.equal(deliveries.length, 1);
+  assert.match(
+    last(),
+    /Admin:\n.*dynamic-0[\s\S]*Supervisor:\n.*dynamic-1[\s\S]*Sales Force:\n.*dynamic-2/
   );
-  assert.deepEqual(
-    keyboards.map((d) => d.payload.text),
-    ["Admin", "Supervisor", "Sales Force"]
+  assert.match(
+    last(),
+    /\/demo_login account_id[\s\S]*60 menit[\s\S]*hanya baca/
   );
-  assert.equal(
-    keyboards[2].payload.reply_markup.inline_keyboard[0][0].callback_data,
-    "demo:" + "2".repeat(32)
-  );
-  await callback("demo:" + "2".repeat(32));
-  assert.equal(calls.at(-1)[1].telegramUserId, "900");
-  assert.ok(deliveries.some((d) => d.method === "answerCallbackQuery"));
-  assert.ok(deliveries.some((d) => d.payload.text?.includes("Dynamic Name")));
-  await callback("demo:malformed");
-  assert.ok(deliveries.at(-1).payload.text.includes("kedaluwarsa"));
+  assert.ok(deliveries.every((d) => !d.payload.reply_markup));
   const before = calls.length;
-  await callback("demo:" + "2".repeat(32), { id: -100, type: "group" });
-  await callback("demo:" + "2".repeat(32), { id: 901, type: "private" });
-  await callback(
-    "demo:" + "2".repeat(32),
-    { id: 900, type: "private" },
-    { id: 900, is_bot: true, first_name: "Bot" }
-  );
+  for (const text of [
+    "/demo_login",
+    "/demo_login a b",
+    "/demo_login ~invalid=",
+    "/demo_login a\nowner=901",
+  ])
+    await message(text);
+  await message("/demo_login dynamic-2", "group");
+  assert.equal(calls.length, before);
   await bot.handleUpdate({
     update_id: ++id,
     callback_query: {
       id: String(id),
       chat_instance: "test",
       from: { id: 900, is_bot: false, first_name: "Sender" },
-      data: "demo:123",
-      inline_message_id: "inline",
+      data: "demo:old-token",
+      message: {
+        message_id: 7,
+        date: 1,
+        chat: { id: 900, type: "private" },
+        text: "Old picker",
+      },
     },
   });
   assert.equal(calls.length, before);
+  assert.equal(deliveries.at(-1).method, "answerCallbackQuery");
+  await message("/demo_login dynamic-2");
+  assert.equal(calls.at(-1)[0], "login");
+  assert.equal(calls.at(-1)[1].telegramUserId, "900");
+  assert.equal(calls.at(-1)[2], "dynamic-2");
+  assert.match(
+    last(),
+    /Demo Mode aktif[\s\S]*Dynamic Name[\s\S]*Role: Sales Force[\s\S]*Sesi: 60 menit/
+  );
+  await message("/demo_login missing");
+  assert.match(last(), /tidak tersedia/);
   await message("/demo_status");
   assert.equal(calls.at(-1)[0], "status");
   await message("/demo_logout");
   assert.equal(calls.at(-1)[0], "logout");
-  assert.ok(deliveries.at(-1).payload.text.includes("normal"));
+  assert.match(last(), /normal/);
   unavailable = true;
+  await message("/demo_login dynamic-2");
+  assert.match(last(), /Periksa \/demo_status/);
+  items = Array.from({ length: 60 }, (_, i) => ({
+    ...account,
+    id: `account-${i}`,
+    name: "N".repeat(256),
+  }));
   const start = deliveries.length;
-  await callback("demo:" + "2".repeat(32));
-  assert.equal(
-    deliveries.slice(start).filter((d) => d.method === "answerCallbackQuery")
-      .length,
-    1
+  await message("/demo");
+  assert.ok(deliveries.slice(start).length > 1);
+  assert.ok(
+    deliveries.slice(start).every((d) => d.payload.text.length <= 4096)
   );
-  assert.match(deliveries.at(-1).payload.text, /Demo tidak tersedia/);
+  assert.match(
+    deliveries
+      .slice(start)
+      .map((d) => d.payload.text)
+      .join("\n"),
+    /account-59/
+  );
 });

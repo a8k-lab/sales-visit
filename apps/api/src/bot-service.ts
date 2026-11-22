@@ -29,7 +29,7 @@ export function botService(env: Env): BotIdentityService {
   }
   return {
     demoAccounts: (actor) => demo.accounts(actor),
-    demoSelect: (actor, token) => demo.select(actor, token),
+    demoLogin: (actor, accountId) => demo.login(actor, accountId),
     demoStatus: (actor) => demo.status(actor),
     demoLogout: (actor) => demo.logout(actor),
     me: (actor) =>

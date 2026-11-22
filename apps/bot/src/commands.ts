@@ -46,7 +46,7 @@ export function installCommands(bot: Bot, api: BotIdentityService) {
   bot.on("callback_query", async (ctx) => {
     await ctx
       .answerCallbackQuery({
-        text: "Tombol tidak tersedia. Ketik /demo untuk pilihan baru.",
+        text: "Tombol tidak tersedia. Ketik /help untuk perintah saat ini.",
       })
       .catch(() => {});
   });

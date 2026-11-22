@@ -27,15 +27,19 @@ With an already configured **dedicated test bot**, in private chat:
 
 1. `/demo`: dynamically lists eligible accounts grouped by Admin, Supervisor,
    Sales Force. New eligible Web demo accounts appear without code changes.
-2. Choose an account. `/me` and `/help` reflect its role. `/demo_status` reports
+2. Send `/demo_login account_id`, using the exact internal ID displayed by `/demo`.
+   No prior listing or expiring picker token is required. IDs with whitespace or
+   special characters use the existing reversible `~` ID/token format (not an
+   authentication token). `/me` and `/help` reflect the selected role. `/demo_status` reports
    its internal User ID, role and remaining minutes. `/me`'s Telegram ID remains
    the verified sender, not a Telegram identity belonging to the demo account.
 3. Admin/Supervisor: `/outlets`, `/outletinternal TOKEN`, `/jadwalsales`.
    Supervisor schedule queries retain current team-assignment scope.
 4. Sales Force: `/jadwal semua` reads only its own synthetic schedules;
    monitoring/Admin commands remain forbidden.
-5. `/demo` again switches accounts and starts a new one-hour session.
-6. `/demo_logout` deletes the demo credential and picker; the original Telegram
+5. `/demo_login account_id` switches accounts and starts a new one-hour session.
+   Invalid/ineligible account selections leave the existing session unchanged.
+6. `/demo_logout` deletes the demo credential; the original Telegram
    registration/role returns unchanged. Expiry also restores normal authentication.
 
 Demo Mode is intentionally **read-only**: `/register`, user enumeration and
@@ -59,26 +63,33 @@ appear only when the API reports Demo Mode enabled. Normal non-demo commands are
   Telegram sender, with internal User FK, absolute creation/expiry milliseconds
   and a database-enforced one-hour duration. D1 survives Worker restarts. There
   are no browser tokens, process-local sessions or changes to `telegram_identities`.
-- `telegram_demo_choices` holds random UUID-derived opaque picker tokens, bound to the
-  requesting sender, selected internal User and five-minute expiry. Callback data
-  is `demo:TOKEN` (37 ASCII bytes), never an arbitrary target User/Telegram ID.
-  Atomic D1 batch selection rechecks ownership, expiry and shared eligibility,
-  replaces the owner's session and consumes all their choices. Replay, old picker,
-  malformed and cross-user callbacks cannot activate sessions. Logout and a fresh
-  `/demo` invalidate existing choices. Expired choices are cleaned in bounded
-  batches during picker creation; expired sessions are inert and overwritten on
-  the next selection (at most one stored credential per sender).
+- Private RPC `demoLogin(actor, accountId)` explicitly accepts an internal account
+  ID, not an opaque selection token. It validates the input, environment and
+  verified sender server-side, then atomically upserts that sender's session only
+  when the selected account satisfies the shared Web demo eligibility predicate.
+  No target owner/Telegram ID or role is accepted as login input. A user's login,
+  switch or logout cannot alter another Telegram sender's session. Missing,
+  disabled, Telegram-linked and otherwise ineligible accounts return the same
+  unavailable result. Listing is read-only. Expired sessions are inert and replaced
+  by the next explicit login (at most one stored credential per sender).
+- Migration `0013_remove_demo_choices.sql` drops only the now-unused picker table
+  `telegram_demo_choices` and its indexes. Drizzle schema/snapshot/journal are
+  updated; migration 0012 remains unchanged. Existing sessions, identities and
+  operational data are preserved. Apply pending migrations locally with
+  `pnpm db:migrate:local`. For a future reviewed non-Production rollout, update
+  API and Bot together because `demoLogin` replaces the `demoSelect` RPC contract.
+  No remote migration or deployment is part of this change.
 - Test/local webhook helpers request `allowed_updates=["message","callback_query"]`.
-  An existing Telegram registration restricted to `message` must be refreshed by
-  its operator before Telegram can deliver button clicks. Updating code does not
-  change a live webhook subscription; never take over a Production/shared bot.
+  Demo login now needs only text messages; no webhook changes are necessary for
+  this flow. Callback support remains available for unrelated features and old
+  buttons are safely acknowledged without selecting accounts. Never take over a
+  Production/shared bot.
 - The authenticated, bounded webhook parser accepts both text `message` and
   `callback_query` updates. It validates the callback's own sender separately from
   the original keyboard message (which is normally sent by the bot), query ID,
   chat, and 1–64-byte callback data. Ambiguous/malformed updates are ignored.
-  Callbacks are acknowledged before RPC work; stale acknowledgements or failed
-  keyboard cleanup never mask a successfully activated session. Unknown, group,
-  mismatched-chat and inline-message callbacks are acknowledged without RPC.
+  Unknown, obsolete demo, group, mismatched-chat and inline-message callbacks are
+  acknowledged without demo RPC or session changes.
 - Both commands and callbacks require a non-bot, positive safe Telegram sender ID
   and a private chat. Callbacks also require the chat ID to match that sender. Inline-message/group callbacks
   cannot reach RPC. The existing authenticated webhook boundary remains unchanged.
@@ -101,7 +112,7 @@ appear only when the API reports Demo Mode enabled. Normal non-demo commands are
 All D1 test writes are disposable Miniflare-local only. No Telegram network calls:
 
 ```sh
-pnpm --filter @sales-visit/api exec node --test tests/telegram-demo.test.mjs tests/bot-demo.test.mjs tests/demo-auth.test.mjs
+pnpm --filter @sales-visit/api exec node --test tests/telegram-demo.test.mjs tests/bot-demo.test.mjs tests/bot-help.test.mjs tests/bot-callback-webhook.test.mjs tests/demo-auth.test.mjs
 pnpm --filter @sales-visit/api test
 pnpm --filter @sales-visit/db test
 pnpm typecheck

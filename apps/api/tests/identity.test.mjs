@@ -961,7 +961,7 @@ test("registration, authorization and verified webhook across real Worker RPC + 
             assert.equal(message.parse_mode, undefined);
           }
           const guide = messages.map((m) => m.text).join("\n");
-          assert.match(guide, /^Umum\n/);
+          assert.match(guide, /^Sales Visit Bot —/);
           assert.doesNotMatch(guide, /\/demo\b/); // API defaults to demo disabled.
           assert.doesNotMatch(guide, /Contoh:|Format:|IMPORTANT NOTES/);
           assert.doesNotMatch(guide, /\/test\b/);
@@ -979,7 +979,7 @@ test("registration, authorization and verified webhook across real Worker RPC + 
               "/outletinternal",
               "/tambahjadwal",
             ])
-              assert.ok(guide.includes(command + " —"));
+              assert.match(guide, new RegExp(`^${command}(?: | —)`, "m"));
             assert.doesNotMatch(guide, /\/salesvisit|\/konfirmasi|\/batal/);
           }
         }

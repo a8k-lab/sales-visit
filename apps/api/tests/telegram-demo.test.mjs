@@ -54,11 +54,7 @@ async function setup(t) {
   const api = botService(env);
   const actor = { telegramUserId: "900" };
   const login = async (id, sender = actor) => {
-    const choices = await api.demoAccounts(sender);
-    assert.equal(choices.ok, true);
-    const choice = choices.items.find((item) => item.id === id);
-    assert.ok(choice);
-    const result = await api.demoSelect(sender, choice.token);
+    const result = await api.demoLogin(sender, id);
     assert.equal(result.ok, true);
     return result.data;
   };
@@ -105,65 +101,67 @@ test("demo sessions persist, take precedence, switch accounts, expire and logout
   );
 });
 
-test("picker tokens bind owner, expire, are single-use, reject replay and recheck Web demo eligibility", async (t) => {
+test("text login validates IDs, rechecks eligibility, and binds sessions only to the verified sender", async (t) => {
   const f = await setup(t);
-  let choices = await f.api.demoAccounts(f.actor);
-  assert.equal(choices.items.length, 20);
-  const token = choices.items.find((i) => i.id === "demo-admin-01").token;
-  assert.equal(
-    (await f.api.demoSelect({ telegramUserId: "901" }, token)).code,
-    "expired"
-  );
-  assert.equal((await f.api.demoStatus(f.actor)).data, null);
+  const accounts = await f.api.demoAccounts(f.actor);
+  assert.equal(accounts.items.length, 20);
+  assert.ok(accounts.items.every((item) => !("token" in item)));
+  assert.equal(await f.count("telegram_demo_sessions"), 0); // listing is read-only
   for (const malformed of [
     null,
     {},
+    [],
     "",
-    "demo-admin-01",
-    token + "x",
-    token + "\n",
-    token.toUpperCase(),
+    " ",
+    "x".repeat(257),
+    "demo-admin-01\n",
+    { accountId: "demo-admin-01", telegramUserId: "901" },
   ])
-    assert.equal((await f.api.demoSelect(f.actor, malformed)).code, "invalid");
-  const results = await Promise.all([
-    f.api.demoSelect(f.actor, token),
-    f.api.demoSelect(f.actor, token),
-  ]);
-  assert.equal(results.filter((r) => r.ok).length, 1);
-  assert.equal((await f.api.demoSelect(f.actor, token)).code, "expired");
-  choices = await f.api.demoAccounts(f.actor);
-  await f.api.demoLogout(f.actor);
-  assert.equal(
-    (await f.api.demoSelect(f.actor, choices.items[0].token)).code,
-    "expired"
-  );
-  choices = await f.api.demoAccounts(f.actor);
-  await f.api.demoAccounts(f.actor);
-  assert.equal(
-    (await f.api.demoSelect(f.actor, choices.items[0].token)).code,
-    "expired"
-  );
-  choices = await f.api.demoAccounts(f.actor);
-  await f.db.prepare("UPDATE telegram_demo_choices SET expires_at=0").run();
-  assert.equal(
-    (await f.api.demoSelect(f.actor, choices.items[0].token)).code,
-    "expired"
-  );
-  choices = await f.api.demoAccounts(f.actor);
+    assert.equal((await f.api.demoLogin(f.actor, malformed)).code, "invalid");
+  await f.login("demo-admin-01");
   await f.db
     .prepare(
-      "INSERT INTO telegram_identities(user_id,telegram_user_id) VALUES ('demo-admin-01','123')"
+      "INSERT INTO telegram_identities(user_id,telegram_user_id) VALUES ('demo-admin-02','123')"
     )
     .run();
+  await f.db
+    .prepare("UPDATE users SET status='disabled' WHERE id='demo-sf-02'")
+    .run();
+  await f.db
+    .prepare("UPDATE users SET sales_force_id=NULL WHERE id='demo-sf-03'")
+    .run();
+  await f.db
+    .prepare("UPDATE users SET display_name=' ' WHERE id='demo-sf-04'")
+    .run();
+  for (const id of [
+    "missing",
+    "demo-admin-02",
+    "demo-sf-02",
+    "demo-sf-03",
+    "demo-sf-04",
+    "' OR 1=1 --",
+  ])
+    assert.equal((await f.api.demoLogin(f.actor, id)).code, "unavailable");
   assert.equal(
-    (
-      await f.api.demoSelect(
-        f.actor,
-        choices.items.find((i) => i.id === "demo-admin-01").token
-      )
-    ).code,
-    "expired"
+    (await f.api.demoStatus(f.actor)).data.account.id,
+    "demo-admin-01"
   );
+  const other = { telegramUserId: "901" };
+  await f.login("demo-supervisor-01", other);
+  await f.login("demo-sf-01", other);
+  await f.api.demoLogout(other);
+  assert.equal(
+    (await f.api.demoStatus(f.actor)).data.account.id,
+    "demo-admin-01"
+  );
+  assert.equal((await f.api.demoStatus(other)).data, null);
+  assert.equal(
+    (await f.api.demoLogin({ ...f.actor, owner: "901" }, "demo-admin-01")).code,
+    "disabled"
+  );
+  // Repeated explicit text commands are allowed and safely replace one credential.
+  assert.ok((await f.api.demoLogin(f.actor, "demo-admin-01")).ok);
+  assert.equal(await f.count("telegram_demo_sessions"), 1);
   await f.login("demo-sf-01");
   await f.db
     .prepare("UPDATE users SET role='supervisor' WHERE id='demo-sf-01'")
@@ -272,7 +270,7 @@ test("gate defaults off and always rejects production; existing credentials cann
     const api = botService({ ...f.env, ...config });
     assert.equal((await api.demoAccounts(f.actor)).ok, false);
     assert.equal(
-      (await api.demoSelect(f.actor, "a".repeat(32))).code,
+      (await api.demoLogin(f.actor, "demo-admin-01")).code,
       "disabled"
     );
     assert.equal((await api.demoStatus(f.actor)).code, "disabled");

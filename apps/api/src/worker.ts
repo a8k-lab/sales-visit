@@ -15,8 +15,8 @@ export class BotIdentity
   demoAccounts(actor: BotActor) {
     return this.service().demoAccounts(actor);
   }
-  demoSelect(actor: BotActor, token: unknown) {
-    return this.service().demoSelect(actor, token);
+  demoLogin(actor: BotActor, accountId: unknown) {
+    return this.service().demoLogin(actor, accountId);
   }
   demoStatus(actor: BotActor) {
     return this.service().demoStatus(actor);

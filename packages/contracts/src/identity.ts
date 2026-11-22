@@ -46,16 +46,16 @@ export interface DemoAccount {
   salesForceId: string | null;
 }
 export type BotDemoResult =
-  | { ok: false; code: "disabled" | "invalid" | "expired" }
+  | { ok: false; code: "disabled" | "invalid" | "expired" | "unavailable" }
   | { ok: true; data: { account: DemoAccount; expiresAt: number } | null };
 export interface BotIdentityService
   extends BotPlanningService, BotVisitService {
   demoAccounts(
     actor: BotActor
-  ): Promise<
-    { ok: false } | { ok: true; items: (DemoAccount & { token: string })[] }
-  >;
-  demoSelect(actor: BotActor, token: unknown): Promise<BotDemoResult>;
+  ): Promise<{ ok: false } | { ok: true; items: DemoAccount[] }>;
+  // accountId is an internal eligible demo User ID, NOT an opaque picker token.
+  // The verified actor is always the owner of the resulting Telegram session.
+  demoLogin(actor: BotActor, accountId: unknown): Promise<BotDemoResult>;
   demoStatus(actor: BotActor): Promise<BotDemoResult>;
   demoLogout(actor: BotActor): Promise<BotDemoResult>;
   register(actor: BotActor): Promise<IdentityResult<Account>>;
