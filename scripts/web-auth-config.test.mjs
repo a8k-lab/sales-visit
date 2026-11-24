@@ -155,7 +155,14 @@ test("strict API config permits only reviewed nonsecret Web auth settings", () =
   const config = loadTarget("api");
   assert.doesNotThrow(() => validateConfig("api", config, account));
   const validate = (vars) =>
-    validateConfig("api", { ...config, vars }, account);
+    validateConfig(
+      "api",
+      {
+        ...config,
+        vars: { APP_ENV: "production", DEMO_AUTH_ENABLED: "false", ...vars },
+      },
+      account
+    );
   assert.doesNotThrow(() =>
     validate({
       TELEGRAM_CLIENT_ID: "12345",
@@ -164,6 +171,8 @@ test("strict API config permits only reviewed nonsecret Web auth settings", () =
   );
   for (const vars of [
     {},
+    { ...config.vars, APP_ENV: "staging" },
+    { ...config.vars, DEMO_AUTH_ENABLED: "true" },
     { TELEGRAM_CLIENT_ID: "123", WEB_ORIGINS: "*" },
     { TELEGRAM_CLIENT_ID: "123", WEB_ORIGINS: "https://web.example/path" },
     { TELEGRAM_CLIENT_ID: "123", WEB_ORIGINS: "http://web.example" },

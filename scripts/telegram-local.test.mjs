@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { main, run, tunnelUrl } from "./telegram-local.mjs";
 
@@ -181,7 +182,7 @@ test("setting a fresh webhook preserves the secret and records ownership", async
   assert.deepEqual(mutations(state)[0].payload, {
     url: newUrl,
     secret_token: secret,
-    allowed_updates: ["message"],
+    allowed_updates: ["message", "callback_query"],
     drop_pending_updates: false,
   });
   assert.deepEqual(state.owned, [newUrl]);
@@ -195,6 +196,23 @@ test("only owned local webhooks can be refreshed or moved to a new tunnel", asyn
   assert.deepEqual(state.saves, [[oldUrl, newUrl], [newUrl]]);
   await state.run(["webhook:set", newUrl]);
   assert.equal(mutations(state).length, 2);
+});
+
+test("owned legacy and callback-capable webhooks can be refreshed or deleted", async () => {
+  for (const allowed_updates of [
+    ["message"],
+    ["message", "callback_query"],
+    ["callback_query", "message"],
+  ]) {
+    for (const command of [["webhook:set", newUrl], ["webhook:delete"]]) {
+      const state = fixture({
+        owned: [oldUrl],
+        info: { url: oldUrl, has_custom_certificate: false, allowed_updates },
+      });
+      await state.run(command);
+      assert.equal(mutations(state).length, 1);
+    }
+  }
 });
 
 test("unowned or unexpected configurations are never replaced or deleted", async () => {
@@ -219,6 +237,15 @@ test("unowned or unexpected configurations are never replaced or deleted", async
           allowed_updates: ["callback_query"],
         },
       },
+      ...[
+        ["message", "edited_message"],
+        ["message", "callback_query", "edited_message"],
+        ["message", "message"],
+        [],
+      ].map((allowed_updates) => ({
+        owned: [oldUrl],
+        info: { url: oldUrl, has_custom_certificate: false, allowed_updates },
+      })),
       { info: {} },
       { owned: "malformed" },
       { owned: ["https://production.example.com/"] },
@@ -349,7 +376,7 @@ test("failures are concise and never expose secrets or raw responses", async () 
 test("CLI help works without credentials or network", () => {
   const result = spawnSync(
     process.execPath,
-    [new URL("./telegram-local.mjs", import.meta.url).pathname, "--help"],
+    [fileURLToPath(new URL("./telegram-local.mjs", import.meta.url)), "--help"],
     { encoding: "utf8" }
   );
   assert.equal(result.status, 0);

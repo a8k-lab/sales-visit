@@ -1,4 +1,5 @@
 import {
+  demoAccountCreateSchema,
   webUserRoleSchema,
   webOperationIdSchema,
   webOperationDeadline,
@@ -9,9 +10,23 @@ import {
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 
-import { operationRange, operationWindowMs } from "./admin-operation.ts";
-import { accountQuery, IdentityOperations, webAdminGuard } from "./identity.ts";
-import { hashToken, sessionAccount, type WebEnv } from "./web-auth.ts";
+import {
+  operationRange,
+  operationWindowMs,
+  operationWriteGuard,
+  operationWriteBindings,
+} from "./admin-operation.ts";
+import {
+  webAccountQuery as accountQuery,
+  IdentityOperations,
+  webAdminGuard,
+} from "./identity.ts";
+import {
+  demoEnabled,
+  hashToken,
+  sessionAccount,
+  type WebEnv,
+} from "./web-auth.ts";
 
 // A failed in-transaction guard may mean logout, expiry, disabling, or demotion
 // since middleware. Reclassify without disclosing target records.
@@ -141,6 +156,57 @@ export function adminUserRoutes() {
       items,
       next: rows!.results.length > Number(limit) ? items.at(-1)!.id : null,
     });
+  });
+
+  app.post("/demo", async (c) => {
+    if (!demoEnabled(c.env)) return c.notFound();
+    let input: unknown;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid request" }, 400);
+    }
+    const parsed = demoAccountCreateSchema.safeParse(input);
+    if (!parsed.success) return c.json({ error: "Invalid request" }, 400);
+    const { displayName, role, salesForceId, operationId } = parsed.data;
+    const hash = await hashToken(c.req.header("Authorization")!.slice(7));
+    const id = crypto.randomUUID(),
+      eventId = operationId + ":" + crypto.randomUUID();
+    // register is the existing account-creation audit action. A serialized batch
+    // makes the actor, ownership, operation deadline and audit atomic with creation.
+    const [created] = await c.env.DB.batch([
+      c.env.DB.prepare(`INSERT INTO users (id, display_name, status, role, sales_force_id)
+        SELECT ?, ?, 'active', ?, ? WHERE ${webAdminGuard} AND ${operationWriteGuard}
+        AND (? IS NULL OR (EXISTS (SELECT 1 FROM sales_force WHERE id = ?)
+          AND NOT EXISTS (SELECT 1 FROM users WHERE sales_force_id = ?))) RETURNING id`).bind(
+        id,
+        displayName,
+        role,
+        salesForceId ?? null,
+        hash,
+        ...operationWriteBindings(operationId),
+        salesForceId ?? null,
+        salesForceId ?? null,
+        salesForceId ?? null
+      ),
+      c.env.DB.prepare(`INSERT INTO access_audit (id, actor_user_id, target_user_id, action, before_state, after_state)
+        SELECT ?, (SELECT user_id FROM web_sessions WHERE token_hash = ?), u.id, 'register', 'null',
+        json_object('status', u.status, 'role', u.role, 'salesForceId', u.sales_force_id, 'displayName', u.display_name)
+        FROM users u WHERE u.id = ?`).bind(eventId, hash, id),
+    ]);
+    if (created!.results.length) return c.json({ id }, 201);
+    const permitted = await c.env.DB.prepare(`SELECT 1 WHERE ${webAdminGuard}`)
+      .bind(hash)
+      .first();
+    if (!permitted)
+      return c.json(
+        { error: "Access denied" },
+        await denied(c.req.raw, c.env.DB)
+      );
+    return c.json(
+      { error: "Association unavailable or operation already used/expired" },
+      409
+    );
   });
 
   // Current account state is informational, not proof of a mutation's outcome.

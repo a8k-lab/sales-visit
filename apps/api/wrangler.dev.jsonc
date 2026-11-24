@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sales-visit-api-dev",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-11-02",
+  "workers_dev": true,
+  "vars": {
+    "TELEGRAM_CLIENT_ID": "9096219015",
+    "WEB_ORIGINS": "http://localhost:8787,https://sales-visit-dev.rtrivaldo05.workers.dev",
+    "APP_ENV": "staging",
+    "DEMO_AUTH_ENABLED": "true",
+  },
+  "ratelimits": [
+    {
+      "name": "AUTH_IP_LIMITER",
+      "namespace_id": "25001",
+      "simple": {
+        "limit": 20,
+        "period": 60,
+      },
+    },
+    {
+      "name": "AUTH_GLOBAL_LIMITER",
+      "namespace_id": "25002",
+      "simple": {
+        "limit": 300,
+        "period": 60,
+      },
+    },
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sales-visit-dev",
+      "database_id": "66aadb98-21f9-413e-8646-7347555b2268",
+      "migrations_dir": "../../packages/db/migrations",
+    },
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
+}

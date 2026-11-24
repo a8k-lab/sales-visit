@@ -36,6 +36,7 @@ import { roleLabel, useAccount } from "@/features/auth/session";
 
 import { AccountAction } from "./action-dialog";
 import { accountName, statusLabels } from "./data";
+import { DemoAccountDialog } from "./demo-dialog";
 import { OperationOutcome } from "./operation-outcome";
 
 function UserTable({
@@ -91,7 +92,7 @@ function UserRow({
         <p>{accountName(row)}</p>
         <p className="text-muted-foreground text-xs">
           {row.username ? "@" + row.username + " · " : ""}
-          {row.telegramUserId}
+          {row.telegramUserId ?? "Akun demo · tanpa Telegram"}
         </p>
       </TableCell>
       <TableCell>
@@ -191,6 +192,7 @@ export function UserManagementPage() {
       <p role="status" aria-live="polite">
         {message}
       </p>
+      <DemoAccountDialog onMessage={setMessage} />
       <OperationOutcome onMessage={setMessage} />
       <section className="flex flex-col gap-4" aria-labelledby="pending-title">
         <h2 id="pending-title" className="text-lg font-semibold">

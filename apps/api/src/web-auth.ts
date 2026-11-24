@@ -2,6 +2,9 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 
+import { demoEnabled, demoEligibility, demoAccountQuery } from "./demo-auth.ts";
+export { demoEnabled, demoEligibility } from "./demo-auth.ts";
+
 const telegramKeys = createRemoteJWKSet(
   URL.parse("https://oauth.telegram.org/.well-known/jwks.json")!
 );
@@ -69,15 +72,34 @@ export async function verifyTelegram(
   return { telegramId: String(id), nonce: payload.nonce };
 }
 
+async function issueSession(
+  db: D1Database,
+  account: WebAccount,
+  demoOnly = false
+) {
+  const token = random(),
+    now = Date.now(),
+    expiresAt = now + 3600000;
+  // Recheck demo eligibility in the write itself, not just a preflight read.
+  const issued = await db
+    .prepare(`INSERT INTO web_sessions (token_hash, user_id, created_at, expires_at)
+    SELECT ?, u.id, ?, ? FROM users u WHERE u.id = ? AND (? = 0 OR (${demoEligibility})) RETURNING token_hash`)
+    .bind(await hashToken(token), now, expiresAt, account.id, demoOnly ? 1 : 0)
+    .first();
+  return issued ? { token, expiresAt, account } : null;
+}
+
 export async function liveAccount(
   db: D1Database,
   userId: string
 ): Promise<WebAccount | null> {
   const row = await db
     .prepare(`SELECT u.id, u.role, u.sales_force_id AS salesForceId,
-    coalesce(t.first_name, 'Akun Telegram') AS name FROM users u
-    JOIN telegram_identities t ON t.user_id = u.id
-    WHERE u.id = ? AND u.status = 'active' AND u.role IN ('admin','supervisor','sales_force')`)
+    CASE WHEN t.user_id IS NOT NULL THEN coalesce(t.first_name, 'Akun Telegram')
+      ELSE trim(u.display_name) END AS name FROM users u
+    LEFT JOIN telegram_identities t ON t.user_id = u.id
+    WHERE u.id = ? AND u.status = 'active' AND u.role IN ('admin','supervisor','sales_force')
+      AND (t.user_id IS NOT NULL OR (${demoEligibility}))`)
     .bind(userId)
     .first<WebAccount>();
   if (!row) return null;
@@ -144,6 +166,43 @@ export function authRoutes(keys: JWTVerifyGetKey = telegramKeys) {
       onError: (c) => c.json({ error: "Invalid request" }, 400),
     })
   );
+  app.use("/demo/*", async (c, next) => {
+    if (!demoEnabled(c.env)) return c.notFound();
+    await next();
+  });
+  app.get("/demo/accounts", async (c) => {
+    const rows =
+      await c.env.DB.prepare(`${demoAccountQuery} WHERE ${demoEligibility}
+      ORDER BY u.role, u.display_name, u.id`).all<WebAccount>();
+    return c.json({ environment: c.env.APP_ENV, items: rows.results });
+  });
+  app.post("/demo/login", async (c) => {
+    let input: unknown;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid request" }, 400);
+    }
+    if (
+      !input ||
+      typeof input !== "object" ||
+      !("userId" in input) ||
+      typeof input.userId !== "string" ||
+      !input.userId ||
+      input.userId.length > 256 ||
+      Object.keys(input).length !== 1
+    )
+      return c.json({ error: "Invalid request" }, 400);
+    const eligible = await c.env.DB.prepare(
+      `SELECT u.id FROM users u WHERE u.id = ? AND ${demoEligibility}`
+    )
+      .bind(input.userId)
+      .first();
+    const account = eligible && (await liveAccount(c.env.DB, input.userId));
+    if (!account) return c.json({ error: "Login failed" }, 401);
+    const session = await issueSession(c.env.DB, account, true);
+    return session ? c.json(session) : c.json({ error: "Login failed" }, 401);
+  });
   app.get("/config", (c) =>
     configured(c.env)
       ? c.json({
@@ -214,14 +273,8 @@ export function authRoutes(keys: JWTVerifyGetKey = telegramKeys) {
       .first<{ userId: string }>();
     const account = identity && (await liveAccount(c.env.DB, identity.userId));
     if (!account) return c.json({ error: "Login failed" }, 401);
-    const token = random(),
-      expiresAt = now + 3600000;
-    await c.env.DB.prepare(
-      "INSERT INTO web_sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)"
-    )
-      .bind(await hashToken(token), account.id, now, expiresAt)
-      .run();
-    return c.json({ token, expiresAt, account });
+    const session = await issueSession(c.env.DB, account);
+    return session ? c.json(session) : c.json({ error: "Login failed" }, 401);
   });
   // A disabled account may still destroy its own credential, never read data.
   app.post("/logout", async (c) => {

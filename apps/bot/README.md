@@ -4,6 +4,17 @@ A grammY Worker for registration, account administration, Outlets, schedules and
 guided Visit reporting. It calls the API through the `IDENTITY` Service Binding;
 only API accesses D1. No Telegraf setup is needed.
 
+## Demo Mode
+
+`/demo` lists live eligible Web demo accounts grouped by role, without buttons.
+`/demo_login account_id` selects or switches accounts. `/demo_status`
+shows the selected account and remaining time; `/demo_logout` restores normal
+Telegram authentication. Sessions last one hour and survive Worker restarts.
+Only explicitly marked synthetic records are readable; all operational writes
+and user administration are blocked. No Telegram identity is created or changed.
+The API must explicitly enable this in local/staging; Production always rejects it.
+See [setup, security and local tests](../../docs/telegram-demo-mode.md).
+
 ## Quick Start
 
 Already have a token? Use it only if it belongs to a **separate, dedicated test

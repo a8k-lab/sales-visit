@@ -13,13 +13,15 @@ export function validReadQuery(c: Context<WebEnv>) {
   const allowed =
     path === "/visits"
       ? [...paging, "salesForceId", "outletId", "channel", "stock", "date", "q"]
-      : path === "/stock-reports"
-        ? [...paging, "salesForceId", "reporterSalesForceId", "outletId"]
-        : ["/sales-force", "/outlets", "/products"].includes(path)
-          ? [...paging, ...(query.view === "page" ? ["q"] : [])]
-          : path.startsWith("/visits/")
-            ? ["include"]
-            : [];
+      : path === "/schedules"
+        ? ["weekday", "salesForceId", "after"]
+        : path === "/stock-reports"
+          ? [...paging, "salesForceId", "reporterSalesForceId", "outletId"]
+          : ["/sales-force", "/outlets", "/products"].includes(path)
+            ? [...paging, ...(query.view === "page" ? ["q"] : [])]
+            : path.startsWith("/visits/")
+              ? ["include"]
+              : [];
   if (query.include !== undefined && query.include !== "references")
     return false;
   if (Object.keys(query).some((key) => !allowed.includes(key))) return false;

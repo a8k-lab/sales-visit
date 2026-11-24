@@ -17,6 +17,22 @@ projects stored master identifiers only. No new migration or HTTP report-write
 authorization is introduced. Unknown/duplicate/unsupported query parameters are
 rejected; bounded exact reference filters preserve legacy IDs.
 
+## Shared schedule reads
+
+`GET /schedules` is an additive authenticated, read-only endpoint using the exact
+same `ScheduleOperations` query/policies as the Bot. Response: `{ items, next }`
+(50 rows maximum, keyset pagination with `after=ID`). Optional `weekday=1..7`
+filters ISO days; omission means all days. Admin/Supervisor may additionally use
+`salesForceId=ID`; SF is always scoped to itself and cannot supply another owner.
+Supervisor scope follows live assignments. Duplicate/unknown parameters are 400;
+missing authentication is 401; unauthorized owner selection is 403. No writes or
+Web schedule UI are introduced. `/jadwal semua` and `/jadwalsales` are the equivalent
+Bot reads; `/jadwal` alone defaults to today WIB.
+
+Demo Web outlet list/page/detail and schedule reads use the same explicit
+`demo_only` provenance as the Bot. Linked normal Web users keep existing catalog
+access and response shapes. See [shared seed repair and bindings](telegram-demo-mode.md#shared-data-missing-records-and-development-bindings).
+
 ## Endpoints
 
 See [Web authentication and release setup](./web-auth.md) for Telegram

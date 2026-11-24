@@ -1,4 +1,4 @@
-import type { Account } from "@sales-visit/contracts";
+import type { WebUserAccount as Account } from "@sales-visit/contracts";
 import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -253,7 +253,7 @@ export function AccountAction({
         </DialogHeader>
         <p className="text-muted-foreground text-sm">
           Telegram: {row.username ? "@" + row.username + " · " : ""}
-          {row.telegramUserId}
+          {row.telegramUserId ?? "Akun demo · tanpa Telegram"}
         </p>
         {row.salesForceId && (
           <p className="text-muted-foreground text-sm">

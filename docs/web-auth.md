@@ -2,11 +2,11 @@
 
 ## Architecture and boundaries
 
-The authentication milestone advanced login beyond ADR-0006's initial static prototype. The subsequent [Supervisor Assignment & API Scoping milestone](supervisor-assignments.md) adds live assignment administration and restricts operational monitoring; use its rollout checklist for migration 0008. Web remains a static-assets-only Worker (`sales-visit`), communicating over HTTPS with the existing `sales-visit-api`. There is no BFF, Web entrypoint, Service Binding, cookie dependency, or Web report-write authorization. The existing `sales-visit` D1, BotIdentity private RPC binding, Bot lifecycle/approval rules, durable wizard, and Telegram webhook are unchanged.
+The authentication milestone advanced login beyond ADR-0006's initial static prototype. The subsequent [Supervisor Assignment & API Scoping milestone](supervisor-assignments.md) adds live assignment administration and restricts operational monitoring; use its rollout checklist for migration 0008. Web remains a static-assets-only Worker (`sales-visit`), communicating over HTTPS with the existing `sales-visit-api`. There is no BFF, Web entrypoint, Web Service Binding, or Web report-write authorization. T1 adds [local/staging Demo Login](demo-environment.md); application identity still uses opaque Bearer sessions, while staging's Cloudflare Access perimeter additionally needs its edge cookie. The existing `sales-visit` D1, BotIdentity private RPC binding, Bot lifecycle/approval rules, durable wizard, and Telegram webhook are unchanged.
 
 The official [Telegram Login documentation](https://core.telegram.org/bots/telegram-login) defines `Telegram.Login.auth`, its signed `id_token` callback, `profile` scope, and nonce. We use `https://oauth.telegram.org/js/telegram-login.js?6`; **no authorization-code exchange, Client Secret, UserInfo endpoint, phone scope, or messaging permission** is needed.
 
-1. The browser prepares `/auth/config`, `/auth/challenge`, and the SDK before enabling the login button. The button invokes the SDK synchronously in the click handler, not after an asynchronous fetch. A stale challenge requires preparation and another click. Cancel/closed popup, SDK/network failure, and a bounded popup timeout have Indonesian status feedback. The SDK does not notify blocked popups, so the timeout explains how to permit popups and retry. Missing/null callback results are treated as cancellation: timers and loading state are cleared, without forwarding a proof.
+1. Only after Telegram Login is selected, the browser prepares `/auth/config`, `/auth/challenge`, and the SDK before enabling the popup button. Demo Login does not initialize or depend on Telegram. The button invokes the SDK synchronously in the click handler, not after an asynchronous fetch. A stale challenge requires preparation and another click. Cancel/closed popup, SDK/network failure, and a bounded popup timeout have Indonesian status feedback. The SDK does not notify blocked popups, so the timeout explains how to permit popups and retry. Missing/null callback results are treated as cancellation: timers and loading state are cleared, without forwarding a proof.
 2. API generates separate 256-bit random challenge references and nonces, valid for **3 minutes**. Only the signed nonce is trusted. JOSE verifies Telegram's official JWKS (`https://oauth.telegram.org/.well-known/jwks.json`), issuer `https://oauth.telegram.org`, configured audience, **RS256 only**, required expiry/issued-at/nonce/ID, a maximum token age of 5 minutes, and 30-second clock tolerance. These fixed trust anchors are deliberately not request-configurable.
 3. Telegram's `profile` scope places its Bot API user ID in the **top-level JWT `id` claim**. It must be either a canonical positive decimal string (ASCII digits, no leading zero or surrounding whitespace) or a positive safe integer. Only after signature, issuer, audience, algorithm, timestamps and nonce-shape verification is it normalized to canonical decimal text; string IDs never pass through `Number`, avoiding identity rounding. Signs, fractions, scientific-notation strings, zero, unsafe numeric values and malformed types are rejected. Numeric JSON spelling is not preserved by JWT JSON parsing: an integral safe numeric value is checked as a number, while scientific notation in a string is always rejected. Neither `sub`, SDK-decoded `user`, username, nor display name supplies identity. There is no separate `profile_verified` flag or UserInfo call: verification means the profile claim is inside the cryptographically verified token.
 4. `UPDATE ... WHERE consumed_at IS NULL AND expires_at > now AND nonce = verified_nonce RETURNING id` atomically selects one winner, including concurrent callbacks. Invalid proofs do not consume challenges. The winner resolves `telegram_identities.telegram_user_id` to an existing active User with an assigned valid role. Login never registers, approves, relinks, or edits a profile. All unavailable/unapproved/disabled accounts receive the same sanitized login failure.
@@ -20,14 +20,16 @@ Sensitive responses and errors use `Cache-Control: no-store`. Errors contain no 
 
 No `/api` prefix. Success bodies are JSON; errors consistently use `{ "error": "sanitized message" }`.
 
-| Endpoint               | Access and success body                                                          |
-| ---------------------- | -------------------------------------------------------------------------------- |
-| `GET /health`          | Public liveness, `{ "status": "ok" }`                                            |
-| `GET /auth/config`     | Public `{ clientId: number, scope: ["profile"] }`; 503 if unavailable            |
-| `POST /auth/challenge` | Public, no body required; `{ challenge, nonce, expiresAt }` (epoch milliseconds) |
-| `POST /auth/telegram`  | Strict `{ idToken: string, challenge: string }`; `{ token, expiresAt, account }` |
-| `GET /auth/me`         | Bearer required; `{ account: { id, name, role, salesForceId } }`                 |
-| `POST /auth/logout`    | Bearer required; `{ ok: true }`, revokes server-side credential                  |
+| Endpoint                  | Access and success body                                                                                           |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `GET /health`             | Public liveness, `{ "status": "ok" }`                                                                             |
+| `GET /auth/config`        | Public `{ clientId: number, scope: ["profile"] }`; 503 if unavailable                                             |
+| `POST /auth/challenge`    | Public, no body required; `{ challenge, nonce, expiresAt }` (epoch milliseconds)                                  |
+| `POST /auth/telegram`     | Public proof exchange, strict `{ idToken: string, challenge: string }`; `{ token, expiresAt, account }`           |
+| `GET /auth/demo/accounts` | Public at the application layer, enabled local/staging only; `{ environment, items }`                             |
+| `POST /auth/demo/login`   | Public at the application layer, enabled local/staging only; strict `{ userId }`; `{ token, expiresAt, account }` |
+| `GET /auth/me`            | Bearer required; `{ account: { id, name, role, salesForceId } }`                                                  |
+| `POST /auth/logout`       | Bearer required; `{ ok: true }`, revokes server-side credential                                                   |
 
 Malformed input returns 400; invalid proof/challenge/account/session returns 401; forbidden origin/scope returns 403; service/configuration failures return 503. Abuse limits return 429 with `{ "error": "Too many requests" }`, `Retry-After: 60`, `Cache-Control: no-store` and normal approved-origin CORS headers; no key/IP/token or internal diagnostic is returned. Auth request bodies are limited to 16 KiB. Monitor 429/503 and D1/JWKS failure rates without capturing credentials. Expired challenges are incrementally pruned after an hour; session records retain revocation history. Schedule operator-reviewed deletion of expired session records according to the deployment's retention policy; no new cron infrastructure is introduced here.
 
@@ -62,14 +64,14 @@ Do not modify production settings, webhook, deploy, or migrate merely to test th
 
 ### API Worker and CORS
 
-`apps/api/wrangler.jsonc` declares two **nonsecret** runtime vars, initially empty so browser login is disabled:
+`apps/api/wrangler.jsonc` declares four **nonsecret** runtime vars. Production pins `APP_ENV=production` and `DEMO_AUTH_ENABLED=false`; the other two configure Telegram and CORS:
 
 - `TELEGRAM_CLIENT_ID`: canonical positive decimal BotFather Client ID.
 - `WEB_ORIGINS`: comma-separated exact origins, **no spaces, paths, trailing slash, wildcard, credentials, or query**. Example: `https://sales-visit.<account-subdomain>.workers.dev,http://localhost:5173`. Production must contain only approved deployed origins; include development origins only when explicitly approved. HTTPS is required except explicit localhost/127.0.0.1 development origins.
 
 Prepare actual values as a reviewed configuration change before the approved release; do not expect untracked Dashboard vars to survive Wrangler deployment. No new API runtime secret is required. The Bot's existing secrets remain private and separate.
 
-CORS permits only exact allowlisted origins and GET/POST/PUT preflights with Authorization/Content-Type. Unknown origins are denied, including `null` and deceptive suffixes; no credentials cookies or wildcard CORS are used. Non-browser requests without Origin still require authentication. CORS is not authentication. Strict deployment config validation permits exactly these two API vars, not arbitrary bindings or overrides, with offline regression tests.
+CORS permits only exact allowlisted origins and GET/POST/PUT preflights with Authorization/Content-Type. Unknown origins are denied, including `null` and deceptive suffixes; credentialed requests are permitted for Cloudflare Access cookies, but wildcard CORS is never used and application identity remains Bearer-only. Protected endpoints (including `/auth/me`, `/auth/logout`, business reads and Admin operations) require Bearer authentication regardless of whether `Origin` is present. Public endpoints such as `GET /health` and the Telegram/Demo Login endpoints do not require an existing application session; Telegram proof validation and demo environment/eligibility checks still apply. In staging, Cloudflare Access must protect all Web/API paths, explicitly including **both `/auth/demo/accounts` and `/auth/demo/login`**, against unauthenticated Internet access. Access cookies are separate from application Bearer authentication; CORS is neither. Strict production deployment config validation permits exactly these four API vars, with production/demo values pinned, not arbitrary bindings or overrides, with offline regression tests.
 
 ### Native auth abuse protection
 
@@ -95,7 +97,7 @@ For initial introduction, preflight accepts **both bindings absent only on a pre
 - Keep Worker names, D1 UUID/name, API entrypoint, BotIdentity binding, webhook and Web's static-only Wrangler configuration unchanged.
 - Do not set `Cross-Origin-Opener-Policy: same-origin`: Telegram popup messaging would fail. Use `same-origin-allow-popups` or omit it. If introducing CSP, permit the official SDK script from `https://oauth.telegram.org` and API `connect-src` for the exact API origin; review the SDK's injected styles and popup behavior before enforcing it. Do not weaken unrelated policies or add broad wildcards. Test actual popup interaction in supported browsers, including keyboard activation.
 
-With missing Client ID or limiter bindings the API config/challenge/login endpoints return 503; missing frontend API URL also fails closed. No mock account, password fallback, live-key test requirement, or development authentication bypass exists.
+With missing Client ID or limiter bindings the API config/challenge/login endpoints return 503; missing frontend API URL also fails closed. No mock authorization, password fallback or live-key test requirement exists. Explicitly enabled local/staging Demo Login issues real D1-backed sessions independently of Telegram; production cannot enable it with the demo flag alone.
 
 ## API-only OIDC ID hotfix release checklist
 

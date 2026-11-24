@@ -39,8 +39,25 @@ export type IdentityResult<T> =
         | "last_admin"
         | "association_locked";
     };
+export interface DemoAccount {
+  id: string;
+  name: string;
+  role: "admin" | "supervisor" | "sales_force";
+  salesForceId: string | null;
+}
+export type BotDemoResult =
+  | { ok: false; code: "disabled" | "invalid" | "expired" | "unavailable" }
+  | { ok: true; data: { account: DemoAccount; expiresAt: number } | null };
 export interface BotIdentityService
   extends BotPlanningService, BotVisitService {
+  demoAccounts(
+    actor: BotActor
+  ): Promise<{ ok: false } | { ok: true; items: DemoAccount[] }>;
+  // accountId is an internal eligible demo User ID, NOT an opaque picker token.
+  // The verified actor is always the owner of the resulting Telegram session.
+  demoLogin(actor: BotActor, accountId: unknown): Promise<BotDemoResult>;
+  demoStatus(actor: BotActor): Promise<BotDemoResult>;
+  demoLogout(actor: BotActor): Promise<BotDemoResult>;
   register(actor: BotActor): Promise<IdentityResult<Account>>;
   me(actor: BotActor): Promise<IdentityResult<Account | null>>;
   pending(
@@ -105,9 +122,36 @@ export const webUserRoleSchema = webUserTargetSchema
       ? !!input.salesForceId
       : input.salesForceId === undefined
   );
-export interface ManagedAccount extends Account {
+export interface WebUserAccount extends Omit<Account, "telegramUserId"> {
+  telegramUserId: string | null;
+  displayName: string | null;
+}
+export interface ManagedAccount extends WebUserAccount {
   salesForceName: string | null;
 }
+export const demoAccountCreateSchema = z
+  .object({
+    displayName: z
+      .string()
+      .trim()
+      .min(1)
+      .max(256)
+      .refine(
+        (value) =>
+          ![...value].some(
+            (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127
+          )
+      ),
+    role: z.enum(["admin", "supervisor", "sales_force"]),
+    salesForceId: z.string().min(1).max(256).optional(),
+    operationId: webOperationIdSchema,
+  })
+  .strict()
+  .refine((input) =>
+    input.role === "sales_force"
+      ? !!input.salesForceId
+      : input.salesForceId === undefined
+  );
 export interface UserPage {
   items: ManagedAccount[];
   next: string | null;

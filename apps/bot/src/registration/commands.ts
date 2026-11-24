@@ -97,7 +97,10 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
       await result(ctx, response);
       return;
     }
-    await replyBlocks(ctx, helpSections(response.data));
+    // me() resolves demo before real authentication; status supplies the live
+    // feature gate and selected role without modifying the session.
+    const demo = await api.demoStatus(actor(ctx));
+    await ctx.reply(helpSections(response.data, demo).join("\n\n"));
   });
   bot.command("me", async (ctx) => {
     const response = await api.me(actor(ctx));

@@ -1,0 +1,1 @@
+DROP TABLE `telegram_demo_choices`;

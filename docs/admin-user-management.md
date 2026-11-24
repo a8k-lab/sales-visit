@@ -2,26 +2,30 @@
 
 Admin-only account management at `/users`, backed by the same D1 users,
 Telegram identities, and access audit as Telegram Bot. This is not master-data
-CRUD, manual account creation, or a new identity verification channel.
+CRUD or a new Telegram identity verification channel. T1 adds only
+[local/staging demo account creation](demo-environment.md); production still
+has no manual account creation.
 
 ## Lifecycle and permissions
 
 Users register themselves with `/register` in Telegram. The stored verified
 Telegram profile snapshot is displayed; Web cannot supply or replace it.
-An existing active Admin signs in using the existing Telegram OIDC Web session.
-No bootstrap/recovery account is created by this feature.
+An existing active Admin signs in using the existing Telegram OIDC Web session,
+or Demo Login in explicitly enabled local/staging environments. T1 demo seeds
+bootstrap synthetic non-production accounts only, never production recovery.
 
-| Operation                                       | Target / prerequisites                                | Result                                        |
-| ----------------------------------------------- | ----------------------------------------------------- | --------------------------------------------- |
-| List accounts / eligible SF                     | Active Admin only                                     | Bounded pages of stored records               |
-| Approve                                         | Pending, no existing role/link; exactly one role      | Active Admin, Supervisor, or Sales Force      |
-| Approve Sales Force                             | Existing, unclaimed SF ID required                    | Immutable association to that business record |
-| Reject                                          | Pending, no existing role/link                        | Rejected; final in the existing lifecycle     |
-| Change role                                     | Active account; active Admin demotion prohibited      | Access changes immediately; SF link retained  |
-| Change to Sales Force                           | Explicit existing SF ID; unclaimed or owned by target | Existing link cannot be replaced              |
-| Disable                                         | Active non-Admin                                      | Disabled; role, SF link, assignments retained |
-| Enable                                          | Disabled account                                      | Active with stored role and associations      |
-| Delete / manual creation / identity replacement | Never                                                 | Not implemented                               |
+| Operation                                                  | Target / prerequisites                                | Result                                        |
+| ---------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------- |
+| List accounts / eligible SF                                | Active Admin only                                     | Bounded pages of stored records               |
+| Approve                                                    | Pending, no existing role/link; exactly one role      | Active Admin, Supervisor, or Sales Force      |
+| Approve Sales Force                                        | Existing, unclaimed SF ID required                    | Immutable association to that business record |
+| Reject                                                     | Pending, no existing role/link                        | Rejected; final in the existing lifecycle     |
+| Change role                                                | Active account; active Admin demotion prohibited      | Access changes immediately; SF link retained  |
+| Change to Sales Force                                      | Explicit existing SF ID; unclaimed or owned by target | Existing link cannot be replaced              |
+| Disable                                                    | Active non-Admin                                      | Disabled; role, SF link, assignments retained |
+| Enable                                                     | Disabled account                                      | Active with stored role and associations      |
+| Create demo account                                        | Active Admin, demo-enabled local/staging only         | Active identity-less User plus register audit |
+| Delete / production manual creation / identity replacement | Never                                                 | Not implemented                               |
 
 All active Admins are protected from demotion and disabling (stronger than the
 last-active-Admin invariant). The last Admin returns `last_admin`; otherwise a
@@ -70,10 +74,19 @@ Lists use ascending ID keyset pagination, not offsets; an empty page is genuine.
 Eligible SF options exclude claims by **any** account, including disabled accounts.
 The role dialog also offers the target's already-owned immutable association.
 
-`Account` is the shared identity contract: `id`, `telegramUserId`, `status`,
+On Web routes, `Account` in the historical table above now denotes
+`WebUserAccount`: `id`, nullable `telegramUserId`, nullable `displayName`, `status`,
 nullable `role`, `salesForceId`, `username`, `firstName`, `lastName`, and epoch-ms
-`createdAt`. `ManagedAccount` additionally includes nullable `salesForceName`.
+`createdAt`. `ManagedAccount` adds nullable `salesForceName`. Bot's original
+`Account` contract still requires `telegramUserId` and does not add `displayName`.
 No session hashes, OIDC proofs, or audit internals are returned.
+
+T1 also adds `POST /admin/users/demo` with strict
+`{ displayName, role, salesForceId?, operationId }`, returning `{ id }` with 201.
+It uses the same operation tickets/outcome lookup, live Admin guard and exclusive
+SF ownership rules. Creation and the existing `register` audit are atomic;
+production returns 404 for an authorized caller. See the
+[demo runbook](demo-environment.md) for setup, safety and verification.
 
 Errors have `{ error: string }`:
 

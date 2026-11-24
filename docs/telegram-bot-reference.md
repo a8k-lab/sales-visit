@@ -8,8 +8,18 @@ planning changes or releases.
 
 ## Commands (private chat only)
 
-- `/start`, `/help`: Indonesian welcome and nine-section role-aware guide; safely
-  packed replies and explicit differences from the original bot. See the
+- `/demo`: list eligible demo accounts grouped by Admin/Supervisor/Sales Force.
+  `/demo_login account_id`: select/switch by the listed internal User ID (no buttons).
+  `/demo_status`: account and remaining hour; `/demo_logout`:
+  restore normal authentication. Local/staging opt-in only, read-only marked
+  synthetic data and existing role scopes. See [Telegram Demo Mode](telegram-demo-mode.md).
+
+- `/start`, `/help`: Indonesian welcome and compact single-message guide limited
+  to the effective role. Demo commands appear only when enabled; active Demo Mode
+  hides all disabled write/user-management commands. Short emoji headings and
+  `/command — description` lines keep it readable; only `/demo_login account_id`
+  includes an essential argument. Detailed grammar, defaults and examples remain
+  in individual command usage/error responses. See the
   [current command parity matrix and handoff](./design/telegram-bot-parity.md).
 - `/register`: pending account from the verified update's `message.from.id`.
 - `/me`: own role, status, Telegram display snapshot and Sales Force link.

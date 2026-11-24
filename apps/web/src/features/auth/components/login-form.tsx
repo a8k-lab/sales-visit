@@ -9,7 +9,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { api, finishLogin, restoreSession, safeReturn } from "../session";
+import {
+  api,
+  finishDemoLogin,
+  finishLogin,
+  restoreSession,
+  safeReturn,
+} from "../session";
+import { DemoLogin } from "./demo-login";
 
 interface TelegramLogin {
   auth(
@@ -77,15 +84,17 @@ interface Ready {
 const destination = () =>
   safeReturn(new URLSearchParams(location.search).get("redirect"));
 export function LoginForm() {
-  const [preparing, setPreparing] = useState(true);
+  const [preparing, setPreparing] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [ready, setReady] = useState<Ready | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Menyiapkan login…");
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [message, setMessage] = useState("");
   const attempt = useRef(0);
   const timer = useRef<number | undefined>(undefined);
   const mounted = useRef(false);
   const preparingRef = useRef(false);
+  // Shared synchronous guard: neither login method may start while the other is pending.
   const busyRef = useRef(false);
   async function prepare() {
     if (preparingRef.current || busyRef.current) return;
@@ -102,7 +111,9 @@ export function LoginForm() {
       ]);
       if (!mounted.current || attempt.current !== current) return;
       setReady({ ...challenge, clientId: config.clientId });
-      setMessage("");
+      setMessage(
+        "Telegram siap. Pilih Masuk dengan Telegram untuk melanjutkan."
+      );
     } catch {
       if (mounted.current && attempt.current === current)
         setMessage("Login tidak tersedia. Periksa koneksi lalu coba lagi.");
@@ -120,7 +131,6 @@ export function LoginForm() {
         if (account && mounted.current) location.replace(destination());
       })
       .catch(() => {});
-    void prepare();
     return () => {
       mounted.current = false;
       preparingRef.current = false;
@@ -130,7 +140,7 @@ export function LoginForm() {
     };
   }, []);
   useEffect(() => {
-    if (!ready || busy) return;
+    if (!ready || busy || demoBusy) return;
     const expiry = window.setTimeout(
       () => {
         setReady(null);
@@ -141,7 +151,25 @@ export function LoginForm() {
       Math.max(0, ready.expiresAt - Date.now() - 5000)
     );
     return () => clearTimeout(expiry);
-  }, [ready, busy]);
+  }, [ready, busy, demoBusy]);
+  async function loginDemo(userId: string) {
+    if (preparingRef.current || busyRef.current) return;
+    busyRef.current = true;
+    setDemoBusy(true);
+    setMessage("Memverifikasi akun demo…");
+    try {
+      await finishDemoLogin(userId);
+      if (mounted.current) location.replace(destination());
+    } catch {
+      if (mounted.current) {
+        busyRef.current = false;
+        setDemoBusy(false);
+        setMessage(
+          "Login demo ditolak. Periksa koneksi dan status akun lalu coba lagi."
+        );
+      }
+    }
+  }
   function cancel(text = "Login dibatalkan. Silakan coba lagi.") {
     attempt.current++;
     clearTimeout(timer.current);
@@ -242,14 +270,19 @@ export function LoginForm() {
             Sesi Anda telah berakhir. Silakan masuk kembali.
           </p>
         )}
-        <Button disabled={!ready || busy} onClick={open}>
+        <Button
+          disabled={preparing || busy || demoBusy}
+          onClick={ready ? open : () => void prepare()}
+        >
           {preparing
             ? "Menyiapkan login…"
             : verifying
               ? "Memverifikasi akun…"
               : busy
                 ? "Menunggu Telegram…"
-                : "Masuk dengan Telegram"}
+                : ready
+                  ? "Masuk dengan Telegram"
+                  : "Siapkan Login Telegram"}
         </Button>
         <p
           role="status"
@@ -266,14 +299,21 @@ export function LoginForm() {
           >
             Batal
           </Button>
-        ) : !preparing && !ready ? (
-          <Button variant="outline" onClick={() => void prepare()}>
+        ) : !preparing && !ready && message ? (
+          <Button
+            variant="outline"
+            disabled={demoBusy}
+            onClick={() => void prepare()}
+          >
             Coba lagi
           </Button>
         ) : null}
+        <DemoLogin
+          disabled={preparing || busy || demoBusy}
+          onLogin={loginDemo}
+        />
         <p className="text-muted-foreground text-center text-xs">
-          Pemantauan operasional untuk Admin dan Supervisor. Pelaporan Web belum
-          tersedia.
+          Pemantauan operasional sesuai role akun. Pelaporan Web belum tersedia.
         </p>
       </CardContent>
     </Card>

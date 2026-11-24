@@ -5,6 +5,8 @@
   "compatibility_date": "2026-11-02",
   "workers_dev": true,
   "vars": {
+    "APP_ENV": "production",
+    "DEMO_AUTH_ENABLED": "false",
     "TELEGRAM_CLIENT_ID": "9213768100",
     "WEB_ORIGINS": "https://sales-visit.up2dul.workers.dev"
   },
